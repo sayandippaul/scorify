@@ -1,0 +1,1408 @@
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+.page {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 30px 50px;
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   WELCOME SECTION
+   ========================================================= */
+
+.welcome-section {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+
+  padding: 30px 34px;
+  margin-bottom: 28px;
+
+  border-radius: 20px;
+
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+
+  box-sizing: border-box;
+}
+
+.welcome-section > div:first-child {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 7px;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  letter-spacing: 1.5px;
+
+  color: var(--primary-color, #2563eb);
+}
+
+.welcome-section h2 {
+  margin: 0;
+
+  font-size: 30px;
+  line-height: 1.2;
+
+  font-weight: 750;
+
+  color: var(--text-primary, #111827);
+}
+
+.subtitle {
+  margin: 8px 0 0;
+
+  font-size: 14px;
+  line-height: 1.6;
+
+  color: var(--text-secondary, #6b7280);
+}
+
+.cricket-ball {
+  width: 70px;
+  height: 70px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: var(--primary-light, #eff6ff);
+
+  font-size: 36px;
+}
+
+
+/* =========================================================
+   STAT CARDS
+   ========================================================= */
+
+.stats-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 18px;
+
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 22px;
+
+  border-radius: 18px;
+
+  background: var(--card-bg, #ffffff);
+
+  border: 1px solid var(--border-color, #e5e7eb);
+
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.04);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.08);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 14px;
+
+  background: var(--primary-light, #eff6ff);
+
+  font-size: 23px;
+}
+
+.stat-card p {
+  margin: 0 0 5px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  color: var(--text-secondary, #6b7280);
+}
+
+.stat-card h3 {
+  margin: 0;
+
+  font-size: 25px;
+  line-height: 1.1;
+
+  font-weight: 750;
+
+  color: var(--text-primary, #111827);
+}
+
+
+/* =========================================================
+   COMMON SECTION
+   ========================================================= */
+
+.section {
+  width: 100%;
+
+  padding: 28px;
+
+  border-radius: 20px;
+
+  background: var(--card-bg, #ffffff);
+
+  border: 1px solid var(--border-color, #e5e7eb);
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.05);
+
+  box-sizing: border-box;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0;
+
+  font-size: 21px;
+  font-weight: 750;
+
+  color: var(--text-primary, #111827);
+}
+
+
+/* =========================================================
+   LEADERBOARD TABS
+   ========================================================= */
+
+.leaderboard-tabs {
+  display: flex;
+
+  gap: 10px;
+
+  margin-bottom: 20px;
+
+  flex-wrap: wrap;
+}
+
+.leaderboard-tabs button {
+  min-height: 42px;
+
+  padding: 10px 17px;
+
+  border-radius: 10px;
+
+  font-size: 13px;
+  font-weight: 650;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border 0.2s ease,
+    transform 0.15s ease;
+}
+
+.leaderboard-tabs button:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button {
+  border: 1px solid var(--primary-color, #2563eb);
+
+  background: var(--primary-color, #2563eb);
+
+  color: #ffffff;
+
+  box-shadow:
+    0 4px 12px rgba(37, 99, 235, 0.18);
+}
+
+.primary-button:hover {
+  background: var(--primary-hover, #1d4ed8);
+}
+
+.secondary-button {
+  border: 1px solid var(--border-color, #d1d5db);
+
+  background: var(--card-bg, #ffffff);
+
+  color: var(--text-primary, #374151);
+}
+
+.secondary-button:hover {
+  background: var(--hover-bg, #f3f4f6);
+}
+
+
+/* =========================================================
+   LEADERBOARD TABLE
+   ========================================================= */
+/* =========================================================
+   LEADERBOARD TABLE CONTAINER
+   ========================================================= */
+
+.leaderboard-table-container {
+  width: 100%;
+
+  /* Fixed height so rows scroll */
+  max-height: 420px;
+
+  overflow-x: auto;
+  overflow-y: auto;
+
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 14px;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+}
+
+
+/* =========================================================
+   LEADERBOARD TABLE CONTAINER
+   ========================================================= */
+
+.leaderboard-table-container {
+  width: 100%;
+  max-width: 100%;
+
+  height: 420px;
+  max-height: 420px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 14px;
+
+  -webkit-overflow-scrolling: touch;
+
+  box-sizing: border-box;
+
+  scrollbar-width: thin;
+}
+
+
+/* =========================================================
+   LEADERBOARD TABLE
+   ========================================================= */
+
+.leaderboard-table {
+  width: 100%;
+  max-width: 100%;
+
+  border-collapse: collapse;
+
+  table-layout: fixed;
+
+  min-width: 0;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TABLE HEADER
+   ========================================================= */
+
+.leaderboard-table th {
+  padding: 14px 10px;
+
+  text-align: left;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+
+  white-space: nowrap;
+
+  background: var(
+    --table-header-bg,
+    #f8fafc
+  );
+
+  color: var(
+    --text-secondary,
+    #6b7280
+  );
+
+  border-bottom:
+    1px solid var(
+      --border-color,
+      #e5e7eb
+    );
+
+  position: sticky;
+  top: 0;
+
+  z-index: 5;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TABLE DATA
+   ========================================================= */
+
+.leaderboard-table td {
+  padding: 14px 10px;
+
+  font-size: 14px;
+
+  color: var(
+    --text-primary,
+    #1f2937
+  );
+
+  border-bottom:
+    1px solid var(
+      --border-color,
+      #f0f1f3
+    );
+
+  white-space: nowrap;
+
+  box-sizing: border-box;
+}
+
+
+.leaderboard-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* =========================================================
+   ROW HOVER
+   ========================================================= */
+
+.leaderboard-table tbody tr {
+  transition:
+    background 0.15s ease;
+}
+
+
+.leaderboard-table tbody tr:hover {
+  background: var(
+    --hover-bg,
+    #f8fafc
+  );
+}
+
+
+/* =========================================================
+   RANK
+   ========================================================= */
+
+.leaderboard-table th:first-child,
+.leaderboard-table td:first-child {
+  width: 70px;
+
+  font-weight: 700;
+}
+
+
+.leaderboard-table td:first-child {
+  color: var(
+    --primary-color,
+    #2563eb
+  );
+}
+
+
+/* =========================================================
+   PLAYER NAME
+   ========================================================= */
+
+.leaderboard-table th:nth-child(2),
+.leaderboard-table td:nth-child(2) {
+  min-width: 180px;
+
+  font-weight: 650;
+}
+
+
+/* =========================================================
+   MOBILE LEADERBOARD
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  /* -------------------------------------------------------
+     DASHBOARD
+     ------------------------------------------------------- */
+
+  .dashboard-page {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 8px;
+
+    box-sizing: border-box;
+
+    overflow-x: hidden;
+  }
+
+
+  /* -------------------------------------------------------
+     LEADERBOARD TABS
+     ------------------------------------------------------- */
+
+  .leaderboard-tabs {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    gap: 5px;
+
+    box-sizing: border-box;
+  }
+
+
+  .leaderboard-tabs button {
+    width: 100%;
+
+    min-width: 0;
+
+    padding: 9px 2px;
+
+    font-size: 10px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    box-sizing: border-box;
+  }
+
+
+  /* -------------------------------------------------------
+     TABLE CONTAINER
+     ------------------------------------------------------- */
+
+  .leaderboard-table-container {
+
+    width: 100%;
+    max-width: 100%;
+
+    height: 300px;
+    max-height: 300px;
+
+    overflow-y: auto;
+
+    overflow-x: hidden;
+
+    border-radius: 10px;
+
+    box-sizing: border-box;
+  }
+
+
+  /* -------------------------------------------------------
+     TABLE
+     ------------------------------------------------------- */
+
+  .leaderboard-table {
+
+    width: 100%;
+    max-width: 100px;
+
+    min-width: 0;
+
+    table-layout: fixed;
+
+    border-collapse: collapse;
+
+    box-sizing: border-box;
+  }
+
+
+  /* -------------------------------------------------------
+     ALL HEADERS
+     ------------------------------------------------------- */
+
+  .leaderboard-table th {
+
+    padding: 8px 2px;
+
+    font-size: 8px;
+
+    line-height: 1.15;
+
+    text-align: center;
+
+    white-space: normal;
+
+    word-break: normal;
+
+    overflow-wrap: break-word;
+
+    letter-spacing: 0.1px;
+
+    box-sizing: border-box;
+
+    position: sticky;
+
+    top: 0;
+
+    z-index: 5;
+  }
+
+
+  /* -------------------------------------------------------
+     ALL CELLS
+     ------------------------------------------------------- */
+
+  .leaderboard-table td {
+
+    padding: 9px 2px;
+
+    font-size: 9px;
+
+    line-height: 1.2;
+
+    text-align: center;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    box-sizing: border-box;
+  }
+
+
+  /* =======================================================
+     5 COLUMN LAYOUT
+
+     RANK    = 12%
+     NAME    = 36%
+     COLUMN3 = 17%
+     COLUMN4 = 17%
+     COLUMN5 = 18%
+
+     TOTAL = 100%
+     ======================================================= */
+
+
+  .leaderboard-table th:first-child,
+  .leaderboard-table td:first-child {
+
+    width: 12%;
+  }
+
+
+  .leaderboard-table th:nth-child(2),
+  .leaderboard-table td:nth-child(2) {
+
+    width: 36%;
+
+    min-width: 0;
+
+    text-align: left;
+  }
+
+
+  .leaderboard-table th:nth-child(3),
+  .leaderboard-table td:nth-child(3) {
+
+    width: 17%;
+  }
+
+
+  .leaderboard-table th:nth-child(4),
+  .leaderboard-table td:nth-child(4) {
+
+    width: 17%;
+  }
+
+
+  .leaderboard-table th:nth-child(5),
+  .leaderboard-table td:nth-child(5) {
+
+    width: 18%;
+  }
+
+
+  /* -------------------------------------------------------
+     PLAYER NAME
+     ------------------------------------------------------- */
+
+  .leaderboard-table td:nth-child(2) {
+
+    min-width: 0;
+
+    max-width: 0;
+
+    font-weight: 650;
+
+    text-align: left;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+  }
+
+
+  /* -------------------------------------------------------
+     RANK
+     ------------------------------------------------------- */
+
+  .leaderboard-table td:first-child {
+
+    font-size: 9px;
+
+    font-weight: 700;
+
+    text-align: center;
+  }
+
+
+  /* -------------------------------------------------------
+     SCROLLBAR
+     ------------------------------------------------------- */
+
+  .leaderboard-table-container::-webkit-scrollbar {
+
+    width: 4px;
+  }
+
+
+  .leaderboard-table-container::-webkit-scrollbar-track {
+
+    background: transparent;
+  }
+
+
+  .leaderboard-table-container::-webkit-scrollbar-thumb {
+
+    background: var(
+      --border-color,
+      #d1d5db
+    );
+
+    border-radius: 10px;
+  }
+
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 400px) {
+
+  .dashboard-page {
+    padding: 6px;
+  }
+
+
+  .leaderboard-table-container {
+
+    height: 280px;
+    max-height: 280px;
+
+    border-radius: 9px;
+  }
+
+
+  .leaderboard-table th {
+
+    padding: 7px 1px;
+
+    font-size: 7px;
+
+    line-height: 1.1;
+  }
+
+
+  .leaderboard-table td {
+
+    padding: 8px 1px;
+
+    font-size: 8px;
+
+    line-height: 1.15;
+  }
+
+
+  .leaderboard-table td:nth-child(2) {
+
+    font-size: 8px;
+  }
+
+
+  .leaderboard-tabs {
+
+    gap: 4px;
+  }
+
+
+  .leaderboard-tabs button {
+
+    padding: 8px 1px;
+
+    font-size: 9px;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 350px) {
+
+  .leaderboard-table-container {
+
+    height: 260px;
+    max-height: 260px;
+  }
+
+
+  .leaderboard-table th {
+
+    padding: 6px 1px;
+
+    font-size: 6.5px;
+  }
+
+
+  .leaderboard-table td {
+
+    padding: 7px 1px;
+
+    font-size: 7.5px;
+  }
+
+
+  .leaderboard-table td:nth-child(2) {
+
+    font-size: 7.5px;
+  }
+
+}
+
+/* =========================================================
+   EMPTY CARD
+   ========================================================= */
+
+.empty-card {
+  width: 100%;
+
+  padding: 45px 25px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  box-sizing: border-box;
+
+  border-radius: 16px;
+
+  background: var(--empty-bg, #f8fafc);
+
+  border: 1px dashed
+    var(--border-color, #d1d5db);
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 14px;
+
+  border-radius: 50%;
+
+  background: var(--primary-light, #eff6ff);
+
+  font-size: 26px;
+}
+
+.empty-card h3 {
+  margin: 0;
+
+  font-size: 18px;
+
+  color: var(--text-primary, #111827);
+}
+
+.empty-card p {
+  max-width: 500px;
+
+  margin: 8px auto 0;
+
+  font-size: 14px;
+  line-height: 1.6;
+
+  color: var(--text-secondary, #6b7280);
+}
+
+
+/* =========================================================
+   LOADING STATE
+   ========================================================= */
+
+.page .welcome-section .subtitle {
+  min-height: 20px;
+}
+
+
+/* =========================================================
+   ERROR STATE
+   ========================================================= */
+
+.empty-card h3 + p {
+  word-break: break-word;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+[data-theme="dark"] .page {
+  background: transparent;
+}
+
+[data-theme="dark"] .welcome-section,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .section {
+  background: var(--card-bg, #111827);
+
+  border-color:
+    var(--border-color, #374151);
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="dark"] .welcome-section h2,
+[data-theme="dark"] .section-header h3,
+[data-theme="dark"] .stat-card h3,
+[data-theme="dark"] .empty-card h3 {
+  color: var(--text-primary, #f9fafb);
+}
+
+[data-theme="dark"] .subtitle,
+[data-theme="dark"] .stat-card p,
+[data-theme="dark"] .empty-card p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+[data-theme="dark"] .cricket-ball,
+[data-theme="dark"] .stat-icon,
+[data-theme="dark"] .empty-icon {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+[data-theme="dark"] .secondary-button {
+  background: var(--card-bg, #111827);
+
+  border-color:
+    var(--border-color, #374151);
+
+  color: var(--text-primary, #f3f4f6);
+}
+
+[data-theme="dark"] .secondary-button:hover {
+  background: #1f2937;
+}
+
+[data-theme="dark"] .leaderboard-table-container {
+  border-color:
+    var(--border-color, #374151);
+}
+
+[data-theme="dark"] .leaderboard-table th {
+  background: #1f2937;
+
+  color: #9ca3af;
+
+  border-bottom-color:
+    var(--border-color, #374151);
+}
+
+[data-theme="dark"] .leaderboard-table td {
+  color: #e5e7eb;
+
+  border-bottom-color:
+    #273244;
+}
+
+[data-theme="dark"] .leaderboard-table tbody tr:hover {
+  background: #1a2433;
+}
+
+[data-theme="dark"] .empty-card {
+  background: #111827;
+
+  border-color: #374151;
+}
+
+
+/* =========================================================
+   LARGE TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .page {
+    padding: 24px 22px 45px;
+  }
+
+  .stats-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .welcome-section {
+    padding: 27px 28px;
+  }
+
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .page {
+    padding: 20px 16px 40px;
+  }
+
+  .welcome-section {
+    padding: 24px;
+
+    border-radius: 17px;
+
+    gap: 20px;
+  }
+
+  .welcome-section h2 {
+    font-size: 25px;
+  }
+
+  .cricket-ball {
+    width: 58px;
+    height: 58px;
+
+    font-size: 30px;
+  }
+
+  .stats-grid {
+    gap: 14px;
+
+    margin-bottom: 22px;
+  }
+
+  .stat-card {
+    padding: 18px;
+
+    gap: 12px;
+
+    border-radius: 15px;
+  }
+
+  .stat-icon {
+    width: 43px;
+    height: 43px;
+
+    border-radius: 12px;
+
+    font-size: 20px;
+  }
+
+  .stat-card h3 {
+    font-size: 22px;
+  }
+
+  .section {
+    padding: 22px;
+
+    border-radius: 17px;
+  }
+
+  .section-header {
+    margin-bottom: 17px;
+  }
+
+  .section-header h3 {
+    font-size: 19px;
+  }
+
+  .leaderboard-tabs {
+    gap: 8px;
+  }
+
+  .leaderboard-tabs button {
+    min-height: 40px;
+
+    padding: 9px 13px;
+
+    font-size: 12px;
+  }
+
+  .leaderboard-table th {
+    padding: 13px 15px;
+  }
+
+  .leaderboard-table td {
+    padding: 14px 15px;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  .page {
+    padding: 14px 12px 30px;
+  }
+
+  /* Welcome */
+
+  .welcome-section {
+    padding: 20px;
+
+    margin-bottom: 18px;
+
+    border-radius: 15px;
+  }
+
+  .eyebrow {
+    font-size: 10px;
+
+    letter-spacing: 1.2px;
+  }
+
+  .welcome-section h2 {
+    font-size: 22px;
+  }
+
+  .welcome-section .subtitle {
+    font-size: 13px;
+
+    margin-top: 6px;
+  }
+
+  .cricket-ball {
+    width: 48px;
+    height: 48px;
+
+    font-size: 25px;
+  }
+
+
+  /* Stats */
+
+  .stats-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 10px;
+
+    margin-bottom: 18px;
+  }
+
+  .stat-card {
+    padding: 14px;
+
+    gap: 10px;
+
+    border-radius: 13px;
+  }
+
+  .stat-icon {
+    width: 38px;
+    height: 38px;
+
+    border-radius: 10px;
+
+    font-size: 17px;
+  }
+
+  .stat-card p {
+    font-size: 11px;
+
+    margin-bottom: 4px;
+  }
+
+  .stat-card h3 {
+    font-size: 20px;
+  }
+
+
+  /* Section */
+
+  .section {
+    padding: 17px 14px;
+
+    border-radius: 15px;
+  }
+
+  .section-header {
+    margin-bottom: 14px;
+  }
+
+  .section-header h3 {
+    font-size: 18px;
+  }
+
+  .section-header .subtitle {
+    font-size: 12px;
+  }
+
+
+  /* Tabs */
+
+  .leaderboard-tabs {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns:
+      1fr 1fr;
+
+    gap: 8px;
+
+    margin-bottom: 15px;
+  }
+
+  .leaderboard-tabs button {
+    width: 100%;
+
+    min-height: 40px;
+
+    padding: 8px 7px;
+
+    font-size: 11px;
+
+    border-radius: 9px;
+  }
+
+  .leaderboard-tabs button:last-child {
+    grid-column: 1 / -1;
+  }
+
+
+  /* Table */
+
+  .leaderboard-table-container {
+    border-radius: 11px;
+  }
+
+  .leaderboard-table {
+    min-width: 500px;
+  }
+
+  .leaderboard-table th {
+    padding: 12px;
+
+    font-size: 10px;
+  }
+
+  .leaderboard-table td {
+    padding: 13px 12px;
+
+    font-size: 13px;
+  }
+
+  .leaderboard-table td:nth-child(2) {
+    min-width: 150px;
+  }
+
+
+  /* Empty */
+
+  .empty-card {
+    padding: 35px 18px;
+
+    border-radius: 13px;
+  }
+
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+
+    font-size: 22px;
+  }
+
+  .empty-card h3 {
+    font-size: 16px;
+  }
+
+  .empty-card p {
+    font-size: 12px;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+  .page {
+    padding: 12px 9px 25px;
+  }
+
+  .welcome-section {
+    padding: 17px;
+  }
+
+  .welcome-section h2 {
+    font-size: 20px;
+  }
+
+  .cricket-ball {
+    width: 43px;
+    height: 43px;
+
+    font-size: 22px;
+  }
+
+  .stats-grid {
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px 10px;
+
+    gap: 8px;
+  }
+
+  .stat-icon {
+    width: 34px;
+    height: 34px;
+
+    font-size: 15px;
+  }
+
+  .stat-card p {
+    font-size: 10px;
+  }
+
+  .stat-card h3 {
+    font-size: 18px;
+  }
+
+  .section {
+    padding: 15px 11px;
+  }
+
+  .leaderboard-tabs button {
+    font-size: 10px;
+
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+   ========================================================= */
+
+.leaderboard-tabs button:focus-visible {
+  outline: 3px solid
+    rgba(37, 99, 235, 0.25);
+
+  outline-offset: 2px;
+}
+
+.leaderboard-table-container:focus-within {
+  outline: 2px solid
+    rgba(37, 99, 235, 0.25);
+}
+
+
+/* =========================================================
+   REDUCE MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .stat-card,
+  .leaderboard-tabs button,
+  .leaderboard-table tbody tr {
+    transition: none;
+  }
+
+}
