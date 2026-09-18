@@ -1102,6 +1102,12 @@ function Matches() {
   // AI TEAM BALANCE
   // --------------------------------------------------
 
+  const [skippedAiPlayerIds, setSkippedAiPlayerIds] = useState([]);
+
+  useEffect(() => {
+    setSkippedAiPlayerIds([]);
+  }, [nextPickTeam, draftSelections]);
+
   const aiSuggestion = useMemo(() => {
     if (!nextPickTeam) return null;
 
@@ -1124,6 +1130,7 @@ function Matches() {
           ? !teamA.players.some((p) => String(p.id) === id)
           : !teamB.players.some((p) => String(p.id) === id);
       })
+      .filter((player) => !skippedAiPlayerIds.includes(String(player.id)))
       .sort(
         (a, b) =>
           playerMatchStrength(b) - playerMatchStrength(a)
@@ -1146,7 +1153,16 @@ function Matches() {
     draftSelections,
     battingStats,
     bowlingStats,
+    skippedAiPlayerIds,
   ]);
+
+  const skipAiSuggestion = () => {
+    if (!aiSuggestion) return;
+    setSkippedAiPlayerIds((previous) => [
+      ...previous,
+      String(aiSuggestion.player.id),
+    ]);
+  };
 
   // --------------------------------------------------
   // CONFIRM TEAMS
@@ -2113,6 +2129,12 @@ function Matches() {
                   onClick={() => selectPlayer(aiSuggestion.player, aiSuggestion.team)}
                 >
                   + Add
+                </button>
+                <button
+                  type="button"
+                  onClick={skipAiSuggestion}
+                >
+                  Skip
                 </button>
               </div>
             ) : (
