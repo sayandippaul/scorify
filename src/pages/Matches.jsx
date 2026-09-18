@@ -5,6 +5,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import "./matches.css";
+import { calculateWinPrediction, getPredictionForDelivery } from "../services/winPrediction";
 import { db } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
 import {
@@ -87,6 +88,576 @@ const getTossWinnerTeamId = (match) => {
     )
   )?.id || null;
 };
+
+function LiveWinPredictionCard({ prediction, title = "LIVE WIN PREDICTION" }) {
+  if (!prediction) return null;
+
+  const teamA = Math.round(Number(prediction.A || 0));
+  const teamB = Math.round(Number(prediction.B || 0));
+  const phaseLabel = prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE";
+
+  return (
+    <section className="win-prediction-card" aria-label={title}>
+      <div className="win-prediction-header">
+        <div>
+          <p className="win-prediction-eyebrow">{title}</p>
+          <small>{phaseLabel}{prediction.h2hIncluded ? " • H2H included" : ""}</small>
+        </div>
+        <span className="win-prediction-live-dot" />
+      </div>
+
+      <div className="win-prediction-team">
+        <div className="win-prediction-label">
+          <strong>{prediction.teamA}</strong>
+          <b>{teamA}%</b>
+        </div>
+        <div className="win-prediction-track" aria-hidden="true">
+          <span className="win-prediction-fill win-prediction-fill-a" style={{ width: `${teamA}%` }} />
+        </div>
+      </div>
+
+      <div className="win-prediction-team">
+        <div className="win-prediction-label">
+          <strong>{prediction.teamB}</strong>
+          <b>{teamB}%</b>
+        </div>
+        <div className="win-prediction-track" aria-hidden="true">
+          <span className="win-prediction-fill win-prediction-fill-b" style={{ width: `${teamB}%` }} />
+        </div>
+      </div>
+
+      {prediction.metrics && (
+        <div className="win-prediction-metrics">
+          {prediction.metrics.runsRequired != null && (
+            <span><small>Required</small><b>{prediction.metrics.runsRequired}</b></span>
+          )}
+          <span><small>Current RR</small><b>{Number(prediction.metrics.currentRR || 0).toFixed(2)}</b></span>
+          {prediction.metrics.runsRequired != null && (
+            <span><small>Required RR</small><b>{Number.isFinite(prediction.metrics.requiredRR) ? Number(prediction.metrics.requiredRR).toFixed(2) : "—"}</b></span>
+          )}
+          <span><small>Recent 6</small><b>{prediction.metrics.recentSixRuns}</b></span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const predictionHistoryMatch = (match) => ({
+  ...(match || {}),
+  // Historical rows must be calculated as if the match were live. The
+  // actual result is intentionally used only for the final "After match"
+  // row so a finished match does not turn every past over into 100/0.
+  status: "live",
+  winner: null,
+  result: null,
+  resultText: "",
+});
+
+const deliveryHistoryTotals = (deliveries = []) =>
+  deliveries.reduce(
+    (totals, delivery) => ({
+      runs: totals.runs + Number(delivery?.runs ?? delivery?.batterRuns ?? 0),
+      wickets:
+        totals.wickets +
+        (delivery?.wicket ? 1 : Number(delivery?.wickets ?? 0)),
+      legalBalls:
+        totals.legalBalls +
+        (delivery?.validBall === false
+          ? 0
+          : delivery?.validBall === true
+            ? 1
+            : ["NB", "WD", "DEAD", "NO_BALL", "WIDE"].includes(
+                String(delivery?.type || "").toUpperCase()
+              )
+              ? 0
+              : 1),
+    }),
+    { runs: 0, wickets: 0, legalBalls: 0 }
+  );
+
+const scorecardHistoryInnings = ({ match, scoringState }) => {
+  const teams = {
+    A: match?.teamA || {
+      id: "A",
+      name: match?.teamAName || "Team A",
+      players: match?.teamAPlayers || [],
+    },
+    B: match?.teamB || {
+      id: "B",
+      name: match?.teamBName || "Team B",
+      players: match?.teamBPlayers || [],
+    },
+  };
+
+  const firstSaved = match?.firstInningsData || null;
+  const secondSaved = match?.secondInningsData || null;
+  const firstTeamId =
+    firstSaved?.teamId === "B" || match?.firstInningsTeamId === "B"
+      ? "B"
+      : "A";
+  const secondTeamId = firstTeamId === "A" ? "B" : "A";
+
+  const fromScoringState = () => {
+    if (!scoringState || typeof scoringState !== "object") return null;
+
+    const inningsIndex = Number(scoringState.inningsIndex) === 1 ? 1 : 0;
+    const teamId = inningsIndex === 1 ? secondTeamId : firstTeamId;
+    const team = teams[teamId];
+    const deliveries = Array.isArray(scoringState.deliveries)
+      ? scoringState.deliveries
+      : [];
+
+    return {
+      teamId,
+      teamName: team?.name,
+      runs: Number(scoringState.inningsRuns || 0),
+      wickets: Number(scoringState.inningsWickets || 0),
+      balls: Number(scoringState.legalBalls || 0),
+      battingStats: scoringState.battingStats || {},
+      bowlingStats: scoringState.bowlingStats || {},
+      extras: scoringState.extras,
+      deliveries,
+      fallOfWickets: scoringState.fallOfWickets,
+      completedOvers: scoringState.completedOvers,
+    };
+  };
+
+  const first =
+    firstSaved ||
+    (Number(scoringState?.inningsIndex) === 0 ? fromScoringState() : null);
+  const second =
+    secondSaved ||
+    (Number(scoringState?.inningsIndex) === 1 ? fromScoringState() : null);
+
+  return [first, second].map((innings, index) => {
+    if (!innings) return null;
+
+    const teamId = innings.teamId === "B" || innings.teamId === "A"
+      ? innings.teamId
+      : index === 0
+        ? firstTeamId
+        : secondTeamId;
+    const fallbackTeam = teams[teamId];
+    const deliveries = Array.isArray(innings.deliveries)
+      ? innings.deliveries
+      : [];
+
+    return {
+      ...innings,
+      teamId,
+      teamName: innings.teamName || fallbackTeam?.name,
+      deliveries,
+      battingStats: innings.battingStats || {},
+      bowlingStats: innings.bowlingStats || {},
+    };
+  });
+};
+
+const getLastRecordedPredictionByOver = ({ match, innings, inningsIndex }) => {
+  const deliveries = Array.isArray(innings?.deliveries)
+    ? innings.deliveries
+    : [];
+  if (!deliveries.length) return [];
+
+  const groups = [];
+  deliveries.forEach((delivery, deliveryIndex) => {
+    const rawOver = Number(delivery?.over);
+    const over = Number.isFinite(rawOver)
+      ? Math.max(1, Math.floor(rawOver))
+      : Math.floor(deliveryIndex / 6) + 1;
+
+    const existing = groups.findIndex((item) => item.over === over);
+    if (existing >= 0) {
+      groups[existing].lastIndex = deliveryIndex;
+    } else {
+      groups.push({ over, lastIndex: deliveryIndex });
+    }
+  });
+
+  const historyMatch = predictionHistoryMatch(match);
+
+  return groups.map(({ over, lastIndex }) => {
+    const deliveriesUptoOver = deliveries.slice(0, lastIndex + 1);
+    const totals = deliveryHistoryTotals(deliveriesUptoOver);
+    const lastDelivery = deliveriesUptoOver[deliveriesUptoOver.length - 1] || {};
+    const historyState = {
+      ...(innings || {}),
+      inningsIndex,
+      inningsRuns: totals.runs,
+      inningsWickets: totals.wickets,
+      legalBalls: totals.legalBalls,
+      deliveries: deliveriesUptoOver,
+      battingStats: innings?.battingStats || {},
+      bowlingStats: innings?.bowlingStats || {},
+      strikerId: lastDelivery?.strikerId || "",
+      nonStrikerId: lastDelivery?.nonStrikerId || "",
+      currentBowlerId: lastDelivery?.bowlerId || "",
+    };
+
+    const prediction = getPredictionForDelivery({
+      match: historyMatch,
+      scoringState: historyState,
+      deliveryIndex: deliveriesUptoOver.length - 1,
+    });
+
+    return {
+      over,
+      index: lastIndex,
+      prediction,
+      score: `${totals.runs}/${totals.wickets}`,
+    };
+  }).filter((item) => item.prediction);
+};
+
+const buildPredictionHistory = ({ match, scoringState }) => {
+  const historyMatch = predictionHistoryMatch(match);
+  const innings = scorecardHistoryInnings({ match, scoringState });
+
+  const preMatchPrediction = calculateWinPrediction({
+    match: historyMatch,
+    scoringState: null,
+  });
+
+  const records = preMatchPrediction
+    ? [{
+        key: "before-match",
+        label: "BEFORE MATCH",
+        subLabel: "Pre-match probability",
+        prediction: preMatchPrediction,
+      }]
+    : [];
+
+  innings.forEach((inningsData, inningsIndex) => {
+    if (!inningsData) return;
+
+    const overRecords = getLastRecordedPredictionByOver({
+      match,
+      innings: inningsData,
+      inningsIndex,
+    });
+
+    overRecords.forEach((record) => {
+      records.push({
+        key: `${inningsIndex + 1}-${record.over}-${record.index}`,
+        label: `${inningsIndex === 0 ? "1ST INNINGS" : "2ND INNINGS"} • OVER ${record.over}`,
+        subLabel: `${inningsData.teamName || `Team ${inningsData.teamId}`} • ${record.score}`,
+        prediction: record.prediction,
+      });
+    });
+  });
+
+  const matchFinished =
+    String(match?.status || "").toLowerCase() === "finished" ||
+    String(match?.status || "").toLowerCase() === "completed" ||
+    match?.winner !== undefined && match?.winner !== null ||
+    match?.result?.winner !== undefined && match?.result?.winner !== null;
+
+  if (matchFinished) {
+    const finalPrediction = calculateWinPrediction({
+      match,
+      scoringState,
+    });
+
+    if (finalPrediction) {
+      records.push({
+        key: "after-match",
+        label: "AFTER MATCH",
+        subLabel: "Final recorded result",
+        prediction: finalPrediction,
+      });
+    }
+  }
+
+  return records;
+};
+
+function PredictionOverHistory({ match, scoringState }) {
+  const records = buildPredictionHistory({ match, scoringState });
+
+  if (!records.length) return null;
+
+  return (
+    <section className="win-prediction-history">
+      <div className="section-title">
+        <span>WIN PREDICTION BY OVER</span>
+        <small>Before match, every recorded over of both innings, and after match</small>
+      </div>
+
+      <div className="win-prediction-history-list">
+        {records.map((record) => {
+          const prediction = record.prediction;
+          const teamA = Math.round(Number(prediction.A || 0));
+          const teamB = Math.round(Number(prediction.B || 0));
+
+          return (
+            <div className="win-prediction-history-record" key={record.key}>
+              <div className="win-prediction-history-record-head">
+                <div>
+                  <strong>{record.label}</strong>
+                  <small>{record.subLabel}</small>
+                </div>
+                <span>{prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE"}</span>
+              </div>
+
+              <div className="win-prediction-history-probabilities">
+                <strong>{prediction.teamA} {teamA}%</strong>
+                <div className="win-prediction-mini-track" aria-hidden="true">
+                  <span style={{ width: `${teamA}%` }} />
+                </div>
+                <strong>{prediction.teamB} {teamB}%</strong>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const recordedPlayerPerformances = ({ match }) => {
+  const teams = [
+    match?.teamA || {
+      id: "A",
+      name: match?.teamAName || "Team A",
+      players: match?.teamAPlayers || [],
+    },
+    match?.teamB || {
+      id: "B",
+      name: match?.teamBName || "Team B",
+      players: match?.teamBPlayers || [],
+    },
+  ];
+
+  const innings = [match?.firstInningsData, match?.secondInningsData].filter(Boolean);
+  const map = new Map();
+
+  const ensurePlayer = (playerId, name, team) => {
+    const key = String(playerId || name || "").trim();
+    if (!key) return null;
+    if (!map.has(key)) {
+      map.set(key, {
+        id: key,
+        name: name || "Unknown Player",
+        teamName: team?.name || "Team",
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        wickets: 0,
+        legalBalls: 0,
+        runsConceded: 0,
+      });
+    }
+    return map.get(key);
+  };
+
+  teams.forEach((team) => {
+    (team?.players || []).forEach((player) => {
+      const id = scorecardPlayerId(player);
+      ensurePlayer(id, scorecardPlayerName(player), team);
+    });
+  });
+
+  innings.forEach((inning) => {
+    const battingTeam = teams.find((team) => team?.id === inning?.teamId);
+    const bowlingTeam = teams.find((team) => team?.id !== inning?.teamId);
+    const battingStats = inning?.battingStats || {};
+    const bowlingStats = inning?.bowlingStats || {};
+
+    Object.entries(battingStats).forEach(([id, stats]) => {
+      const player = ensurePlayer(
+        id,
+        stats?.name || stats?.playerName,
+        battingTeam
+      );
+      if (!player) return;
+      player.runs += Number(stats?.runs || 0);
+      player.balls += Number(stats?.balls || 0);
+      player.fours += Number(stats?.fours || 0);
+      player.sixes += Number(stats?.sixes || 0);
+    });
+
+    Object.entries(bowlingStats).forEach(([id, stats]) => {
+      const player = ensurePlayer(
+        id,
+        stats?.name || stats?.playerName,
+        bowlingTeam
+      );
+      if (!player) return;
+      player.wickets += Number(stats?.wickets || 0);
+      player.legalBalls += Number((stats?.legalBalls ?? stats?.balls) || 0);
+      player.runsConceded += Number(stats?.runs || stats?.runsConceded || 0);
+    });
+  });
+
+  return [...map.values()].map((player) => {
+    const strikeRate = player.balls > 0 ? (player.runs / player.balls) * 100 : 0;
+    const economy = player.legalBalls > 0
+      ? (player.runsConceded / player.legalBalls) * 6
+      : null;
+
+    const battingImpact =
+      player.runs +
+      player.fours * 0.5 +
+      player.sixes * 1.5 +
+      (player.balls > 0 ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04)) : 0);
+
+    const bowlingImpact =
+      player.wickets * 30 +
+      (economy == null ? 0 : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
+
+    return {
+      ...player,
+      strikeRate,
+      economy,
+      impact: battingImpact + bowlingImpact,
+    };
+  });
+};
+
+const getPlayerOfTheMatch = (match) => {
+  if (!match) return null;
+
+  const finished =
+    String(match?.status || "").toLowerCase() === "finished" ||
+    String(match?.status || "").toLowerCase() === "completed";
+  if (!finished) return null;
+
+  const performances = recordedPlayerPerformances({ match })
+    .filter((player) => player.runs > 0 || player.wickets > 0 || player.balls > 0 || player.legalBalls > 0)
+    .sort((a, b) => b.impact - a.impact);
+
+  return performances[0] || null;
+};
+
+const describeTurningPointDelivery = (delivery) => {
+  const wicket = delivery?.wicket;
+  if (wicket) {
+    const dismissed = wicket?.batterName || "a batter";
+    return `${dismissed} dismissed (${wicket?.type || "wicket"})`;
+  }
+
+  const runs = Number(delivery?.runs ?? delivery?.batterRuns ?? 0);
+  const type = String(delivery?.type || "").toUpperCase();
+  if (type === "NB") return `No-ball sequence added ${runs} run${runs === 1 ? "" : "s"}`;
+  if (type === "WD") return `Wide added ${runs} run${runs === 1 ? "" : "s"}`;
+  if (runs >= 6) return "Six";
+  if (runs === 4) return "Four";
+  if (runs > 0) return `${runs} run${runs === 1 ? "" : "s"}`;
+  return "Dot ball";
+};
+
+const getTurningPoint = ({ match, scoringState }) => {
+  const historyMatch = predictionHistoryMatch(match);
+  const innings = scorecardHistoryInnings({ match, scoringState });
+  let best = null;
+
+  innings.forEach((inningsData, inningsIndex) => {
+    let previousA = null;
+    const deliveries = Array.isArray(inningsData?.deliveries)
+      ? inningsData.deliveries
+      : [];
+
+    deliveries.forEach((delivery, deliveryIndex) => {
+      const upto = deliveries.slice(0, deliveryIndex + 1);
+      const totals = deliveryHistoryTotals(upto);
+      const state = {
+        ...(inningsData || {}),
+        inningsIndex,
+        inningsRuns: totals.runs,
+        inningsWickets: totals.wickets,
+        legalBalls: totals.legalBalls,
+        deliveries: upto,
+        battingStats: inningsData?.battingStats || {},
+        bowlingStats: inningsData?.bowlingStats || {},
+        strikerId: delivery?.strikerId || "",
+        nonStrikerId: delivery?.nonStrikerId || "",
+        currentBowlerId: delivery?.bowlerId || "",
+      };
+
+      const prediction = getPredictionForDelivery({
+        match: historyMatch,
+        scoringState: state,
+        deliveryIndex,
+      });
+      if (!prediction) return;
+
+      const currentA = Number(prediction.A || 0);
+      const change = previousA == null ? 0 : Math.abs(currentA - previousA);
+
+      if (previousA != null && (!best || change > best.change)) {
+        best = {
+          innings: inningsIndex + 1,
+          over: Number(delivery?.over || Math.floor(deliveryIndex / 6) + 1),
+          ball: Number(delivery?.ball || (deliveryIndex % 6) + 1),
+          change,
+          from: previousA,
+          to: currentA,
+          delivery,
+          summary: describeTurningPointDelivery(delivery),
+        };
+      }
+
+      previousA = currentA;
+    });
+  });
+
+  return best;
+};
+
+function MatchMatchImpactSections({ match, scoringState }) {
+  const player = getPlayerOfTheMatch(match);
+  const turningPoint = getTurningPoint({ match, scoringState });
+  const finished =
+    String(match?.status || "").toLowerCase() === "finished" ||
+    String(match?.status || "").toLowerCase() === "completed";
+
+  return (
+    <div className="match-impact-sections">
+      <section className="match-impact-card">
+        <div className="section-title">
+          <span>PLAYER OF THE MATCH</span>
+          <small>{finished ? "Calculated from the recorded scorecard" : "Available after the match is finished"}</small>
+        </div>
+
+        {player ? (
+          <div className="match-impact-content">
+            <strong>{player.name}</strong>
+            <span>{player.teamName}</span>
+            <div className="match-impact-stats">
+              {player.runs > 0 && <small>{player.runs} runs</small>}
+              {player.wickets > 0 && <small>{player.wickets} wicket{player.wickets === 1 ? "" : "s"}</small>}
+              {player.balls > 0 && <small>SR {player.strikeRate.toFixed(1)}</small>}
+              {player.legalBalls > 0 && player.economy != null && <small>Eco {player.economy.toFixed(2)}</small>}
+            </div>
+          </div>
+        ) : (
+          <p className="match-impact-empty">Player of the match will appear here after a completed match with recorded player statistics.</p>
+        )}
+      </section>
+
+      <section className="match-impact-card">
+        <div className="section-title">
+          <span>TURNING POINT OF THE MATCH</span>
+          <small>{turningPoint ? "Largest recorded change in win probability" : "Built from recorded deliveries"}</small>
+        </div>
+
+        {turningPoint ? (
+          <div className="match-impact-content">
+            <strong>{turningPoint.summary}</strong>
+            <span>{turningPoint.innings === 1 ? "1st innings" : "2nd innings"} • Over {turningPoint.over} • Ball {turningPoint.ball}</span>
+            <div className="match-turning-point-probability">
+              <small>{match?.teamA?.name || match?.teamAName || "Team A"} {turningPoint.from.toFixed(1)}% → {turningPoint.to.toFixed(1)}%</small>
+              <small>Change {turningPoint.change.toFixed(1)}%</small>
+            </div>
+          </div>
+        ) : (
+          <p className="match-impact-empty">The turning point will appear here after recorded deliveries are available.</p>
+        )}
+      </section>
+    </div>
+  );
+}
 
 function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
   if (!battingTeam) return null;
@@ -318,8 +889,16 @@ function MatchScorecard({ match }) {
     );
   };
 
+  const prediction = calculateWinPrediction({
+    match,
+    scoringState: savedState,
+  });
+
   return (
     <div className="match-scorecard-full">
+      <LiveWinPredictionCard prediction={prediction} />
+      <PredictionOverHistory match={match} scoringState={savedState} />
+      <MatchMatchImpactSections match={match} scoringState={savedState} />
       <div className="match-scorecard-tabs" role="tablist" aria-label="Match innings">
         <button
           type="button"

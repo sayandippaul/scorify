@@ -255,7 +255,7 @@ function Dashboard() {
             ...player,
 
             points:
-              player.runs,
+              (player.runs / (player.matchIds.size || 1)).toFixed(1),
 
             strikeRate:
               player.balls > 0

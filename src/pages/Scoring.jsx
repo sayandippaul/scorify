@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./scoring.css";
+import { calculateWinPrediction } from "../services/winPrediction";
 import {
   getCurrentUserId,
   flushMatchData,
@@ -11,6 +12,40 @@ import {
 /* =========================================================
    HELPERS
 ========================================================= */
+
+function ScoringWinPredictionCard({ prediction }) {
+  if (!prediction) return null;
+  const a = Math.round(Number(prediction.A || 0));
+  const b = Math.round(Number(prediction.B || 0));
+  return (
+    <section className="win-prediction-card" aria-label="Live win prediction">
+      <div className="win-prediction-header">
+        <div>
+          <p className="win-prediction-eyebrow">LIVE WIN PREDICTION</p>
+          <small>{prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE"}{prediction.h2hIncluded ? " • H2H included" : ""}</small>
+        </div>
+        <span className="win-prediction-live-dot" />
+      </div>
+      <div className="win-prediction-team">
+        <div className="win-prediction-label"><strong>{prediction.teamA}</strong><b>{a}%</b></div>
+        <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-a" style={{ width: `${a}%` }} /></div>
+      </div>
+      <div className="win-prediction-team">
+        <div className="win-prediction-label"><strong>{prediction.teamB}</strong><b>{b}%</b></div>
+        <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-b" style={{ width: `${b}%` }} /></div>
+      </div>
+      {prediction.metrics && (
+        <div className="win-prediction-metrics">
+          {prediction.metrics.runsRequired != null && <span><small>Required</small><b>{prediction.metrics.runsRequired}</b></span>}
+          <span><small>Current RR</small><b>{Number(prediction.metrics.currentRR || 0).toFixed(2)}</b></span>
+          {prediction.metrics.runsRequired != null && <span><small>Required RR</small><b>{Number.isFinite(prediction.metrics.requiredRR) ? Number(prediction.metrics.requiredRR).toFixed(2) : "—"}</b></span>}
+          <span><small>Recent 6</small><b>{prediction.metrics.recentSixRuns}</b></span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 const PLAYER_ID = (player) =>
   String(
@@ -3707,6 +3742,13 @@ export default function Scoring() {
           <div className="overs-text">{formatOvers(savedState.legalBalls || 0)} / {match.overs || 0} overs</div>
         </section>
 
+        <ScoringWinPredictionCard
+          prediction={calculateWinPrediction({
+            match,
+            scoringState: savedState,
+          })}
+        />
+
         <section className="over-card">
           <div className="section-title"><span>LIVE DELIVERIES</span><small>{(savedState.deliveries || []).length} recorded</small></div>
           <div className="ball-grid bowling-timeline-grid">
@@ -3907,6 +3949,24 @@ if (screen === "finished") {
           </div>
 
         </header>
+
+        <ScoringWinPredictionCard
+          prediction={calculateWinPrediction({
+            match,
+            scoringState: {
+              inningsIndex,
+              inningsRuns,
+              inningsWickets,
+              legalBalls,
+              strikerId,
+              nonStrikerId,
+              currentBowlerId,
+              battingStats,
+              bowlingStats,
+              deliveries,
+            },
+          })}
+        />
 
         <section className="innings-start-card">
 
@@ -4380,6 +4440,24 @@ if (screen === "finished") {
         )}
 
       </section>
+
+      <ScoringWinPredictionCard
+        prediction={calculateWinPrediction({
+          match,
+          scoringState: {
+            inningsIndex,
+            inningsRuns,
+            inningsWickets,
+            legalBalls,
+            strikerId,
+            nonStrikerId,
+            currentBowlerId,
+            battingStats,
+            bowlingStats,
+            deliveries,
+          },
+        })}
+      />
 
       {/* AI */}
 
