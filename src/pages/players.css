@@ -1,29 +1,74 @@
+
 /* =========================================
    PLAYERS
 ========================================= */
 
 .players-list {
+
   display: flex;
+
   flex-direction: column;
+
   gap: 12px;
+
 }
 
+
+/* =========================================
+   PLAYER CARD
+========================================= */
+
 .player-card {
+
+  width: 100%;
+
+  box-sizing: border-box;
+
   background: var(--surface);
+
   border: 1px solid var(--border);
+
   border-radius: 16px;
+
   padding: 16px;
 
   display: flex;
-  align-items: center;
+
+  align-items: flex-start;
 
   gap: 13px;
 
   box-shadow: var(--shadow);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+
 }
 
+.player-card:hover {
+
+  transform: translateY(-2px);
+
+  border-color:
+    rgba(45, 212, 191, 0.35);
+
+  box-shadow:
+    0 8px 26px
+    rgba(0, 0, 0, 0.08);
+
+}
+
+
+/* =========================================
+   PLAYER AVATAR
+========================================= */
+
 .player-avatar {
+
   width: 46px;
+
   height: 46px;
 
   flex-shrink: 0;
@@ -35,105 +80,637 @@
   color: var(--primary);
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   font-size: 18px;
+
   font-weight: 700;
+
+  position: relative;
+
+  overflow: hidden;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(45, 212, 191, 0.08);
+
 }
+
+
+/* subtle avatar animation */
+
+.player-avatar::after {
+
+  content: "";
+
+  position: absolute;
+
+  width: 25px;
+
+  height: 70px;
+
+  left: -40px;
+
+  top: -20px;
+
+  background:
+    rgba(255, 255, 255, 0.14);
+
+  transform: rotate(25deg);
+
+  transition:
+    left 0.45s ease;
+
+}
+
+.player-card:hover .player-avatar::after {
+
+  left: 65px;
+
+}
+
+
+/* =========================================
+   PLAYER INFO
+========================================= */
 
 .player-info {
+
   min-width: 0;
+
   flex: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: flex-start;
+
 }
+
+
+/* =========================================
+   PLAYER NAME
+========================================= */
 
 .player-info h3 {
+
+  width: 100%;
+
   font-size: 15px;
 
+  line-height: 1.25;
+
   white-space: nowrap;
+
   overflow: hidden;
+
   text-overflow: ellipsis;
 
-  margin-bottom: 5px;
+  margin: 0;
+
+  color: var(--text);
+
+  font-weight: 750;
+
 }
 
+
+/* =========================================
+   PLAYER TYPE
+========================================= */
+
 .player-type {
-  display: inline-block;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
 
   color: var(--primary);
 
   font-size: 10px;
 
+  line-height: 1;
+
   font-weight: 700;
+
+  background: var(--surface-2);
+
+  padding: 5px 8px;
+
+  border-radius: 7px;
+
+  margin-top: 6px;
+
+  border: 1px solid
+    rgba(45, 212, 191, 0.10);
+
+  white-space: nowrap;
+
+}
+
+
+/* =========================================
+   PLAYER STRENGTH
+========================================= */
+
+.player-strength {
+
+  position: relative;
+
+  display: flex;
+
+  align-items: center;
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  margin-top: 7px;
+
+  padding: 6px 9px;
+
+  border-radius: 8px;
+
+  background: var(--surface-2);
+
+  border: 1px solid var(--border);
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+
+  font-weight: 650;
+
+  overflow: hidden;
+
+}
+
+
+/* animated strength indicator */
+
+.player-strength::before {
+
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+
+  top: 0;
+
+  bottom: 0;
+
+  width: 3px;
+
+  border-radius: 8px 0 0 8px;
+
+  background: var(--primary);
+
+  animation:
+    strengthPulse 2s ease-in-out infinite;
+
+}
+
+
+/* subtle moving highlight */
+
+.player-strength::after {
+
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+
+  bottom: 0;
+
+  left: -80px;
+
+  width: 70px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(45, 212, 191, 0.10),
+      transparent
+    );
+
+  animation:
+    strengthSweep 3.2s ease-in-out infinite;
+
+}
+
+
+@keyframes strengthPulse {
+
+  0%,
+  100% {
+
+    opacity: 0.55;
+
+    box-shadow:
+      0 0 0
+      rgba(45, 212, 191, 0);
+
+  }
+
+  50% {
+
+    opacity: 1;
+
+    box-shadow:
+      0 0 9px
+      rgba(45, 212, 191, 0.35);
+
+  }
+
+}
+
+
+@keyframes strengthSweep {
+
+  0% {
+
+    left: -80px;
+
+  }
+
+  55%,
+  100% {
+
+    left: 110%;
+
+  }
+
+}
+
+
+/* =========================================
+   PLAYER TAGS / SKILLS
+========================================= */
+
+.player-tags {
+
+  width: 100%;
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  margin-top: 7px;
+
+}
+
+
+/* =========================================
+   SKILL CHIP
+========================================= */
+
+.player-tags span {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  min-height: 24px;
+
+  box-sizing: border-box;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+
+  line-height: 1.1;
+
+  font-weight: 600;
 
   background: var(--surface-2);
 
   padding: 4px 7px;
 
-  border-radius: 6px;
+  border-radius: 7px;
+
+  border: 1px solid
+    var(--border);
+
+  white-space: nowrap;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+
 }
 
-.player-tags {
-  display: flex;
 
-  flex-wrap: wrap;
+.player-tags span:hover {
 
-  gap: 5px;
+  background:
+    rgba(45, 212, 191, 0.08);
 
-  margin-top: 7px;
+  border-color:
+    rgba(45, 212, 191, 0.25);
+
+  color:
+    var(--primary);
+
+  transform:
+    translateY(-1px);
+
 }
 
-.player-tags span {
-  color: var(--text-secondary);
 
-  font-size: 10px;
-
-  background: var(--surface-2);
-
-  padding: 4px 6px;
-
-  border-radius: 6px;
-}
+/* =========================================
+   PLAYER ACTIONS
+========================================= */
 
 .player-actions {
+
+  flex-shrink: 0;
+
   display: flex;
 
   align-items: center;
 
   gap: 6px;
+
+  margin-left: auto;
+
 }
 
-.view-button,
-.delete-button {
-  border: none;
+
+/* =========================================
+   VIEW BUTTON
+========================================= */
+
+.view-button {
+
+  border: 1px solid var(--border);
 
   cursor: pointer;
 
   border-radius: 9px;
 
   min-height: 36px;
-}
 
-.view-button {
   background: var(--surface-2);
 
   color: var(--primary);
 
-  padding: 0 10px;
+  padding: 0 11px;
 
   font-size: 11px;
 
-  font-weight: 600;
+  font-weight: 650;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.15s ease;
+
 }
 
+
+.view-button:hover {
+
+  background:
+    var(--primary);
+
+  border-color:
+    var(--primary);
+
+  color:
+    #ffffff;
+
+  transform:
+    translateY(-1px);
+
+}
+
+
+/* =========================================
+   DELETE BUTTON
+========================================= */
+
 .delete-button {
+
   width: 36px;
+
+  min-height: 36px;
+
+  border: 1px solid transparent;
+
+  cursor: pointer;
+
+  border-radius: 9px;
 
   background: transparent;
 
   color: #ef4444;
 
   font-size: 15px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.15s ease;
+
+}
+
+
+.delete-button:hover {
+
+  background:
+    rgba(239, 68, 68, 0.10);
+
+  border-color:
+    rgba(239, 68, 68, 0.16);
+
+  transform:
+    translateY(-1px);
+
+}
+
+
+/* =========================================
+   BUTTON ACCESSIBILITY
+========================================= */
+
+.view-button:focus-visible,
+.delete-button:focus-visible {
+
+  outline:
+    3px solid
+    rgba(45, 212, 191, 0.20);
+
+  outline-offset: 2px;
+
+}
+
+
+/* =========================================
+   DARK MODE - PLAYERS
+========================================= */
+
+[data-theme="dark"] .player-card {
+
+  background: var(--surface);
+
+  border-color: var(--border);
+
+  box-shadow:
+    0 6px 22px
+    rgba(0, 0, 0, 0.20);
+
+}
+
+
+[data-theme="dark"] .player-card:hover {
+
+  border-color:
+    rgba(45, 212, 191, 0.30);
+
+  box-shadow:
+    0 9px 28px
+    rgba(0, 0, 0, 0.28);
+
+}
+
+
+[data-theme="dark"] .player-info h3 {
+
+  color:
+    var(--text);
+
+}
+
+
+[data-theme="dark"] .player-avatar {
+
+  background:
+    var(--surface-2);
+
+  color:
+    var(--primary);
+
+}
+
+
+[data-theme="dark"] .player-type {
+
+  background:
+    rgba(45, 212, 191, 0.09);
+
+  border-color:
+    rgba(45, 212, 191, 0.16);
+
+  color:
+    var(--primary);
+
+}
+
+
+[data-theme="dark"] .player-strength {
+
+  background:
+    var(--surface-2);
+
+  border-color:
+    var(--border);
+
+  color:
+    var(--text-secondary);
+
+}
+
+
+[data-theme="dark"] .player-tags span {
+
+  background:
+    var(--surface-2);
+
+  border-color:
+    var(--border);
+
+  color:
+    var(--text-secondary);
+
+}
+
+
+[data-theme="dark"] .player-tags span:hover {
+
+  background:
+    rgba(45, 212, 191, 0.10);
+
+  border-color:
+    rgba(45, 212, 191, 0.25);
+
+  color:
+    var(--primary);
+
+}
+
+
+[data-theme="dark"] .view-button {
+
+  background:
+    var(--surface-2);
+
+  border-color:
+    var(--border);
+
+  color:
+    var(--primary);
+
+}
+
+
+[data-theme="dark"] .view-button:hover {
+
+  background:
+    var(--primary);
+
+  border-color:
+    var(--primary);
+
+  color:
+    #0f1419;
+
+}
+
+
+[data-theme="dark"] .delete-button:hover {
+
+  background:
+    rgba(239, 68, 68, 0.12);
+
+  border-color:
+    rgba(239, 68, 68, 0.20);
+
 }
 
 
@@ -142,6 +719,7 @@
 ========================================= */
 
 .clear-search {
+
   border: none;
 
   background: transparent;
@@ -153,6 +731,7 @@
   font-size: 20px;
 
   line-height: 1;
+
 }
 
 
@@ -161,6 +740,7 @@
 ========================================= */
 
 .modal-overlay {
+
   position: fixed;
 
   inset: 0;
@@ -172,14 +752,17 @@
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 
   padding: 20px;
 
   overflow-y: auto;
+
 }
 
 .modal {
+
   width: 100%;
 
   max-width: 500px;
@@ -197,9 +780,11 @@
   padding: 22px;
 
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
 }
 
 .modal-header {
+
   display: flex;
 
   align-items: flex-start;
@@ -209,16 +794,21 @@
   gap: 15px;
 
   margin-bottom: 22px;
+
 }
 
 .modal-header h3 {
+
   font-size: 21px;
 
   margin-top: 2px;
+
 }
 
 .modal-close {
+
   width: 38px;
+
   height: 38px;
 
   flex-shrink: 0;
@@ -234,13 +824,17 @@
   cursor: pointer;
 
   font-size: 21px;
+
 }
 
 .form-group {
+
   margin-bottom: 18px;
+
 }
 
 .form-group label {
+
   display: block;
 
   color: var(--text);
@@ -250,10 +844,13 @@
   font-weight: 600;
 
   margin-bottom: 8px;
+
 }
 
 .form-group input,
+
 .form-group select {
+
   width: 100%;
 
   height: 48px;
@@ -271,14 +868,19 @@
   padding: 0 13px;
 
   font-size: 14px;
+
 }
 
 .form-group input:focus,
+
 .form-group select:focus {
+
   border-color: var(--primary);
+
 }
 
 .form-section {
+
   border-top: 1px solid var(--border);
 
   padding-top: 18px;
@@ -286,23 +888,29 @@
   margin-top: 20px;
 
   margin-bottom: 20px;
+
 }
 
 .form-section h4 {
+
   font-size: 14px;
 
   margin-bottom: 15px;
+
 }
 
 .choice-grid {
+
   display: grid;
 
   grid-template-columns: repeat(2, 1fr);
 
   gap: 8px;
+
 }
 
 .choice-button {
+
   min-height: 44px;
 
   border: 1px solid var(--border);
@@ -318,9 +926,11 @@
   padding: 7px;
 
   font-size: 12px;
+
 }
 
 .choice-button.selected {
+
   border-color: var(--primary);
 
   background: var(--surface-2);
@@ -328,6 +938,7 @@
   color: var(--primary);
 
   font-weight: 700;
+
 }
 
 
@@ -336,15 +947,19 @@
 ========================================= */
 
 .player-detail-heading {
+
   display: flex;
 
   align-items: center;
 
   gap: 12px;
+
 }
 
 .large-player-avatar {
+
   width: 48px;
+
   height: 48px;
 
   flex-shrink: 0;
@@ -356,15 +971,19 @@
   color: var(--primary);
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   font-size: 20px;
 
   font-weight: 700;
+
 }
 
 .details-type {
+
   display: inline-block;
 
   padding: 6px 10px;
@@ -380,39 +999,49 @@
   font-weight: 700;
 
   margin-bottom: 20px;
+
 }
 
 .details-section {
+
   border-top: 1px solid var(--border);
 
   padding-top: 17px;
 
   margin-top: 17px;
+
 }
 
 .details-section h4 {
+
   font-size: 14px;
 
   margin-bottom: 12px;
+
 }
 
 .details-grid {
+
   display: grid;
 
   grid-template-columns: repeat(2, 1fr);
 
   gap: 10px;
+
 }
 
 .detail-item {
+
   background: var(--surface-2);
 
   border-radius: 12px;
 
   padding: 13px;
+
 }
 
 .detail-item span {
+
   display: block;
 
   color: var(--text-secondary);
@@ -420,16 +1049,21 @@
   font-size: 10px;
 
   margin-bottom: 5px;
+
 }
 
 .detail-item strong {
+
   font-size: 12px;
+
 }
 
 .full-button {
+
   width: 100%;
 
   margin-top: 22px;
+
 }
 
 
@@ -438,13 +1072,17 @@
 ========================================= */
 
 .delete-modal {
+
   text-align: center;
 
   max-width: 380px;
+
 }
 
 .delete-icon {
+
   width: 56px;
+
   height: 56px;
 
   margin: 0 auto 16px;
@@ -454,27 +1092,35 @@
   background: rgba(239, 68, 68, 0.12);
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   font-size: 24px;
+
 }
 
 .delete-modal h3 {
+
   font-size: 19px;
 
   margin-bottom: 8px;
+
 }
 
 .delete-modal p {
+
   color: var(--text-secondary);
 
   font-size: 13px;
 
   line-height: 1.5;
+
 }
 
 .delete-actions {
+
   display: grid;
 
   grid-template-columns: 1fr 1fr;
@@ -482,9 +1128,11 @@
   gap: 10px;
 
   margin-top: 22px;
+
 }
 
 .danger-button {
+
   min-height: 46px;
 
   border: none;
@@ -498,213 +1146,598 @@
   cursor: pointer;
 
   font-weight: 700;
+
 }
 
 .required {
+
   color: #ef4444;
+
   font-weight: 700;
+
 }
 
 .form-group label {
+
   display: block;
+
 }
 
 .form-group input:invalid,
+
 .form-group select:invalid {
+
   border-color: var(--border);
+
 }
 
+
+/* =========================================
+   MOBILE
+========================================= */
+
 @media (max-width: 700px) {
+
   .players-page {
+
     padding-bottom: 20px;
+
   }
 
+
+  /* -----------------------------------------
+     PAGE HEADER
+  ----------------------------------------- */
+
   .players-page .page-header {
+
     flex-direction: column;
+
     align-items: flex-start;
+
     gap: 14px;
+
     margin-bottom: 18px;
+
   }
 
   .players-page .page-header > div {
+
     width: 100%;
+
   }
 
   .players-page .page-header h2 {
+
     font-size: 24px;
+
     margin-bottom: 4px;
+
   }
 
   .players-page .page-header .subtitle {
+
     font-size: 12px;
+
   }
 
   .players-page .add-button {
+
     width: 100%;
+
     justify-content: center;
+
   }
 
+
+  /* -----------------------------------------
+     SEARCH
+  ----------------------------------------- */
+
   .players-page .search-box {
+
     min-height: 48px;
+
     padding: 0 12px;
+
     margin-bottom: 16px;
+
     gap: 8px;
+
   }
 
   .players-page .search-box input {
+
     font-size: 14px;
+
   }
+
+
+  /* -----------------------------------------
+     PLAYER LIST
+  ----------------------------------------- */
 
   .players-page .players-list {
+
     gap: 10px;
+
   }
+
+
+  /* -----------------------------------------
+     PLAYER CARD
+  ----------------------------------------- */
 
   .players-page .player-card {
-    flex-wrap: wrap;
-    align-items: flex-start;
+
+    width: 100%;
+
+    box-sizing: border-box;
+
+    display: grid;
+
+    grid-template-columns:
+      40px minmax(0, 1fr) auto;
+
+    align-items: start;
+
     padding: 12px;
+
     gap: 10px;
+
+    border-radius: 13px;
+
   }
+
+
+  /* -----------------------------------------
+     MOBILE AVATAR
+  ----------------------------------------- */
 
   .players-page .player-avatar {
+
     width: 40px;
+
     height: 40px;
+
     font-size: 16px;
+
+    border-radius: 11px;
+
   }
 
+
+  /* -----------------------------------------
+     MOBILE PLAYER INFO
+  ----------------------------------------- */
+
   .players-page .player-info {
-    flex: 1 1 100%;
+
+    width: 100%;
+
     min-width: 0;
+
+    flex: none;
+
   }
 
   .players-page .player-info h3 {
+
+    width: 100%;
+
     font-size: 15px;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
+
+    line-height: 1.25;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
   }
 
+
+  /* -----------------------------------------
+     MOBILE TYPE
+  ----------------------------------------- */
+
+  .players-page .player-type {
+
+    margin-top: 5px;
+
+    padding: 4px 7px;
+
+    font-size: 9px;
+
+    border-radius: 6px;
+
+  }
+
+
+  /* -----------------------------------------
+     MOBILE STRENGTH
+  ----------------------------------------- */
+
+  .players-page .player-strength {
+
+    width: 100%;
+
+    margin-top: 6px;
+
+    padding: 6px 8px;
+
+    font-size: 9px;
+
+    border-radius: 7px;
+
+  }
+
+
+  /* -----------------------------------------
+     MOBILE SKILLS
+  ----------------------------------------- */
+
   .players-page .player-tags {
+
+    width: 100%;
+
     gap: 4px;
+
+    margin-top: 6px;
+
   }
 
   .players-page .player-tags span {
+
+    min-height: 22px;
+
     font-size: 9px;
-    padding: 4px 5px;
+
+    padding: 4px 6px;
+
+    border-radius: 6px;
+
   }
+
+
+  /* -----------------------------------------
+     MOBILE ACTIONS
+  ----------------------------------------- */
 
   .players-page .player-actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 40px;
-    gap: 8px;
-    margin-top: 2px;
-  }
 
-  .players-page .view-button,
-  .players-page .delete-button {
-    min-height: 40px;
-    border-radius: 10px;
+    width: auto;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    margin: 0;
+
   }
 
   .players-page .view-button {
-    width: 100%;
-    font-size: 12px;
+
+    min-height: 34px;
+
+    height: 34px;
+
+    width: auto;
+
+    padding: 0 9px;
+
+    border-radius: 8px;
+
+    font-size: 10px;
+
   }
 
   .players-page .delete-button {
-    width: 40px;
-    justify-self: end;
+
+    width: 32px;
+
+    min-height: 34px;
+
+    height: 34px;
+
+    padding: 0;
+
+    border-radius: 8px;
+
   }
 
+
+  /* -----------------------------------------
+     MODAL
+  ----------------------------------------- */
+
   .players-page .modal-overlay {
+
     padding: 14px;
+
   }
 
   .players-page .modal {
+
     max-width: 100%;
+
     padding: 18px 16px;
+
     border-radius: 16px;
+
   }
 
   .players-page .modal-header {
+
     align-items: center;
+
     margin-bottom: 16px;
+
   }
 
   .players-page .modal-header h3 {
+
     font-size: 20px;
+
   }
 
   .players-page .modal-close {
+
     width: 36px;
+
     height: 36px;
+
     font-size: 20px;
+
   }
 
   .players-page .form-group {
+
     margin-bottom: 16px;
+
   }
 
   .players-page .form-group label {
+
     font-size: 11px;
+
   }
 
   .players-page .form-group input,
+
   .players-page .form-group select {
+
     height: 46px;
+
     font-size: 14px;
+
   }
 
   .players-page .choice-grid {
+
     grid-template-columns: 1fr 1fr;
+
     gap: 8px;
+
   }
 
   .players-page .choice-button {
+
     min-height: 42px;
+
     font-size: 11px;
+
     padding: 6px 5px;
+
   }
 
+
+  /* -----------------------------------------
+     PLAYER DETAILS
+  ----------------------------------------- */
+
   .players-page .player-detail-heading {
+
     gap: 10px;
+
     align-items: center;
+
   }
 
   .players-page .large-player-avatar {
+
     width: 42px;
+
     height: 42px;
+
     font-size: 18px;
+
   }
 
   .players-page .details-grid {
+
     grid-template-columns: 1fr;
+
   }
 
+
+  /* -----------------------------------------
+     DELETE MODAL
+  ----------------------------------------- */
+
   .players-page .delete-modal {
+
     max-width: 100%;
+
     padding: 20px 16px;
+
   }
 
   .players-page .delete-actions {
+
     grid-template-columns: 1fr 1fr;
+
     gap: 8px;
+
   }
 
   .players-page .delete-actions button {
+
     min-height: 42px;
+
   }
 
+
+  /* -----------------------------------------
+     EMPTY CARD
+  ----------------------------------------- */
+
   .players-page .empty-card {
+
     padding: 22px 16px;
+
   }
 
   .players-page .empty-card h3 {
+
     font-size: 20px;
+
   }
 
   .players-page .empty-card p {
+
     font-size: 13px;
+
   }
+
+}
+
+
+/* =========================================
+   VERY SMALL MOBILE
+========================================= */
+
+@media (max-width: 380px) {
+
+  .players-page .player-card {
+
+    grid-template-columns:
+      37px minmax(0, 1fr) auto;
+
+    padding: 10px;
+
+    gap: 8px;
+
+    border-radius: 11px;
+
+  }
+
+  .players-page .player-avatar {
+
+    width: 37px;
+
+    height: 37px;
+
+    border-radius: 10px;
+
+    font-size: 14px;
+
+  }
+
+  .players-page .player-info h3 {
+
+    font-size: 13px;
+
+  }
+
+  .players-page .player-type {
+
+    font-size: 8px;
+
+    padding: 3px 6px;
+
+  }
+
+  .players-page .player-strength {
+
+    font-size: 8px;
+
+    padding: 5px 7px;
+
+  }
+
+  .players-page .player-tags {
+
+    gap: 3px;
+
+  }
+
+  .players-page .player-tags span {
+
+    min-height: 20px;
+
+    padding: 3px 5px;
+
+    font-size: 8px;
+
+  }
+
+  .players-page .view-button {
+
+    min-height: 30px;
+
+    height: 30px;
+
+    padding: 0 7px;
+
+    font-size: 9px;
+
+  }
+
+  .players-page .delete-button {
+
+    width: 29px;
+
+    min-height: 30px;
+
+    height: 30px;
+
+    font-size: 12px;
+
+  }
+
+}
+
+
+/* =========================================
+   REDUCE MOTION
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .player-card,
+
+  .player-avatar::after,
+
+  .player-tags span,
+
+  .view-button,
+
+  .delete-button,
+
+  .player-strength,
+
+  .player-strength::before,
+
+  .player-strength::after {
+
+    transition: none;
+
+    animation: none;
+
+  }
+
 }

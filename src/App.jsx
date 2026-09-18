@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -16,6 +16,7 @@ import Teams from "./pages/Teams";
 import Matches from "./pages/Matches";
 import Scoring from "./pages/Scoring";
 import Profile from "./pages/Profile";
+import PageLoader from "./components/PageLoader";
 
 
 /* =========================================================
@@ -159,6 +160,11 @@ function App() {
 
   const [user, setUser] =
     useState(getSavedUser);
+  const [isLoading, setIsLoading] = useState(true);
+  const completeLoading = useCallback(
+    () => setIsLoading(false),
+    []
+  );
 
 
   /* =======================================================
@@ -270,6 +276,10 @@ function App() {
   /* =========================================================
      APP UI
      ========================================================= */
+
+  if (isLoading) {
+    return <PageLoader onComplete={completeLoading} />;
+  }
 
   return (
     <BrowserRouter>

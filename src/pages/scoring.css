@@ -472,6 +472,9 @@
 .ball-slot strong {
   font-size: 13px;
 }
+[data-theme="light"] .scoring-page .ball-slot.ball-used {
+  color: black;
+}
 
 .ball-slot small {
   margin-top: 3px;

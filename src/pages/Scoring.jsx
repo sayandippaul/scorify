@@ -768,17 +768,13 @@ export default function Scoring() {
 
     setBattingStats(nextStats);
 
-    if (
-      pendingReplacement.slot ===
-      "striker"
-    ) {
+    if (battingMode === 1 || pendingReplacement.slot === "striker") {
       setStrikerId(id);
     }
 
-    if (
-      pendingReplacement.slot ===
-      "nonStriker"
-    ) {
+    if (battingMode === 1) {
+      setNonStrikerId("");
+    } else if (pendingReplacement.slot === "nonStriker") {
       setNonStrikerId(id);
     }
 
@@ -2091,9 +2087,9 @@ export default function Scoring() {
         setNonStrikerId("");
         setPendingReplacement(null);
       } else if (remaining.length > 1) {
-        setBattingMode(2);
+        setBattingMode(battingMode);
         setPendingReplacement({
-          slot: wasStriker ? "striker" : "nonStriker",
+          slot: battingMode === 1 || wasStriker ? "striker" : "nonStriker",
           overEnded: false,
         });
       } else {
@@ -2251,9 +2247,9 @@ export default function Scoring() {
         setNonStrikerId("");
         setPendingReplacement(null);
       } else if (remaining.length > 1) {
-        setBattingMode(2);
+        setBattingMode(battingMode);
         setPendingReplacement({
-          slot: wasStriker ? "striker" : "nonStriker",
+          slot: battingMode === 1 || wasStriker ? "striker" : "nonStriker",
           overEnded: false,
         });
       } else {
@@ -3239,10 +3235,10 @@ export default function Scoring() {
      * replacement-batsman menu appear.
      */
 
-    setBattingMode(2);
+    setBattingMode(battingMode);
 
     setPendingReplacement({
-      slot: dismissedSlot,
+      slot: battingMode === 1 ? "striker" : dismissedSlot,
       overEnded,
     });
 
@@ -3382,9 +3378,9 @@ export default function Scoring() {
      * Two or more batsmen remain, so
      * show the replacement menu.
      */
-    setBattingMode(2);
+    setBattingMode(battingMode);
     setPendingReplacement({
-      slot,
+      slot: battingMode === 1 ? "striker" : slot,
       overEnded: false,
     });
   };

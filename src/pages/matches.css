@@ -1214,8 +1214,8 @@
 .match-toss-coin {
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
   border: 2px solid #b45309;
   border-radius: 50%;
   background: #facc15;
@@ -1436,11 +1436,11 @@
 
 .match-scorecard-table td small {
   max-width: 220px;
-  overflow: hidden;
+  overflow: scroll;
   color: var(--matches-muted);
   font-size: 9px;
   font-weight: 600;
-  text-overflow: ellipsis;
+  /* text-overflow: ellipsis; */
   white-space: nowrap;
 }
 
@@ -1740,9 +1740,15 @@
 
   .match-scorecard-table th:first-child,
   .match-scorecard-table td:first-child {
-    width: 34%;
+    width: 24%;
+    overflow-x: scroll;
   }
-
+  
+.match-scorecard-table th:last-child,
+  .match-scorecard-table td:last-child {
+    width: 20%;
+    overflow-x: scroll;
+  }
   .match-scorecard-table td small {
     max-width: 100%;
     font-size: 8px;

@@ -498,6 +498,20 @@ function Matches() {
     };
   }, []);
 
+  // Keep an opened scorecard in sync with the existing match snapshot stream.
+  // This is event-driven and does not add any polling or database reads.
+  useEffect(() => {
+    if (!viewingMatch) return;
+
+    const latestMatch = matches.find(
+      (match) => String(match.id) === String(viewingMatch.id)
+    );
+
+    if (latestMatch && latestMatch !== viewingMatch) {
+      setViewingMatch(latestMatch);
+    }
+  }, [matches, viewingMatch]);
+
   // --------------------------------------------------
   // AUTO CHANGE LIVE -> UNFINISHED AFTER 12 HOURS
   // --------------------------------------------------
@@ -584,6 +598,7 @@ function Matches() {
 
     setBattingTeam(null);
     setBowlingTeam(null);
+    setMatchOvers(5);
 
     setScore({
       runs: 0,
@@ -2153,7 +2168,7 @@ function Matches() {
               <option value="2">2 Overs</option>
               <option value="3">3 Overs</option>
               <option value="4">4 Overs</option>
-              <option value="5" selected>5 Overs</option>
+              <option value="5">5 Overs</option>
               <option value="6">6 Overs</option>
               <option value="7">7 Overs</option>
               <option value="8">8 Overs</option>
@@ -2578,7 +2593,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
             selectedA,
             selectedB,
             capA,
-            capB
+            capB,
+            selectedOvers
           ) => {
             setTeamA({
               id: "A",
@@ -2598,6 +2614,7 @@ const teamsWithPlayers = savedTeams.map((team) => {
 
             setCaptainA(capA);
             setCaptainB(capB);
+            setMatchOvers(Number(selectedOvers) || 5);
 
             setFirstTossChoice(null);
             setFirstTossResult(null);
@@ -2911,18 +2928,19 @@ const teamsWithPlayers = savedTeams.map((team) => {
 
             <div className="scorecard-teams">
               <div>
+                
                 <strong>
-                  {viewingMatch.teamA.name}
-                </strong>
-
-                {getTossWinnerTeamId(viewingMatch) === "A" && (
+                  {viewingMatch.teamA.name}{getTossWinnerTeamId(viewingMatch) === "A" && (
                   <small className="scorecard-toss-badge">
                     <small className="scorecard-toss-coin">
                       {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
                     </small>
-                    Toss winner
+                    {/* Toss winner */}
                   </small>
                 )}
+                
+                </strong>
+
 
                 <span>
                   {viewingMatch.scoreA || 0}/
@@ -2933,18 +2951,21 @@ const teamsWithPlayers = savedTeams.map((team) => {
               <div className="score-vs">VS</div>
 
               <div>
+                
                 <strong>
                   {viewingMatch.teamB.name}
-                </strong>
-
-                {getTossWinnerTeamId(viewingMatch) === "B" && (
+ {getTossWinnerTeamId(viewingMatch) === "B" && (
                   <small className="scorecard-toss-badge">
                     <small className="scorecard-toss-coin">
                       {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
                     </small>
-                    Toss winner
+                    {/* Toss winner */}
                   </small>
                 )}
+               
+
+                </strong>
+
 
                 <span>
                   {viewingMatch.scoreB || 0}/
@@ -3013,6 +3034,7 @@ function ExistingTeamsScreen({
 
   const [captainAId, setCaptainAId] = useState("");
   const [captainBId, setCaptainBId] = useState("");
+  const [selectedOvers, setSelectedOvers] = useState("5");
 
   // --------------------------------------------------
   // SAFE ID HELPER
@@ -3428,7 +3450,8 @@ const getTeamPlayers = (team) => {
         players: playersB,
       },
       captainA,
-      captainB
+      captainB,
+      selectedOvers
     );
   };
 
@@ -3627,6 +3650,27 @@ const getTeamPlayers = (team) => {
 
         </div>
 
+      </div>
+
+      <div className="setup-card">
+        <label htmlFor="existing-match-overs">Match Overs</label>
+        <select
+          id="existing-match-overs"
+          value={selectedOvers}
+          onChange={(e) => setSelectedOvers(e.target.value)}
+        >
+          <option value="1">1 Over</option>
+          <option value="2">2 Overs</option>
+          <option value="3">3 Overs</option>
+          <option value="4">4 Overs</option>
+          <option value="5">5 Overs</option>
+          <option value="6">6 Overs</option>
+          <option value="7">7 Overs</option>
+          <option value="8">8 Overs</option>
+          <option value="9">9 Overs</option>
+          <option value="10">10 Overs</option>
+          <option value="15">15 Overs</option>
+        </select>
       </div>
 
       {/* ==============================
