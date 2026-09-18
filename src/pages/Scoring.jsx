@@ -3454,121 +3454,387 @@ export default function Scoring() {
   };
 
   /* =========================================================
-     AI BATTER
+     AI SUGGESTION STATE
+  ========================================================= */
+
+  const [batterSuggestionIndex, setBatterSuggestionIndex] =
+    useState(0);
+
+  const [bowlerSuggestionIndex, setBowlerSuggestionIndex] =
+    useState(0);
+
+  const [batterSuggestionMessage, setBatterSuggestionMessage] =
+    useState("");
+
+  const [bowlerSuggestionMessage, setBowlerSuggestionMessage] =
+    useState("");
+
+
+  /* =========================================================
+     AI BATTER CANDIDATES
+  ========================================================= */
+
+  const batterSuggestionCandidates = useMemo(() => {
+    if (!availableBatters.length) {
+      return [];
+    }
+
+    /*
+     * availableBatters already contains only players
+     * whose battingStats status is "yet".
+     *
+     * Therefore:
+     * - Out players are excluded
+     * - Current batsmen are excluded
+     *
+     * We still explicitly protect the current striker
+     * and non-striker here so that the AI can NEVER
+     * suggest a player who is currently batting.
+     */
+
+    const currentBatterIds = new Set(
+      [
+        strikerId,
+        nonStrikerId,
+      ]
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+
+    const candidates =
+      availableBatters.filter((player) => {
+        const id = PLAYER_ID(player);
+
+        return !currentBatterIds.has(
+          String(id)
+        );
+      });
+
+
+    /*
+     * BATSMAN STRENGTH
+     *
+     * Priority:
+     * 1. Highest total runs
+     * 2. Highest strike rate
+     */
+
+    const getBattingRuns = (player) => {
+      const stats =
+        battingStats[
+          PLAYER_ID(player)
+        ] || {};
+
+      return Number(
+        stats.runs || 0
+      );
+    };
+
+
+    const getBattingStrikeRate = (player) => {
+      const stats =
+        battingStats[
+          PLAYER_ID(player)
+        ] || {};
+
+      const runs =
+        Number(stats.runs || 0);
+
+      const balls =
+        Number(stats.balls || 0);
+
+      if (!balls) {
+        return 0;
+      }
+
+      return (
+        (runs / balls) *
+        100
+      );
+    };
+
+
+    return [...candidates].sort(
+      (a, b) => {
+        const aRuns =
+          getBattingRuns(a);
+
+        const bRuns =
+          getBattingRuns(b);
+
+
+        /*
+         * First priority:
+         * Highest runs
+         */
+
+        if (bRuns !== aRuns) {
+          return bRuns - aRuns;
+        }
+
+
+        /*
+         * Second priority:
+         * Highest strike rate
+         */
+
+        const aStrikeRate =
+          getBattingStrikeRate(a);
+
+        const bStrikeRate =
+          getBattingStrikeRate(b);
+
+        return (
+          bStrikeRate -
+          aStrikeRate
+        );
+      }
+    );
+  }, [
+    availableBatters,
+    battingStats,
+    strikerId,
+    nonStrikerId,
+  ]);
+
+
+  /* =========================================================
+     NEXT BATSMAN SUGGESTION
   ========================================================= */
 
   const nextBatterSuggestion =
     useMemo(() => {
       if (
-        !availableBatters.length
+        !batterSuggestionCandidates.length
       ) {
         return "-";
       }
 
-      const candidates =
-        [...availableBatters];
-
-      candidates.sort(
-        (a, b) => {
-          const aType =
-            String(
-              a.type || ""
-            ).toLowerCase();
-
-          const bType =
-            String(
-              b.type || ""
-            ).toLowerCase();
-
-          const score = (
-            type
-          ) => {
-            if (
-              type.includes(
-                "batsman"
-              )
-            ) {
-              return 4;
-            }
-
-            if (
-              type.includes(
-                "all"
-              )
-            ) {
-              return 3;
-            }
-
-            if (
-              type.includes(
-                "wicket"
-              )
-            ) {
-              return 2;
-            }
-
-            return 1;
-          };
-
-          return (
-            score(bType) -
-            score(aType)
-          );
-        }
-      );
+      if (
+        batterSuggestionIndex >=
+        batterSuggestionCandidates.length
+      ) {
+        return "-";
+      }
 
       return PLAYER_NAME(
-        candidates[0]
+        batterSuggestionCandidates[
+          batterSuggestionIndex
+        ]
       );
     }, [
-      availableBatters,
+      batterSuggestionCandidates,
+      batterSuggestionIndex,
     ]);
 
+
   /* =========================================================
-     AI BOWLER
+     SUGGEST ANOTHER BATSMAN
   ========================================================= */
 
-  const nextBowlerSuggestion =
+  const suggestAnotherBatter = () => {
+    if (
+      !batterSuggestionCandidates.length
+    ) {
+      setBatterSuggestionMessage(
+        "No batsman left"
+      );
+
+      return;
+    }
+
+    const nextIndex =
+      batterSuggestionIndex + 1;
+
+
+    /*
+     * No more batsmen after the
+     * current suggestion.
+     */
+
+    if (
+      nextIndex >=
+      batterSuggestionCandidates.length
+    ) {
+      setBatterSuggestionIndex(
+        nextIndex
+      );
+
+      setBatterSuggestionMessage(
+        "No batsman left"
+      );
+
+      return;
+    }
+
+
+    setBatterSuggestionIndex(
+      nextIndex
+    );
+
+    setBatterSuggestionMessage("");
+  };
+
+
+  /* =========================================================
+     RESET BATTER SUGGESTION
+  ========================================================= */
+
+  useEffect(() => {
+    /*
+     * Reset only when the actual batting
+     * situation changes.
+     *
+     * We deliberately DO NOT use battingStats
+     * here because battingStats changes after
+     * every ball and would reset "Suggest Another".
+     */
+
+    setBatterSuggestionIndex(0);
+    setBatterSuggestionMessage("");
+  }, [
+    strikerId,
+    nonStrikerId,
+  ]);
+
+
+  /* =========================================================
+     AI BOWLER CANDIDATES
+  ========================================================= */
+
+  const bowlerSuggestionCandidates =
     useMemo(() => {
       if (
         !bowlingTeam ||
+        !bowlingTeam.players ||
         !bowlingTeam.players.length
       ) {
-        return "-";
+        return [];
       }
+
+
+      /*
+       * IMPORTANT:
+       *
+       * Keep the existing canSelectBowler()
+       * logic.
+       *
+       * This already handles:
+       * - current batsmen
+       * - current bowler
+       * - previous-over bowler
+       * - other existing bowling restrictions
+       */
 
       const candidates =
         bowlingTeam.players.filter(
-          canSelectBowler
+          (player) =>
+            canSelectBowler(player)
         );
 
-      if (
-        !candidates.length
-      ) {
-        return "-";
-      }
 
-      candidates.sort(
-        (a, b) => {
-          const aStats =
+      /*
+       * BOWLER STRENGTH
+       *
+       * Priority:
+       * 1. Highest wickets
+       * 2. Lowest economy
+       */
+
+      const getBowlerWickets =
+        (player) => {
+          const stats =
             bowlingStats[
-              PLAYER_ID(a)
+              PLAYER_ID(player)
             ] || {};
 
-          const bStats =
+          return Number(
+            stats.wickets || 0
+          );
+        };
+
+
+      const getBowlerEconomy =
+        (player) => {
+          const stats =
             bowlingStats[
-              PLAYER_ID(b)
+              PLAYER_ID(player)
             ] || {};
+
+          const runs =
+            Number(
+              stats.runs || 0
+            );
+
+          const balls =
+            Number(
+              stats.legalBalls || 0
+            );
+
+
+          /*
+           * A bowler who has not bowled
+           * any legal ball does not get an
+           * artificial economy of 0.
+           *
+           * Otherwise an unused bowler would
+           * incorrectly become the "best"
+           * bowler because 0 economy looks
+           * better than every real economy.
+           */
+
+          if (!balls) {
+            return Number.POSITIVE_INFINITY;
+          }
 
           return (
-            (bStats.wickets || 0) -
-            (aStats.wickets || 0)
+            (runs / balls) *
+            6
+          );
+        };
+
+
+      return [...candidates].sort(
+        (a, b) => {
+          const aWickets =
+            getBowlerWickets(a);
+
+          const bWickets =
+            getBowlerWickets(b);
+
+
+          /*
+           * First priority:
+           * Highest wickets
+           */
+
+          if (
+            bWickets !==
+            aWickets
+          ) {
+            return (
+              bWickets -
+              aWickets
+            );
+          }
+
+
+          /*
+           * Second priority:
+           * Lowest economy
+           */
+
+          const aEconomy =
+            getBowlerEconomy(a);
+
+          const bEconomy =
+            getBowlerEconomy(b);
+
+          return (
+            aEconomy -
+            bEconomy
           );
         }
-      );
-
-      return PLAYER_NAME(
-        candidates[0]
       );
     }, [
       bowlingTeam,
@@ -3578,6 +3844,103 @@ export default function Scoring() {
       completedOvers,
     ]);
 
+
+  /* =========================================================
+     NEXT BOWLER SUGGESTION
+  ========================================================= */
+
+  const nextBowlerSuggestion =
+    useMemo(() => {
+      if (
+        !bowlerSuggestionCandidates.length
+      ) {
+        return "-";
+      }
+
+      if (
+        bowlerSuggestionIndex >=
+        bowlerSuggestionCandidates.length
+      ) {
+        return "-";
+      }
+
+      return PLAYER_NAME(
+        bowlerSuggestionCandidates[
+          bowlerSuggestionIndex
+        ]
+      );
+    }, [
+      bowlerSuggestionCandidates,
+      bowlerSuggestionIndex,
+    ]);
+
+
+  /* =========================================================
+     SUGGEST ANOTHER BOWLER
+  ========================================================= */
+
+  const suggestAnotherBowler = () => {
+    if (
+      !bowlerSuggestionCandidates.length
+    ) {
+      setBowlerSuggestionMessage(
+        "No bowler left"
+      );
+
+      return;
+    }
+
+    const nextIndex =
+      bowlerSuggestionIndex + 1;
+
+
+    /*
+     * No more eligible bowlers.
+     */
+
+    if (
+      nextIndex >=
+      bowlerSuggestionCandidates.length
+    ) {
+      setBowlerSuggestionIndex(
+        nextIndex
+      );
+
+      setBowlerSuggestionMessage(
+        "No bowler left"
+      );
+
+      return;
+    }
+
+
+    setBowlerSuggestionIndex(
+      nextIndex
+    );
+
+    setBowlerSuggestionMessage("");
+  };
+
+
+  /* =========================================================
+     RESET BOWLER SUGGESTION
+  ========================================================= */
+
+  useEffect(() => {
+    /*
+     * A new over means a new bowler
+     * suggestion cycle.
+     *
+     * We use completedOvers instead of
+     * bowlingStats because bowlingStats
+     * changes after every delivery.
+     */
+
+    setBowlerSuggestionIndex(0);
+    setBowlerSuggestionMessage("");
+  }, [
+    completedOvers,
+  ]);
   /* =========================================================
      AUTO SAVE CURRENT SCORE + RESUME STATE
   ========================================================= */
@@ -4458,7 +4821,6 @@ if (screen === "finished") {
           },
         })}
       />
-
       {/* AI */}
 
       <section className="ai-suggestion-card">
@@ -4467,27 +4829,79 @@ if (screen === "finished") {
           ✨ AI SUGGESTION
         </div>
 
-        <div className="ai-row">
 
-          <div>
-            <span>
-              Next batsman
-            </span>
+        {/* =================================================
+            BATSMAN SUGGESTION
+        ================================================== */}
 
-            <strong>
-              {nextBatterSuggestion}
-            </strong>
+        <div className="ai-suggestion-part">
+
+          <div className="ai-row">
+
+            <div>
+
+              <span>
+                Next batsman
+              </span>
+
+              <strong>
+                {batterSuggestionMessage
+                  ? batterSuggestionMessage
+                  : nextBatterSuggestion}
+              </strong>
+
+            </div>
+
           </div>
 
-          <div>
-            <span>
-              Next bowler
-            </span>
 
-            <strong>
-              {nextBowlerSuggestion}
-            </strong>
+          <button
+            type="button"
+            onClick={
+              suggestAnotherBatter
+            }
+            className="suggest-another-btn"
+          >
+            Suggest Another
+          </button>
+
+        </div>
+
+
+        {/* =================================================
+            BOWLER SUGGESTION
+        ================================================== */}
+
+        <div className="ai-suggestion-part">
+
+          <div className="ai-row">
+
+            <div>
+
+              <span>
+                Next bowler
+              </span>
+
+              <strong>
+                {bowlerSuggestionMessage
+                  ? bowlerSuggestionMessage
+                  : nextBowlerSuggestion}
+              </strong>
+
+            </div>
+
           </div>
+
+
+          <button
+            type="button"
+            onClick={
+              suggestAnotherBowler
+            }
+            className="suggest-another-btn"
+          >
+            Suggest Another
+          </button>
 
         </div>
 

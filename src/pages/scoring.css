@@ -157,6 +157,8 @@
   border-color: rgba(139, 92, 246, 0.4);
 }
 
+/* AI heading */
+
 .ai-title {
   margin-bottom: 14px;
   font-size: 12px;
@@ -165,31 +167,190 @@
   color: #a78bfa;
 }
 
+
+/* =========================================================
+   INDIVIDUAL AI SUGGESTION PART
+========================================================= */
+
+.ai-suggestion-part {
+  padding: 12px;
+  margin-bottom: 10px;
+
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  border-radius: 13px;
+
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.ai-suggestion-part:last-child {
+  margin-bottom: 0;
+}
+
+
+/* =========================================================
+   AI CONTENT
+========================================================= */
+
 .ai-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .ai-row>div {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(139, 92, 246, 0.08);
+  min-width: 0;
+  padding: 0;
+
+  background: transparent;
 }
+
+
+/* Label */
 
 .ai-row span {
   display: block;
   margin-bottom: 5px;
+
   color: var(--muted-text, #94a3b8);
+
   font-size: 11px;
+  font-weight: 700;
 }
+
+
+/* Suggested player name */
 
 .ai-row strong {
   display: block;
-  font-size: 14px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 15px;
+  font-weight: 900;
+
+  color: var(--text-color, #f8fafc);
 }
 
+
 /* =========================================================
+   SUGGEST ANOTHER BUTTON
+========================================================= */
+
+.suggest-another-btn {
+  width: 100%;
+  min-height: 40px;
+
+  margin-top: 10px;
+  padding: 9px 14px;
+
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 10px;
+
+  background: rgba(139, 92, 246, 0.10);
+  color: #a78bfa;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.suggest-another-btn:hover {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: #a78bfa;
+  transform: translateY(-1px);
+}
+
+.suggest-another-btn:active {
+  transform: scale(0.98);
+}
+
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+
+[data-theme="dark"] .scoring-page .ai-suggestion-card {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+[data-theme="dark"] .scoring-page .ai-suggestion-part {
+  background: rgba(139, 92, 246, 0.06);
+  border-color: rgba(139, 92, 246, 0.20);
+}
+
+[data-theme="dark"] .scoring-page .ai-row strong {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .scoring-page .suggest-another-btn {
+  background: rgba(139, 92, 246, 0.10);
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.40);
+}
+
+[data-theme="dark"] .scoring-page .suggest-another-btn:hover {
+  background: rgba(139, 92, 246, 0.20);
+  border-color: #a78bfa;
+}
+
+
+/* =========================================================
+   LIGHT MODE
+========================================================= */
+
+[data-theme="light"] .scoring-page .ai-suggestion-part {
+  background: rgba(139, 92, 246, 0.04);
+  border-color: rgba(139, 92, 246, 0.18);
+}
+
+[data-theme="light"] .scoring-page .ai-row strong {
+  color: #1e293b;
+}
+
+[data-theme="light"] .scoring-page .suggest-another-btn {
+  background: rgba(139, 92, 246, 0.06);
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.30);
+}
+
+[data-theme="light"] .scoring-page .suggest-another-btn:hover {
+  background: rgba(124, 58, 237, 0.10);
+  border-color: #7c3aed;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+  .ai-suggestion-card {
+    padding: 13px;
+  }
+
+  .ai-suggestion-part {
+    padding: 11px;
+  }
+
+  .ai-row strong {
+    font-size: 14px;
+  }
+
+  .suggest-another-btn {
+    min-height: 38px;
+    font-size: 11px;
+  }
+}/* =========================================================
    SECTION TITLES
 ========================================================= */
 
