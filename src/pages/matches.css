@@ -4278,3 +4278,654 @@
     transform: scale(1);
   }
 }
+
+
+
+/* =========================================================
+   NEW BATTER BAR GRAPH
+   Runs of every batter
+   Light + Dark • Responsive • Animated
+========================================================= */
+
+.finished-match-analysis .analysis-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: analysisBarGrow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.finished-match-analysis .team-a-bar {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-bar {
+  fill: var(--analysis-team-b);
+}
+
+.finished-match-analysis .analysis-bar:hover {
+  opacity: 0.86;
+  filter:
+    drop-shadow(
+      0 3px 6px rgba(15, 23, 42, 0.2)
+    );
+}
+
+.finished-match-analysis .analysis-bar-value {
+  fill: var(--analysis-text);
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(1) {
+  animation-delay: 0.04s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(2) {
+  animation-delay: 0.08s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(3) {
+  animation-delay: 0.12s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(4) {
+  animation-delay: 0.16s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(5) {
+  animation-delay: 0.20s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(6) {
+  animation-delay: 0.24s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(7) {
+  animation-delay: 0.28s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(8) {
+  animation-delay: 0.32s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(9) {
+  animation-delay: 0.36s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(10) {
+  animation-delay: 0.40s;
+}
+
+
+/* =========================================================
+   PLAYER NAMES
+   Tilted + readable
+========================================================= */
+
+.finished-match-analysis .analysis-player-label {
+  fill: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 850;
+  pointer-events: none;
+
+  /*
+     Important:
+     The JSX should use:
+     transform={`rotate(-45 ${x} ${y})`}
+  */
+  white-space: nowrap;
+}
+
+.finished-match-analysis .team-a-label {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-label {
+  fill: var(--analysis-team-b);
+}
+
+
+/* =========================================================
+   BOWLER GRAPH
+   Wickets BAR + Economy Label
+========================================================= */
+
+.finished-match-analysis .analysis-wicket-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation:
+    analysisBarGrow
+    0.72s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.finished-match-analysis .team-a-wicket-bar {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-wicket-bar {
+  fill: var(--analysis-team-b);
+}
+
+.finished-match-analysis .analysis-wicket-bar:hover {
+  opacity: 0.86;
+  filter:
+    drop-shadow(
+      0 3px 6px rgba(15, 23, 42, 0.2)
+    );
+}
+
+.finished-match-analysis .analysis-economy-label {
+  fill: var(--analysis-text);
+  font-size: 9px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.finished-match-analysis .analysis-wickets-label {
+  fill: var(--analysis-muted);
+  font-size: 8px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   PARTNERSHIP ANALYSIS
+========================================================= */
+
+.finished-match-analysis .partnership-analysis-card {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 18px;
+  background: var(--analysis-bg);
+  box-shadow:
+    0 7px 22px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+
+  animation:
+    analysisCardIn
+    0.55s
+    ease
+    both;
+  animation-delay: 0.18s;
+}
+
+.finished-match-analysis .partnership-list {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.finished-match-analysis .partnership-innings {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      var(--analysis-surface),
+      var(--analysis-bg)
+    );
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.finished-match-analysis .partnership-innings:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+.finished-match-analysis .partnership-innings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--analysis-border);
+}
+
+.finished-match-analysis .partnership-innings-header > div {
+  min-width: 0;
+}
+
+.finished-match-analysis .partnership-innings-header strong {
+  display: block;
+  color: var(--analysis-text);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 900;
+}
+
+.finished-match-analysis .partnership-innings-header small {
+  display: block;
+  margin-top: 3px;
+  color: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.finished-match-analysis .partnership-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finished-match-analysis .partnership-item {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 11px;
+  background: var(--analysis-bg);
+
+  animation:
+    partnershipItemIn
+    0.45s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.finished-match-analysis .partnership-item:hover {
+  transform: translateX(2px);
+  border-color: var(--analysis-team-a);
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.finished-match-analysis .partnership-batters {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.finished-match-analysis .partnership-player {
+  min-width: 0;
+  max-width: 42%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.finished-match-analysis .partnership-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--analysis-text);
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 850;
+}
+
+.finished-match-analysis .partnership-vs {
+  flex: 0 0 auto;
+  color: var(--analysis-muted);
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.finished-match-analysis .partnership-score {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--analysis-team-a);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.finished-match-analysis .partnership-balls {
+  color: var(--analysis-muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.finished-match-analysis .partnership-empty {
+  width: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  border: 1px dashed var(--analysis-border);
+  border-radius: 11px;
+  text-align: center;
+  color: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   DARK MODE
+   New bars + partnership
+========================================================= */
+
+[data-theme="dark"] .finished-match-analysis .analysis-bar-value,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-bar-value {
+  fill: var(--analysis-text);
+}
+
+[data-theme="dark"] .finished-match-analysis .analysis-economy-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-economy-label {
+  fill: var(--analysis-text);
+}
+
+[data-theme="dark"] .finished-match-analysis .analysis-player-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-player-label {
+  fill: var(--analysis-muted);
+}
+
+[data-theme="dark"] .finished-match-analysis .team-a-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .team-a-label {
+  fill: var(--analysis-team-a);
+}
+
+[data-theme="dark"] .finished-match-analysis .team-b-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .team-b-label {
+  fill: var(--analysis-team-b);
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-innings,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-innings {
+  background:
+    linear-gradient(
+      145deg,
+      #0f172a,
+      #111827
+    );
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-item,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-item {
+  background: #111827;
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-item:hover,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-item:hover {
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.22);
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 760px) {
+  .finished-match-analysis .partnership-list {
+    gap: 11px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 11px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 9px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 8px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+  .finished-match-analysis .analysis-bar-value {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .analysis-economy-label {
+    font-size: 7.5px;
+  }
+
+  .finished-match-analysis .analysis-wickets-label {
+    font-size: 7px;
+  }
+
+  /*
+     Partnership cards stack vertically.
+     This prevents horizontal overflow on phones.
+  */
+  .finished-match-analysis .partnership-list {
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .finished-match-analysis .partnership-analysis-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 11px;
+    border-radius: 15px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .finished-match-analysis .partnership-innings-header {
+    margin-bottom: 8px;
+    padding-bottom: 7px;
+  }
+
+  .finished-match-analysis .partnership-innings-header strong {
+    font-size: 10px;
+  }
+
+  .finished-match-analysis .partnership-innings-header small {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 8px;
+    gap: 6px;
+    border-radius: 9px;
+  }
+
+  .finished-match-analysis .partnership-player {
+    max-width: 40%;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 8.5px;
+  }
+
+  .finished-match-analysis .partnership-vs {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 10px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-empty {
+    min-height: 65px;
+    padding: 12px;
+    font-size: 8px;
+  }
+
+  /* Player names on graph */
+  .finished-match-analysis .analysis-player-label {
+    font-size: 8px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 390px) {
+  .finished-match-analysis .partnership-analysis-card {
+    padding: 9px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 8px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 7px;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 7.5px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 9px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 6.5px;
+  }
+
+  .finished-match-analysis .analysis-bar-value {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .analysis-economy-label {
+    font-size: 6.5px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 7px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL DEVICES
+========================================================= */
+
+@media (max-width: 340px) {
+  .finished-match-analysis .partnership-analysis-card {
+    padding: 8px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 7px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 6px;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 6px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 6.5px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .finished-match-analysis .analysis-bar,
+  .finished-match-analysis .analysis-wicket-bar,
+  .finished-match-analysis .partnership-analysis-card,
+  .finished-match-analysis .partnership-item {
+    animation: none !important;
+  }
+
+  .finished-match-analysis .analysis-bar,
+  .finished-match-analysis .analysis-wicket-bar,
+  .finished-match-analysis .partnership-item {
+    transition: none !important;
+  }
+}
+
+
+/* =========================================================
+   NEW ANIMATIONS
+========================================================= */
+
+@keyframes analysisBarGrow {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes partnershipItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

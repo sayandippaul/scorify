@@ -1514,553 +1514,1185 @@ function FinishedMatchAnalysisGraphs({ match }) {
   return (
     <section className="finished-match-analysis">
 
-      <div className="finished-match-analysis-header">
+  <div className="finished-match-analysis-header">
 
-        <div>
-          <p className="finished-match-analysis-eyebrow">
-            MATCH ANALYSIS
-          </p>
+    <div>
+      <p className="finished-match-analysis-eyebrow">
+        MATCH ANALYSIS
+      </p>
 
-          <h3>
-            Match Performance Graphs
-          </h3>
+      <h3>
+        Match Performance Graphs
+      </h3>
 
-          <small>
-            Detailed visual analysis from the completed scorecard
-          </small>
-        </div>
+      <small>
+        Detailed visual analysis from the completed scorecard
+      </small>
+    </div>
 
-        <span className="finished-analysis-badge">
-          COMPLETED
+    <span className="finished-analysis-badge">
+      COMPLETED
+    </span>
+
+  </div>
+
+
+  {/* =================================================
+      GRAPH 1
+  ================================================== */}
+
+  <div className="match-analysis-chart-card">
+
+    <div className="match-analysis-chart-header">
+
+      <div>
+        <strong>
+          Win Prediction Throughout Match
+        </strong>
+
+        <small>
+          Probability movement after each recorded delivery
+        </small>
+      </div>
+
+      <div className="match-analysis-legend">
+
+        <span>
+          <i className="legend-team-a" />
+          {teamAName}
+        </span>
+
+        <span>
+          <i className="legend-team-b" />
+          {teamBName}
         </span>
 
       </div>
 
-
-      {/* =================================================
-          GRAPH 1
-      ================================================== */}
-
-      <div className="match-analysis-chart-card">
-
-        <div className="match-analysis-chart-header">
-
-          <div>
-            <strong>
-              Win Prediction Throughout Match
-            </strong>
-
-            <small>
-              Probability movement after each recorded delivery
-            </small>
-          </div>
-
-          <div className="match-analysis-legend">
-
-            <span>
-              <i className="legend-team-a" />
-              {teamAName}
-            </span>
-
-            <span>
-              <i className="legend-team-b" />
-              {teamBName}
-            </span>
-
-          </div>
-
-        </div>
+    </div>
 
 
-        {predictionPoints.length ? (
-          <div className="match-analysis-chart-scroll">
+    {predictionPoints.length ? (
+      <div className="match-analysis-chart-scroll">
 
-            <svg
-              className="match-analysis-svg"
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Match win prediction graph"
-            >
+        <svg
+          className="match-analysis-svg"
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="Match win prediction graph"
+        >
 
-              {/* Grid */}
+          {/* Grid */}
 
-              <line
-                x1={chartPadding.left}
-                y1="25"
-                x2={chartWidth - chartPadding.right}
-                y2="25"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="150"
-                x2={chartWidth - chartPadding.right}
-                y2="150"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="275"
-                x2={chartWidth - chartPadding.right}
-                y2="275"
-                className="analysis-grid-line"
-              />
-
-
-              <PredictionYAxis />
-
-
-              {/* Team A */}
-
-              <path
-                d={createLinePath(
-                  predictionA
-                )}
-                className="analysis-line team-a-line"
-                fill="none"
-              />
-
-
-              {/* Team B */}
-
-              <path
-                d={createLinePath(
-                  predictionB
-                )}
-                className="analysis-line team-b-line"
-                fill="none"
-              />
-
-
-              {/* Team A points */}
-
-              {predictionA.map(
-                (point, index) => (
-                  <circle
-                    key={`prediction-a-${index}`}
-                    cx={point.x}
-                    cy={point.y}
-                    r="3.2"
-                    className="analysis-point team-a-point"
-                  >
-                    <title>
-                      Over{" "}
-                      {
-                        predictionPoints[
-                          index
-                        ]?.over
-                      }
-                      .
-                      {
-                        predictionPoints[
-                          index
-                        ]?.ball
-                      }{" "}
-                      •{" "}
-                      {teamAName}:{" "}
-                      {point.value.toFixed(
-                        1
-                      )}
-                      %
-                    </title>
-                  </circle>
-                )
-              )}
-
-
-              {/* Team B points */}
-
-              {predictionB.map(
-                (point, index) => (
-                  <circle
-                    key={`prediction-b-${index}`}
-                    cx={point.x}
-                    cy={point.y}
-                    r="3.2"
-                    className="analysis-point team-b-point"
-                  >
-                    <title>
-                      Over{" "}
-                      {
-                        predictionPoints[
-                          index
-                        ]?.over
-                      }
-                      .
-                      {
-                        predictionPoints[
-                          index
-                        ]?.ball
-                      }{" "}
-                      •{" "}
-                      {teamBName}:{" "}
-                      {point.value.toFixed(
-                        1
-                      )}
-                      %
-                    </title>
-                  </circle>
-                )
-              )}
-
-            </svg>
-
-          </div>
-        ) : (
-          <GraphEmpty
-            message="Prediction data is not available for this completed match."
+          <line
+            x1={chartPadding.left}
+            y1="25"
+            x2={chartWidth - chartPadding.right}
+            y2="25"
+            className="analysis-grid-line"
           />
-        )}
 
-      </div>
+          <line
+            x1={chartPadding.left}
+            y1="150"
+            x2={chartWidth - chartPadding.right}
+            y2="150"
+            className="analysis-grid-line"
+          />
 
-
-      {/* =================================================
-          GRAPH 2
-      ================================================== */}
-
-      <div className="match-analysis-chart-card">
-
-        <div className="match-analysis-chart-header">
-
-          <div>
-            <strong>
-              Batter Performance
-            </strong>
-
-            <small>
-              Runs scored by recorded batters from both teams
-            </small>
-          </div>
-
-          <div className="match-analysis-legend">
-
-            <span>
-              <i className="legend-team-a" />
-              {teamAName}
-            </span>
-
-            <span>
-              <i className="legend-team-b" />
-              {teamBName}
-            </span>
-
-          </div>
-
-        </div>
+          <line
+            x1={chartPadding.left}
+            y1="275"
+            x2={chartWidth - chartPadding.right}
+            y2="275"
+            className="analysis-grid-line"
+          />
 
 
-        {batterPlayers.length ? (
-          <div className="match-analysis-chart-scroll">
-
-            <svg
-              className="match-analysis-svg performance-svg"
-              viewBox={`0 0 ${Math.max(
-                chartWidth,
-                batterPlayers.length * 65
-              )} ${chartHeight}`}
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Batter performance graph"
-            >
-
-              <line
-                x1={chartPadding.left}
-                y1="25"
-                x2={Math.max(
-                  chartWidth,
-                  batterPlayers.length * 65
-                ) - chartPadding.right}
-                y2="25"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="150"
-                x2={Math.max(
-                  chartWidth,
-                  batterPlayers.length * 65
-                ) - chartPadding.right}
-                y2="150"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="275"
-                x2={Math.max(
-                  chartWidth,
-                  batterPlayers.length * 65
-                ) - chartPadding.right}
-                y2="275"
-                className="analysis-grid-line"
-              />
+          <PredictionYAxis />
 
 
-              <PerformanceYAxis
-                max={batterMax}
-                suffix=""
-              />
+          {/* Team A */}
+
+          <path
+            d={createLinePath(
+              predictionA
+            )}
+            className="analysis-line team-a-line"
+            fill="none"
+          />
 
 
-              <path
-                d={createLinePath(
-                  batterPoints
-                )}
-                className="analysis-line performance-line"
-                fill="none"
-              />
+          {/* Team B */}
+
+          <path
+            d={createLinePath(
+              predictionB
+            )}
+            className="analysis-line team-b-line"
+            fill="none"
+          />
 
 
-              {batterPoints.map(
-                (point, index) => {
+          {/* Team A points */}
 
-                  const player =
-                    batterPlayers[
+          {predictionA.map(
+            (point, index) => (
+              <circle
+                key={`prediction-a-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r="3.2"
+                className="analysis-point team-a-point"
+              >
+                <title>
+                  Over{" "}
+                  {
+                    predictionPoints[
                       index
-                    ];
-
-                  return (
-                    <g
-                      key={`batter-${player.id}-${index}`}
-                    >
-
-                      <circle
-                        cx={point.x}
-                        cy={point.y}
-                        r="5"
-                        className={
-                          player.graphTeam ===
-                          "A"
-                            ? "analysis-point team-a-point"
-                            : "analysis-point team-b-point"
-                        }
-                      >
-                        <title>
-                          {player.name} •{" "}
-                          {player.runs} runs •{" "}
-                          SR{" "}
-                          {Number(
-                            player.strikeRate ||
-                              0
-                          ).toFixed(1)}
-                        </title>
-                      </circle>
+                    ]?.over
+                  }
+                  .
+                  {
+                    predictionPoints[
+                      index
+                    ]?.ball
+                  }{" "}
+                  •{" "}
+                  {teamAName}:{" "}
+                  {point.value.toFixed(
+                    1
+                  )}
+                  %
+                </title>
+              </circle>
+            )
+          )}
 
 
-                      <text
-                        x={point.x}
-                        y="294"
-                        textAnchor="middle"
-                        className={
-                          player.graphTeam ===
-                          "A"
-                            ? "analysis-player-label team-a-label"
-                            : "analysis-player-label team-b-label"
-                        }
-                      >
-                        {String(
-                          player.name ||
-                            "Player"
-                        ).slice(
-                          0,
-                          9
-                        )}
-                      </text>
+          {/* Team B points */}
 
-                    </g>
-                  );
-                }
-              )}
+          {predictionB.map(
+            (point, index) => (
+              <circle
+                key={`prediction-b-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r="3.2"
+                className="analysis-point team-b-point"
+              >
+                <title>
+                  Over{" "}
+                  {
+                    predictionPoints[
+                      index
+                    ]?.over
+                  }
+                  .
+                  {
+                    predictionPoints[
+                      index
+                    ]?.ball
+                  }{" "}
+                  •{" "}
+                  {teamBName}:{" "}
+                  {point.value.toFixed(
+                    1
+                  )}
+                  %
+                </title>
+              </circle>
+            )
+          )}
 
-            </svg>
+        </svg>
 
-          </div>
-        ) : (
-          <GraphEmpty
-            message="No recorded batting performance is available."
-          />
-        )}
+      </div>
+    ) : (
+      <GraphEmpty
+        message="Prediction data is not available for this completed match."
+      />
+    )}
+
+  </div>
+
+
+  {/* =================================================
+      GRAPH 2 - BATTER RUNS BAR GRAPH
+  ================================================== */}
+
+  <div className="match-analysis-chart-card">
+
+    <div className="match-analysis-chart-header">
+
+      <div>
+        <strong>
+          Batter Performance
+        </strong>
+
+        <small>
+          Runs scored by every recorded batter from both innings
+        </small>
+      </div>
+
+      <div className="match-analysis-legend">
+
+        <span>
+          <i className="legend-team-a" />
+          {teamAName}
+        </span>
+
+        <span>
+          <i className="legend-team-b" />
+          {teamBName}
+        </span>
 
       </div>
 
+    </div>
 
-      {/* =================================================
-          GRAPH 3
-      ================================================== */}
 
-      <div className="match-analysis-chart-card">
+    {batterPlayers.length ? (
+      <div className="match-analysis-chart-scroll">
 
-        <div className="match-analysis-chart-header">
+        <svg
+          className="match-analysis-svg performance-svg batter-bar-svg"
+          viewBox={`0 0 ${Math.max(
+            chartWidth,
+            batterPlayers.length * 75
+          )} ${chartHeight}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="Batter runs bar graph"
+        >
 
-          <div>
-            <strong>
-              Bowler Performance
-            </strong>
+          {(() => {
 
-            <small>
-              Wickets taken by recorded bowlers from both teams
-            </small>
-          </div>
+            const graphWidth = Math.max(
+              chartWidth,
+              batterPlayers.length * 75
+            );
 
-          <div className="match-analysis-legend">
+            const graphLeft =
+              chartPadding.left;
 
-            <span>
-              <i className="legend-team-a" />
-              {teamAName}
-            </span>
+            const graphRight =
+              graphWidth -
+              chartPadding.right;
 
-            <span>
-              <i className="legend-team-b" />
-              {teamBName}
-            </span>
+            const graphTop = 25;
+            const graphBottom = 265;
+            const graphHeight =
+              graphBottom - graphTop;
 
-          </div>
+            const maxRuns = Math.max(
+              10,
+              ...batterPlayers.map(
+                (player) =>
+                  Number(
+                    player.runs || 0
+                  )
+              )
+            );
+
+            const slotWidth =
+              (graphRight - graphLeft) /
+              Math.max(
+                batterPlayers.length,
+                1
+              );
+
+            const barWidth =
+              Math.min(
+                38,
+                slotWidth * 0.55
+              );
+
+            return (
+              <>
+
+                {/* Grid */}
+
+                <line
+                  x1={graphLeft}
+                  y1={graphTop}
+                  x2={graphRight}
+                  y2={graphTop}
+                  className="analysis-grid-line"
+                />
+
+                <line
+                  x1={graphLeft}
+                  y1={
+                    graphTop +
+                    graphHeight / 2
+                  }
+                  x2={graphRight}
+                  y2={
+                    graphTop +
+                    graphHeight / 2
+                  }
+                  className="analysis-grid-line"
+                />
+
+                <line
+                  x1={graphLeft}
+                  y1={graphBottom}
+                  x2={graphRight}
+                  y2={graphBottom}
+                  className="analysis-grid-line"
+                />
+
+
+                {/* Y Axis */}
+
+                <text
+                  x="10"
+                  y={graphTop + 4}
+                  className="analysis-axis-label"
+                >
+                  {maxRuns}
+                </text>
+
+                <text
+                  x="10"
+                  y={
+                    graphTop +
+                    graphHeight / 2 +
+                    4
+                  }
+                  className="analysis-axis-label"
+                >
+                  {Math.round(
+                    maxRuns / 2
+                  )}
+                </text>
+
+                <text
+                  x="10"
+                  y={graphBottom + 4}
+                  className="analysis-axis-label"
+                >
+                  0
+                </text>
+
+
+                {/* Bars */}
+
+                {batterPlayers.map(
+                  (player, index) => {
+
+                    const runs = Number(
+                      player.runs || 0
+                    );
+
+                    const barHeight =
+                      maxRuns > 0
+                        ? (runs / maxRuns) *
+                          graphHeight
+                        : 0;
+
+                    const x =
+                      graphLeft +
+                      slotWidth * index +
+                      slotWidth / 2 -
+                      barWidth / 2;
+
+                    const y =
+                      graphBottom -
+                      barHeight;
+
+                    const teamClass =
+                      player.graphTeam ===
+                      "A"
+                        ? "team-a-bar"
+                        : "team-b-bar";
+
+                    return (
+                      <g
+                        key={`batter-bar-${player.id}-${index}`}
+                      >
+
+                        {/* Bar */}
+
+                        <rect
+                          x={x}
+                          y={y}
+                          width={barWidth}
+                          height={Math.max(
+                            barHeight,
+                            runs > 0 ? 3 : 1
+                          )}
+                          rx="6"
+                          ry="6"
+                          className={`analysis-bar ${teamClass}`}
+                        >
+                          <title>
+                            {player.name} •{" "}
+                            {runs} runs
+                            {player.balls != null
+                              ? ` • ${player.balls} balls`
+                              : ""}
+                            {player.strikeRate != null
+                              ? ` • SR ${Number(
+                                  player.strikeRate
+                                ).toFixed(1)}`
+                              : ""}
+                          </title>
+                        </rect>
+
+
+                        {/* Run value */}
+
+                        <text
+                          x={
+                            x +
+                            barWidth / 2
+                          }
+                          y={Math.max(
+                            y - 7,
+                            15
+                          )}
+                          textAnchor="middle"
+                          className="analysis-bar-value"
+                        >
+                          {runs}
+                        </text>
+
+
+                        {/* Player name */}
+
+                        <text
+                          x={
+                            x +
+                            barWidth / 2
+                          }
+                          y="292"
+                          textAnchor="middle"
+                          className={
+                            player.graphTeam ===
+                            "A"
+                              ? "analysis-player-label team-a-label"
+                              : "analysis-player-label team-b-label"
+                          }
+                        >
+                          {String(
+                            player.name ||
+                              "Player"
+                          ).slice(
+                            0,
+                            10
+                          )}
+                        </text>
+
+                      </g>
+                    );
+                  }
+                )}
+
+              </>
+            );
+
+          })()}
+
+        </svg>
+
+      </div>
+    ) : (
+      <GraphEmpty
+        message="No recorded batting performance is available."
+      />
+    )}
+
+  </div>
+
+
+  {/* =================================================
+      GRAPH 3 - BOWLER WICKETS + ECONOMY
+  ================================================== */}
+
+  <div className="match-analysis-chart-card">
+
+    <div className="match-analysis-chart-header">
+
+      <div>
+        <strong>
+          Bowler Performance
+        </strong>
+
+        <small>
+          Wickets and economy of recorded bowlers from both teams
+        </small>
+      </div>
+
+      <div className="match-analysis-legend">
+
+        <span>
+          <i className="legend-team-a" />
+          {teamAName}
+        </span>
+
+        <span>
+          <i className="legend-team-b" />
+          {teamBName}
+        </span>
+
+      </div>
+
+    </div>
+
+
+    {bowlerPlayers.length ? (
+      <div className="match-analysis-chart-scroll">
+
+        <svg
+          className="match-analysis-svg performance-svg bowler-bar-svg"
+          viewBox={`0 0 ${Math.max(
+            chartWidth,
+            bowlerPlayers.length * 85
+          )} ${chartHeight}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="Bowler wickets and economy graph"
+        >
+
+          {(() => {
+
+            const graphWidth = Math.max(
+              chartWidth,
+              bowlerPlayers.length * 85
+            );
+
+            const graphLeft =
+              chartPadding.left;
+
+            const graphRight =
+              graphWidth -
+              chartPadding.right;
+
+            const graphTop = 25;
+            const graphBottom = 265;
+            const graphHeight =
+              graphBottom - graphTop;
+
+            const maxWickets = Math.max(
+              1,
+              ...bowlerPlayers.map(
+                (player) =>
+                  Number(
+                    player.wickets || 0
+                  )
+              )
+            );
+
+            const slotWidth =
+              (graphRight - graphLeft) /
+              Math.max(
+                bowlerPlayers.length,
+                1
+              );
+
+            const barWidth =
+              Math.min(
+                34,
+                slotWidth * 0.48
+              );
+
+            return (
+              <>
+
+                {/* Grid */}
+
+                <line
+                  x1={graphLeft}
+                  y1={graphTop}
+                  x2={graphRight}
+                  y2={graphTop}
+                  className="analysis-grid-line"
+                />
+
+                <line
+                  x1={graphLeft}
+                  y1={
+                    graphTop +
+                    graphHeight / 2
+                  }
+                  x2={graphRight}
+                  y2={
+                    graphTop +
+                    graphHeight / 2
+                  }
+                  className="analysis-grid-line"
+                />
+
+                <line
+                  x1={graphLeft}
+                  y1={graphBottom}
+                  x2={graphRight}
+                  y2={graphBottom}
+                  className="analysis-grid-line"
+                />
+
+
+                {/* Y Axis */}
+
+                <text
+                  x="8"
+                  y={graphTop + 4}
+                  className="analysis-axis-label"
+                >
+                  {maxWickets}
+                </text>
+
+                <text
+                  x="8"
+                  y={
+                    graphTop +
+                    graphHeight / 2 +
+                    4
+                  }
+                  className="analysis-axis-label"
+                >
+                  {Math.round(
+                    maxWickets / 2
+                  )}
+                </text>
+
+                <text
+                  x="8"
+                  y={graphBottom + 4}
+                  className="analysis-axis-label"
+                >
+                  0
+                </text>
+
+
+                {/* Wickets bars */}
+
+                {bowlerPlayers.map(
+                  (player, index) => {
+
+                    const wickets =
+                      Number(
+                        player.wickets || 0
+                      );
+
+                    const economy =
+                      Number(
+                        player.economy || 0
+                      );
+
+                    const barHeight =
+                      maxWickets > 0
+                        ? (wickets /
+                            maxWickets) *
+                          graphHeight
+                        : 0;
+
+                    const x =
+                      graphLeft +
+                      slotWidth * index +
+                      slotWidth / 2 -
+                      barWidth / 2;
+
+                    const y =
+                      graphBottom -
+                      barHeight;
+
+                    const teamClass =
+                      player.graphTeam ===
+                      "A"
+                        ? "team-a-bar"
+                        : "team-b-bar";
+
+                    return (
+                      <g
+                        key={`bowler-bar-${player.id}-${index}`}
+                      >
+
+                        {/* Wicket bar */}
+
+                        <rect
+                          x={x}
+                          y={y}
+                          width={barWidth}
+                          height={Math.max(
+                            barHeight,
+                            wickets > 0
+                              ? 3
+                              : 1
+                          )}
+                          rx="6"
+                          ry="6"
+                          className={`analysis-bar ${teamClass}`}
+                        >
+                          <title>
+                            {player.name} •{" "}
+                            {wickets} wickets •
+                            Economy{" "}
+                            {economy.toFixed(
+                              2
+                            )}
+                          </title>
+                        </rect>
+
+
+                        {/* Wicket value */}
+
+                        <text
+                          x={
+                            x +
+                            barWidth / 2
+                          }
+                          y={Math.max(
+                            y - 7,
+                            15
+                          )}
+                          textAnchor="middle"
+                          className="analysis-bar-value"
+                        >
+                          {wickets}W
+                        </text>
+
+
+                        {/* Economy */}
+
+                        <text
+                          x={
+                            x +
+                            barWidth / 2
+                          }
+                          y="280"
+                          textAnchor="middle"
+                          className="analysis-economy-label"
+                        >
+                          Eco{" "}
+                          {economy.toFixed(
+                            2
+                          )}
+                        </text>
+
+
+                        {/* Bowler name */}
+
+                        <text
+                          x={
+                            x +
+                            barWidth / 2
+                          }
+                          y="295"
+                          textAnchor="middle"
+                          className={
+                            player.graphTeam ===
+                            "A"
+                              ? "analysis-player-label team-a-label"
+                              : "analysis-player-label team-b-label"
+                          }
+                        >
+                          {String(
+                            player.name ||
+                              "Player"
+                          ).slice(
+                            0,
+                            9
+                          )}
+                        </text>
+
+                      </g>
+                    );
+                  }
+                )}
+
+              </>
+            );
+
+          })()}
+
+        </svg>
+
+      </div>
+    ) : (
+      <GraphEmpty
+        message="No recorded bowling performance is available."
+      />
+    )}
+
+  </div>
+
+
+  {/* =================================================
+      PARTNERSHIP ANALYSIS - BOTH INNINGS
+  ================================================== */}
+
+  <div className="match-analysis-chart-card partnership-analysis-card">
+
+    <div className="match-analysis-chart-header">
+
+      <div>
+        <strong>
+          Batting Partnerships
+        </strong>
+
+        <small>
+          Partnerships between batters in both innings
+        </small>
+      </div>
+
+    </div>
+
+
+    {(() => {
+
+      const buildPartnerships = (
+        innings,
+        inningsNumber
+      ) => {
+
+        if (
+          !innings ||
+          !Array.isArray(
+            innings.deliveries
+          )
+        ) {
+          return [];
+        }
+
+        const deliveries =
+          innings.deliveries;
+
+        const partnerships = [];
+
+        let currentPair = null;
+        let currentRuns = 0;
+        let currentBalls = 0;
+
+        const getPlayerName = (
+          playerId
+        ) => {
+
+          if (!playerId) {
+            return "";
+          }
+
+          const player =
+            [
+              ...(teamA?.players || []),
+              ...(teamB?.players || [])
+            ].find(
+              (item) =>
+                String(
+                  scorecardPlayerId(
+                    item
+                  )
+                ) ===
+                String(playerId)
+            );
+
+          return (
+            player?.name ||
+            player?.displayName ||
+            player?.playerName ||
+            String(playerId)
+          );
+        };
+
+
+        const savePartnership = () => {
+
+          if (!currentPair) {
+            return;
+          }
+
+          partnerships.push({
+            innings:
+              inningsNumber,
+
+            striker:
+              currentPair.striker,
+
+            nonStriker:
+              currentPair.nonStriker,
+
+            strikerName:
+              getPlayerName(
+                currentPair.striker
+              ) || "Batter",
+
+            nonStrikerName:
+              getPlayerName(
+                currentPair.nonStriker
+              ) || "Batter",
+
+            runs: currentRuns,
+
+            balls: currentBalls,
+          });
+        };
+
+
+        deliveries.forEach(
+          (delivery) => {
+
+            const striker =
+              delivery?.strikerId ||
+              delivery?.batterId ||
+              delivery?.batsmanId ||
+              "";
+
+            const nonStriker =
+              delivery?.nonStrikerId ||
+              delivery?.nonStriker ||
+              "";
+
+            /*
+             * If only one batter is recorded,
+             * show the same name on both sides.
+             */
+
+            const effectiveNonStriker =
+              nonStriker ||
+              striker;
+
+            const pairKey =
+              [
+                String(striker),
+                String(
+                  effectiveNonStriker
+                ),
+              ]
+                .sort()
+                .join("-");
+
+
+            if (
+              currentPair &&
+              currentPair.key !==
+                pairKey
+            ) {
+              savePartnership();
+
+              currentRuns = 0;
+              currentBalls = 0;
+            }
+
+
+            if (
+              !currentPair ||
+              currentPair.key !==
+                pairKey
+            ) {
+              currentPair = {
+                key: pairKey,
+                striker,
+                nonStriker:
+                  effectiveNonStriker,
+              };
+            }
+
+
+            const deliveryRuns =
+              Number(
+                delivery?.runs?.total ??
+                delivery?.totalRuns ??
+                delivery?.runs ??
+                0
+              );
+
+            currentRuns +=
+              Number.isFinite(
+                deliveryRuns
+              )
+                ? deliveryRuns
+                : 0;
+
+
+            /*
+             * Count recorded deliveries.
+             */
+
+            currentBalls += 1;
+
+          }
+        );
+
+
+        savePartnership();
+
+        return partnerships;
+      };
+
+
+      const firstPartnerships =
+        buildPartnerships(
+          match?.firstInningsData,
+          1
+        );
+
+      const secondPartnerships =
+        buildPartnerships(
+          match?.secondInningsData,
+          2
+        );
+
+
+      const allPartnerships = [
+        ...firstPartnerships,
+        ...secondPartnerships,
+      ];
+
+
+      if (!allPartnerships.length) {
+        return (
+          <GraphEmpty
+            message="Partnership data is not available for this completed match."
+          />
+        );
+      }
+
+
+      return (
+        <div className="partnership-list">
+
+          {[
+            {
+              title:
+                "1st Innings",
+              team:
+                match
+                  ?.firstInningsData
+                  ?.teamName ||
+                teamAName,
+              items:
+                firstPartnerships,
+            },
+
+            {
+              title:
+                "2nd Innings",
+              team:
+                match
+                  ?.secondInningsData
+                  ?.teamName ||
+                teamBName,
+              items:
+                secondPartnerships,
+            },
+          ].map(
+            (
+              inningsData,
+              inningsIndex
+            ) => (
+
+              <div
+                className="partnership-innings"
+                key={`partnership-innings-${inningsIndex}`}
+              >
+
+                <div className="partnership-innings-header">
+
+                  <strong>
+                    {inningsData.title}
+                  </strong>
+
+                  <span>
+                    {inningsData.team}
+                  </span>
+
+                </div>
+
+
+                {inningsData.items
+                  .length ? (
+
+                  <div className="partnership-items">
+
+                    {inningsData.items.map(
+                      (
+                        partnership,
+                        index
+                      ) => (
+
+                        <div
+                          className="partnership-item"
+                          key={`partnership-${inningsIndex}-${index}`}
+                        >
+
+                          <div className="partnership-batters">
+
+                            <div className="partnership-player">
+                              <span className="partnership-player-name">
+                                {
+                                  partnership.strikerName
+                                }
+                              </span>
+                            </div>
+
+                            <div className="partnership-vs">
+                              +
+                            </div>
+
+                            <div className="partnership-player">
+                              <span className="partnership-player-name">
+                                {
+                                  partnership.nonStrikerName
+                                }
+                              </span>
+                            </div>
+
+                          </div>
+
+
+                          <div className="partnership-score">
+
+                            <strong>
+                              {
+                                partnership.runs
+                              }
+                            </strong>
+
+                            <span>
+                              runs
+                            </span>
+
+                          </div>
+
+
+                          <div className="partnership-balls">
+                            {
+                              partnership.balls
+                            }{" "}
+                            balls
+                          </div>
+
+                        </div>
+
+                      )
+                    )}
+
+                  </div>
+
+                ) : (
+
+                  <div className="partnership-empty">
+                    No partnership data recorded for this innings.
+                  </div>
+
+                )}
+
+              </div>
+
+            )
+          )}
 
         </div>
+      );
 
+    })()}
 
-        {bowlerPlayers.length ? (
-          <div className="match-analysis-chart-scroll">
+  </div>
 
-            <svg
-              className="match-analysis-svg performance-svg"
-              viewBox={`0 0 ${Math.max(
-                chartWidth,
-                bowlerPlayers.length * 65
-              )} ${chartHeight}`}
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Bowler performance graph"
-            >
-
-              <line
-                x1={chartPadding.left}
-                y1="25"
-                x2={Math.max(
-                  chartWidth,
-                  bowlerPlayers.length * 65
-                ) - chartPadding.right}
-                y2="25"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="150"
-                x2={Math.max(
-                  chartWidth,
-                  bowlerPlayers.length * 65
-                ) - chartPadding.right}
-                y2="150"
-                className="analysis-grid-line"
-              />
-
-              <line
-                x1={chartPadding.left}
-                y1="275"
-                x2={Math.max(
-                  chartWidth,
-                  bowlerPlayers.length * 65
-                ) - chartPadding.right}
-                y2="275"
-                className="analysis-grid-line"
-              />
-
-
-              <PerformanceYAxis
-                max={bowlerMax}
-                suffix=""
-              />
-
-
-              <path
-                d={createLinePath(
-                  bowlerPoints
-                )}
-                className="analysis-line performance-line"
-                fill="none"
-              />
-
-
-              {bowlerPoints.map(
-                (point, index) => {
-
-                  const player =
-                    bowlerPlayers[
-                      index
-                    ];
-
-                  return (
-                    <g
-                      key={`bowler-${player.id}-${index}`}
-                    >
-
-                      <circle
-                        cx={point.x}
-                        cy={point.y}
-                        r="5"
-                        className={
-                          player.graphTeam ===
-                          "A"
-                            ? "analysis-point team-a-point"
-                            : "analysis-point team-b-point"
-                        }
-                      >
-                        <title>
-                          {player.name} •{" "}
-                          {player.wickets}{" "}
-                          wickets
-                          {player.economy != null
-                            ? ` • Eco ${Number(
-                                player.economy
-                              ).toFixed(2)}`
-                            : ""}
-                        </title>
-                      </circle>
-
-
-                      <text
-                        x={point.x}
-                        y="294"
-                        textAnchor="middle"
-                        className={
-                          player.graphTeam ===
-                          "A"
-                            ? "analysis-player-label team-a-label"
-                            : "analysis-player-label team-b-label"
-                        }
-                      >
-                        {String(
-                          player.name ||
-                            "Player"
-                        ).slice(
-                          0,
-                          9
-                        )}
-                      </text>
-
-                    </g>
-                  );
-                }
-              )}
-
-            </svg>
-
-          </div>
-        ) : (
-          <GraphEmpty
-            message="No recorded bowling performance is available."
-          />
-        )}
-
-      </div>
-
-    </section>
+</section>
   );
 }
 
