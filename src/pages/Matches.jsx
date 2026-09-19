@@ -75,28 +75,17 @@ const scorecardStrikeRate = (runs = 0, balls = 0) =>
 const scorecardEconomy = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 6).toFixed(2) : "0.00";
 
-const getTossPlayerId = (player) =>
-  String(
-    player?.id ??
-      player?.uid ??
-      player?.playerId ??
-      player?._id ??
-      ""
-  );
-
-const sameTossPlayer = (a, b) => {
-  const aId = getTossPlayerId(a);
-  const bId = getTossPlayerId(b);
-  return Boolean(aId && bId && aId === bId);
-};
-
 const getTossWinnerTeamId = (match) => {
   const winner = match?.secondTossWinner;
-  if (!getTossPlayerId(winner)) return null;
+  const winnerId = winner?.id ?? winner?.playerId;
+
+  if (!winnerId) return null;
 
   const teams = [match.teamA, match.teamB].filter(Boolean);
   return teams.find((team) =>
-    (team.players || []).some((player) => sameTossPlayer(player, winner))
+    (team.players || []).some(
+      (player) => String(scorecardPlayerId(player)) === String(winnerId)
+    )
   )?.id || null;
 };
 
@@ -2762,9 +2751,235 @@ function MatchScorecard({ match }) {
     scoringState: savedState,
   });
 
+  const handleDownloadScorecardPdf = () => {
+    const printSheet = document.querySelector(".scorecard-print-sheet");
+
+    if (!printSheet) {
+      alert("Unable to prepare the complete scorecard for PDF.");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      alert("Please allow pop-ups in your browser to download the scorecard PDF.");
+      return;
+    }
+
+    const teamAName = teamA?.name || "Team A";
+    const teamBName = teamB?.name || "Team B";
+    const printTitle = `${teamAName} vs ${teamBName} - Scorecard`;
+
+    // Reuse every stylesheet already loaded by the app so the PDF window is
+    // visually identical to the scorecard, while the complete print sheet
+    // already contains BOTH innings instead of only the selected tab.
+    const stylesheetLinks = Array.from(
+      document.querySelectorAll('link[rel="stylesheet"]')
+    )
+      .map((link) => {
+        const href = link.href;
+        return href
+          ? `<link rel="stylesheet" href="${href.replace(/"/g, "&quot;")}">`
+          : "";
+      })
+      .join("\n");
+
+    const inlineStyles = Array.from(document.querySelectorAll("style"))
+      .map((style) => style.outerHTML)
+      .join("\n");
+
+    const printWindowDocument = printWindow.document;
+    printWindowDocument.open();
+    printWindowDocument.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${printTitle.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
+    ${stylesheetLinks}
+    ${inlineStyles}
+    <style>
+      @page { size: A4; margin: 10mm; }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+      }
+      body {
+        min-width: 0 !important;
+      }
+      .scorecard-print-sheet {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        color: #111827 !important;
+      }
+      .scorecard-print-sheet,
+      .scorecard-print-sheet * {
+        visibility: visible !important;
+      }
+      .scorecard-print-sheet .match-scorecard-table-wrap {
+        overflow: visible !important;
+      }
+      .scorecard-print-sheet .match-scorecard-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+      }
+      .scorecard-print-sheet .match-scorecard-table th,
+      .scorecard-print-sheet .match-scorecard-table td {
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+      .scorecard-print-sheet .scorecard-download-button,
+      .scorecard-print-sheet .match-scorecard-tabs {
+        display: none !important;
+      }
+      .scorecard-print-page-break {
+        break-before: page !important;
+        page-break-before: always !important;
+        height: 1px !important;
+      }
+      .scorecard-print-header,
+      .match-toss-summary,
+      .match-innings-scorecard,
+      .match-scorecard-block,
+      .win-prediction-card,
+      .win-prediction-history,
+      .match-impact-card,
+      .finished-match-analysis,
+      .match-analysis-chart-card {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      svg {
+        max-width: 100% !important;
+      }
+    </style>
+  </head>
+  <body class="scorecard-print-mode">
+    ${printSheet.outerHTML}
+  </body>
+</html>`);
+    printWindowDocument.close();
+
+    const startPrint = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } finally {
+        window.setTimeout(() => {
+          try {
+            printWindow.close();
+          } catch {
+            // Ignore browser restrictions on closing a print window.
+          }
+        }, 1000);
+      }
+    };
+
+    if (printWindow.document.fonts?.ready) {
+      printWindow.document.fonts.ready
+        .then(() => window.setTimeout(startPrint, 250))
+        .catch(() => window.setTimeout(startPrint, 250));
+    } else {
+      window.setTimeout(startPrint, 500);
+    }
+  };
+
+  const matchResultText =
+    typeof match?.result === "string"
+      ? match.result
+      : match?.result?.text || match?.resultText || "";
+
   return (
-    <div className="match-scorecard-full">
-      <LiveWinPredictionCard prediction={prediction} />
+    <>
+      <div className="scorecard-print-sheet" aria-hidden="true">
+        <div className="scorecard-print-header">
+          <p className="eyebrow">MATCH SCORECARD</p>
+          <h1>{teamA.name} vs {teamB.name}</h1>
+          {match?.createdAt && (
+            <p>
+              {new Date(match.createdAt).toLocaleString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          )}
+          {(matchResultText || match?.winner) && (
+            <strong>{matchResultText || match.winner}</strong>
+          )}
+        </div>
+
+        <LiveWinPredictionCard prediction={prediction} />
+        <PredictionOverHistory match={match} scoringState={savedState} />
+        <MatchMatchImpactSections match={match} scoringState={savedState} />
+
+        <div className="match-toss-summary">
+          <span className="match-toss-coin">
+            {tossResult === "Tails" ? "T" : "H"}
+          </span>
+          <span>
+            Toss: {tossResult || "Not recorded"}
+            {tossWinner?.name ? ` • ${tossWinner.name}` : ""}
+          </span>
+        </div>
+
+        {firstInnings
+          ? inningsFor(firstInnings, firstTeamId === "B" ? teamB : teamA)
+          : (
+            <p className="match-scorecard-note">
+              Detailed first-innings scorecard is not available for this match.
+            </p>
+          )}
+
+        <div className="scorecard-print-page-break" />
+
+        {secondInnings
+          ? inningsFor(secondInnings, secondTeamId === "B" ? teamB : teamA)
+          : (
+            <p className="match-scorecard-note">
+              Detailed second-innings scorecard is not available for this match.
+            </p>
+          )}
+
+        <FinishedMatchAnalysisGraphs match={match} />
+      </div>
+
+      <div className="match-scorecard-full">
+        <button
+          type="button"
+          className="scorecard-download-button"
+          onClick={handleDownloadScorecardPdf}
+          aria-label="Download whole match scorecard as PDF"
+          title="Download whole match scorecard as PDF"
+        >
+          <svg
+            className="scorecard-download-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3v12" />
+            <path d="m7 10 5 5 5-5" />
+            <path d="M5 21h14" />
+          </svg>
+          <span>Download PDF</span>
+        </button>
+
+        <LiveWinPredictionCard prediction={prediction} />
       <PredictionOverHistory match={match} scoringState={savedState} />
       <MatchMatchImpactSections match={match} scoringState={savedState} />
       <div className="match-scorecard-tabs" role="tablist" aria-label="Match innings">
@@ -2809,6 +3024,7 @@ function MatchScorecard({ match }) {
         match={match}
       />
     </div>
+    </>
   );
 }
 
@@ -2877,7 +3093,6 @@ function Matches() {
   });
 
   const [viewingMatch, setViewingMatch] = useState(null);
-  const [shareFeedback, setShareFeedback] = useState("");
 
   // --------------------------------------------------
   // LOAD DATA
@@ -3743,9 +3958,8 @@ function Matches() {
       return;
     }
 
-    // FINAL TOSS: the UI explicitly says Captain A chooses first.
-    // Do not randomize this caller; otherwise Captain B can win when
-    // Heads/Tails matches even though Captain A made the visible choice.
+    // Captain A is explicitly shown as the final toss caller in the existing UI.
+    // Keep that caller deterministic so the Heads/Tails result matches the visible flow.
     setSecondTossCaller(captainA);
     setSecondTossChoice(null);
     setSecondTossResult(null);
@@ -3762,19 +3976,23 @@ function Matches() {
     if (secondTossResult || secondTossChoice) return;
 
     const caller = secondTossCaller || captainA;
-    const other = sameTossPlayer(caller, captainA) ? captainB : captainA;
-    const normalizedChoice = choice === "Heads" ? "Heads" : "Tails";
+    const other =
+      String(caller?.id) === String(captainA?.id) ? captainB : captainA;
 
-    setSecondTossChoice(normalizedChoice);
+    setSecondTossChoice(choice);
     setSecondTossSpinning(true);
 
     window.setTimeout(() => {
       const result = Math.random() < 0.5 ? "Heads" : "Tails";
-      const winner = result === normalizedChoice ? caller : other;
 
       setSecondTossResult(result);
-      setSecondTossWinner(winner);
       setSecondTossSpinning(false);
+
+      if (result === choice) {
+        setSecondTossWinner(caller);
+      } else {
+        setSecondTossWinner(other);
+      }
     }, TOSS_FLIP_MS);
   };
 
@@ -3783,12 +4001,11 @@ function Matches() {
   // --------------------------------------------------
 
   const getTossTeams = () => {
-    if (!secondTossWinner || !captainA || !captainB) return null;
+    if (!secondTossWinner) return null;
 
-    const winnerIsA = sameTossPlayer(secondTossWinner, captainA);
-    const winnerIsB = sameTossPlayer(secondTossWinner, captainB);
-
-    if (!winnerIsA && !winnerIsB) return null;
+    const winnerIsA =
+      String(secondTossWinner.id) ===
+      String(captainA.id);
 
     return {
       winnerTeam: winnerIsA ? teamA : teamB,
@@ -5133,7 +5350,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
             setFirstTossWinner(null);
             setNextPickTeam(null);
 
-            // Keep the final-toss caller consistent with the final-toss UI.
+            // Captain A is explicitly shown as the final toss caller in the existing UI.
+            // Keep that caller deterministic so the Heads/Tails result matches the visible flow.
             setSecondTossCaller(capA);
             setSecondTossChoice(null);
             setSecondTossResult(null);
@@ -5237,7 +5455,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
                 </div>
 
                 <div className="winner-team">
-                  {sameTossPlayer(secondTossWinner, captainA)
+                  {String(secondTossWinner.id) ===
+                  String(captainA.id)
                     ? teamA.name
                     : teamB.name}
                 </div>
@@ -5340,131 +5559,6 @@ const teamsWithPlayers = savedTeams.map((team) => {
   }
 
   // --------------------------------------------------
-  // SHARE VIEW SCORECARD
-  // --------------------------------------------------
-
-  const encodeSharedMatch = (match) => {
-    const payload = {
-      version: 1,
-      match: {
-        id: match?.id ?? null,
-        teamA: match?.teamA ?? null,
-        teamB: match?.teamB ?? null,
-        teamAName: match?.teamAName ?? null,
-        teamBName: match?.teamBName ?? null,
-        teamAPlayers: match?.teamAPlayers ?? null,
-        teamBPlayers: match?.teamBPlayers ?? null,
-        captainA: match?.captainA ?? null,
-        captainB: match?.captainB ?? null,
-        firstTossResult: match?.firstTossResult ?? null,
-        secondTossResult: match?.secondTossResult ?? null,
-        secondTossWinner: match?.secondTossWinner ?? null,
-        battingTeamId: match?.battingTeamId ?? null,
-        bowlingTeamId: match?.bowlingTeamId ?? null,
-        battingTeam: match?.battingTeam ?? null,
-        bowlingTeam: match?.bowlingTeam ?? null,
-        overs: match?.overs ?? null,
-        scoreA: match?.scoreA ?? 0,
-        wicketsA: match?.wicketsA ?? 0,
-        scoreB: match?.scoreB ?? 0,
-        wicketsB: match?.wicketsB ?? 0,
-        status: match?.status ?? null,
-        startedAt: match?.startedAt ?? null,
-        createdAt: match?.createdAt ?? null,
-        updatedAt: match?.updatedAt ?? null,
-        finishedAt: match?.finishedAt ?? null,
-        winner: match?.winner ?? null,
-        result: match?.result ?? null,
-        resultText: match?.resultText ?? null,
-        firstInningsScore: match?.firstInningsScore ?? null,
-        firstInningsWickets: match?.firstInningsWickets ?? null,
-        secondInningsScore: match?.secondInningsScore ?? null,
-        secondInningsWickets: match?.secondInningsWickets ?? null,
-        firstInningsTeamId: match?.firstInningsTeamId ?? null,
-        firstInningsData: match?.firstInningsData ?? null,
-        secondInningsData: match?.secondInningsData ?? null,
-        scoringState: match?.scoringState ?? null,
-      },
-    };
-
-    const bytes = new TextEncoder().encode(
-      JSON.stringify(payload)
-    );
-    let binary = "";
-
-    for (let index = 0; index < bytes.length; index += 0x8000) {
-      binary += String.fromCharCode(
-        ...bytes.subarray(index, index + 0x8000)
-      );
-    }
-
-    return btoa(binary)
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/g, "");
-  };
-
-  const handleShareMatch = async () => {
-    if (!viewingMatch) return;
-
-    try {
-      const encodedMatch = encodeSharedMatch(viewingMatch);
-
-      // Build the public page from the Vite deployment base so sharing also
-      // works when Scorify is hosted below a sub-path (for example /scorify/).
-      // A deployed VITE_PUBLIC_APP_URL can override the base when required.
-      const configuredPublicBase = String(
-        import.meta.env?.VITE_PUBLIC_APP_URL || ""
-      ).trim().replace(/\/+$/, "");
-      const deploymentBase = String(
-        import.meta.env?.BASE_URL || "/"
-      );
-      const sharePageBase = configuredPublicBase
-        ? `${configuredPublicBase}/share-match.html`
-        : new URL("share-match.html", new URL(deploymentBase, window.location.origin)).href;
-
-      const shareUrl = `${sharePageBase}?match=${encodedMatch}`;
-
-      let copied = false;
-
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(shareUrl);
-          copied = true;
-        }
-      } catch (clipboardError) {
-        console.warn("Clipboard copy unavailable:", clipboardError);
-      }
-
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: `${viewingMatch.teamA?.name || "Team A"} vs ${viewingMatch.teamB?.name || "Team B"}`,
-            text: "Scorify match scorecard",
-            url: shareUrl,
-          });
-          setShareFeedback(copied ? "Link copied" : "Shared");
-          window.setTimeout(() => setShareFeedback(""), 2200);
-          return;
-        } catch (shareError) {
-          if (shareError?.name === "AbortError") return;
-          console.warn("Native sharing unavailable:", shareError);
-        }
-      }
-
-      if (copied) {
-        setShareFeedback("Link copied");
-        window.setTimeout(() => setShareFeedback(""), 2200);
-      } else {
-        window.prompt("Copy this Scorify share link:", shareUrl);
-      }
-    } catch (error) {
-      console.error("Unable to create share link:", error);
-      alert("Unable to create the match share link.");
-    }
-  };
-
-  // --------------------------------------------------
   // VIEW SCORECARD
   // --------------------------------------------------
 
@@ -5486,38 +5580,6 @@ const teamsWithPlayers = savedTeams.map((team) => {
             }}
           >
             ← Back to Matches
-          </button>
-
-          <button
-            type="button"
-            className={`share-match-button${shareFeedback ? " shared" : ""}`}
-            onClick={handleShareMatch}
-            aria-label="Share match scorecard"
-            title="Share match scorecard"
-          >
-            <svg
-              className="share-match-icon"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                d="M12 16V4m0 0 4.5 4.5M12 4 7.5 8.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span>{shareFeedback || "Share Match"}</span>
           </button>
 
           <div className="setup-header">

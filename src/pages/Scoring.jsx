@@ -13,33 +13,34 @@ import {
    HELPERS
 ========================================================= */
 
-function ScoringWinPredictionCard({ prediction }) {
-  if (!prediction) return null;
-  const a = Math.round(Number(prediction.A || 0));
-  const b = Math.round(Number(prediction.B || 0));
+function ScoringWinPredictionCard({ prediction, live = true }) {
+  const fairPrediction = fairLiveWinPrediction(prediction, live);
+  if (!fairPrediction) return null;
+  const a = Math.round(Number(fairPrediction.A || 0));
+  const b = Math.round(Number(fairPrediction.B || 0));
   return (
     <section className="win-prediction-card" aria-label="Live win prediction">
       <div className="win-prediction-header">
         <div>
           <p className="win-prediction-eyebrow">LIVE WIN PREDICTION</p>
-          <small>{prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE"}{prediction.h2hIncluded ? " • H2H included" : ""}</small>
+          <small>{fairPrediction.phase === "pre-match" ? "PRE-MATCH" : fairPrediction.phase === "finished" ? "FINAL" : "LIVE"}{fairPrediction.h2hIncluded ? " • H2H included" : ""}</small>
         </div>
         <span className="win-prediction-live-dot" />
       </div>
       <div className="win-prediction-team">
-        <div className="win-prediction-label"><strong>{prediction.teamA}</strong><b>{a}%</b></div>
+        <div className="win-prediction-label"><strong>{fairPrediction.teamA}</strong><b>{a}%</b></div>
         <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-a" style={{ width: `${a}%` }} /></div>
       </div>
       <div className="win-prediction-team">
-        <div className="win-prediction-label"><strong>{prediction.teamB}</strong><b>{b}%</b></div>
+        <div className="win-prediction-label"><strong>{fairPrediction.teamB}</strong><b>{b}%</b></div>
         <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-b" style={{ width: `${b}%` }} /></div>
       </div>
-      {prediction.metrics && (
+      {fairPrediction.metrics && (
         <div className="win-prediction-metrics">
-          {prediction.metrics.runsRequired != null && <span><small>Required</small><b>{prediction.metrics.runsRequired}</b></span>}
-          <span><small>Current RR</small><b>{Number(prediction.metrics.currentRR || 0).toFixed(2)}</b></span>
-          {prediction.metrics.runsRequired != null && <span><small>Required RR</small><b>{Number.isFinite(prediction.metrics.requiredRR) ? Number(prediction.metrics.requiredRR).toFixed(2) : "—"}</b></span>}
-          <span><small>Recent 6</small><b>{prediction.metrics.recentSixRuns}</b></span>
+          {fairPrediction.metrics.runsRequired != null && <span><small>Required</small><b>{fairPrediction.metrics.runsRequired}</b></span>}
+          <span><small>Current RR</small><b>{Number(fairPrediction.metrics.currentRR || 0).toFixed(2)}</b></span>
+          {fairPrediction.metrics.runsRequired != null && <span><small>Required RR</small><b>{Number.isFinite(fairPrediction.metrics.requiredRR) ? Number(fairPrediction.metrics.requiredRR).toFixed(2) : "—"}</b></span>}
+          <span><small>Recent 6</small><b>{fairPrediction.metrics.recentSixRuns}</b></span>
         </div>
       )}
     </section>
@@ -211,6 +212,46 @@ const wicketsInHand = (teamSize, wickets) => {
   );
 };
 
+/*
+ * Live cricket predictions should never display an absolute
+ * 100/0 outcome while the match is still active.
+ * Finished-match predictions remain unchanged.
+ */
+const FAIR_MIN_WIN_CHANCE = 10;
+
+const fairLiveWinPrediction = (prediction, live = true) => {
+  if (!prediction || !live) {
+    return prediction;
+  }
+
+  const rawA = Number(prediction.A);
+  const rawB = Number(prediction.B);
+
+  if (!Number.isFinite(rawA) || !Number.isFinite(rawB)) {
+    return prediction;
+  }
+
+  const total = rawA + rawB;
+  const normalizedA =
+    total > 0
+      ? (Math.max(0, Math.min(100, rawA)) / total) * 100
+      : 50;
+
+  // Never expose an absolute 100/0 while the match is still live.
+  // Scorify can continue a chase with one batsman remaining.
+  const fairA = Math.min(
+    100 - FAIR_MIN_WIN_CHANCE,
+    Math.max(FAIR_MIN_WIN_CHANCE, normalizedA)
+  );
+  const fairB = 100 - fairA;
+
+  return {
+    ...prediction,
+    A: Number(fairA.toFixed(2)),
+    B: Number(fairB.toFixed(2)),
+  };
+};
+
 /* =========================================================
    COMPONENT
 ========================================================= */
@@ -292,6 +333,17 @@ export default function Scoring() {
 
   const [wicketRuns, setWicketRuns] =
     useState(0);
+
+  /*
+   * Two-batter Run Out:
+   * explicitly record where both batters finished when the
+   * wicket was effected.
+   */
+  const [runOutDismissedPosition, setRunOutDismissedPosition] =
+    useState("striker");
+
+  const [runOutOtherPosition, setRunOutOtherPosition] =
+    useState("nonStriker");
 
   /* -------------------------------------------------------
      NEW BATSMAN
@@ -2654,6 +2706,8 @@ export default function Scoring() {
 
     setWicketFielderId("");
     setWicketRuns(0);
+    setRunOutDismissedPosition("striker");
+    setRunOutOtherPosition("nonStriker");
 
     setShowWicketModal(true);
   };
@@ -2755,6 +2809,27 @@ export default function Scoring() {
       return;
     }
 
+    if (
+      wicketType === "Run out" &&
+      battingMode === 2
+    ) {
+      const validPositions =
+        ["striker", "nonStriker"].includes(
+          runOutDismissedPosition
+        ) &&
+        ["striker", "nonStriker"].includes(
+          runOutOtherPosition
+        ) &&
+        runOutDismissedPosition !== runOutOtherPosition;
+
+      if (!validPositions) {
+        alert(
+          "Select the final position of both batters."
+        );
+        return;
+      }
+    }
+
     pushHistory();
 
     const dismissedPlayer =
@@ -2791,6 +2866,33 @@ export default function Scoring() {
       String(strikerBefore)
         ? "striker"
         : "nonStriker";
+
+    const otherBatterId =
+      dismissedSlot === "striker"
+        ? nonStrikerBefore
+        : strikerBefore;
+
+    const finalRunOutStrikerId =
+      wicketType === "Run out" &&
+      battingMode === 2
+        ? runOutDismissedPosition === "striker"
+          ? dismissedId
+          : otherBatterId
+        : strikerBefore;
+
+    const finalRunOutNonStrikerId =
+      wicketType === "Run out" &&
+      battingMode === 2
+        ? runOutDismissedPosition === "nonStriker"
+          ? dismissedId
+          : otherBatterId
+        : nonStrikerBefore;
+
+    const dismissedFinalSlot =
+      wicketType === "Run out" &&
+      battingMode === 2
+        ? runOutDismissedPosition
+        : dismissedSlot;
 
     const run =
       Number(wicketRuns || 0);
@@ -2984,6 +3086,19 @@ export default function Scoring() {
         ),
 
       runs: ballRuns,
+
+      ...(wicketType === "Run out" &&
+      battingMode === 2
+        ? {
+            finalPosition: runOutDismissedPosition,
+            otherBatterFinalPosition:
+              runOutOtherPosition,
+            finalStrikerId:
+              finalRunOutStrikerId || null,
+            finalNonStrikerId:
+              finalRunOutNonStrikerId || null,
+          }
+        : {}),
     };
 
     const ball = {
@@ -3098,43 +3213,61 @@ export default function Scoring() {
     setShowWicketModal(false);
 
     /*
-     * Strike movement for completed
-     * runs before wicket.
+     * For two-batter Run Out, the final positions selected
+     * above are authoritative. Do not auto-swap on odd runs.
      */
-
     if (
-      wicketType ===
-        "Run out" &&
-      run % 2 === 1
+      wicketType === "Run out" &&
+      battingMode === 2
     ) {
-      if (
-        battingMode === 2
-      ) {
-        const temp =
-          strikerId;
+      setStrikerId(
+        finalRunOutStrikerId === dismissedId
+          ? ""
+          : finalRunOutStrikerId || ""
+      );
 
-        setStrikerId(
-          nonStrikerId
-        );
-
-        setNonStrikerId(
-          temp
-        );
-      }
-    }
-
-    /*
-     * Remove dismissed player from
-     * the active position.
-     */
-
-    if (
-      dismissedSlot ===
-      "striker"
-    ) {
-      setStrikerId("");
+      setNonStrikerId(
+        finalRunOutNonStrikerId === dismissedId
+          ? ""
+          : finalRunOutNonStrikerId || ""
+      );
     } else {
-      setNonStrikerId("");
+      /*
+       * Existing strike movement for completed
+       * runs before wicket.
+       */
+      if (
+        wicketType ===
+          "Run out" &&
+        run % 2 === 1
+      ) {
+        if (
+          battingMode === 2
+        ) {
+          const temp =
+            strikerId;
+
+          setStrikerId(
+            nonStrikerId
+          );
+
+          setNonStrikerId(
+            temp
+          );
+        }
+      }
+
+      /*
+       * Existing removal of dismissed player.
+       */
+      if (
+        dismissedSlot ===
+        "striker"
+      ) {
+        setStrikerId("");
+      } else {
+        setNonStrikerId("");
+      }
     }
 
     /*
@@ -3273,7 +3406,10 @@ export default function Scoring() {
     setBattingMode(battingMode);
 
     setPendingReplacement({
-      slot: battingMode === 1 ? "striker" : dismissedSlot,
+      slot:
+        battingMode === 1
+          ? "striker"
+          : dismissedFinalSlot,
       overEnded,
     });
 
@@ -4106,6 +4242,7 @@ export default function Scoring() {
         </section>
 
         <ScoringWinPredictionCard
+          live={match.status !== "finished" && match.status !== "completed"}
           prediction={calculateWinPrediction({
             match,
             scoringState: savedState,
@@ -4314,6 +4451,7 @@ if (screen === "finished") {
         </header>
 
         <ScoringWinPredictionCard
+          live={true}
           prediction={calculateWinPrediction({
             match,
             scoringState: {
@@ -4805,6 +4943,7 @@ if (screen === "finished") {
       </section>
 
       <ScoringWinPredictionCard
+        live={true}
         prediction={calculateWinPrediction({
           match,
           scoringState: {
@@ -5982,11 +6121,28 @@ if (screen === "finished") {
                 value={
                   wicketBatterId
                 }
-                onChange={(e) =>
-                  setWicketBatterId(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setWicketBatterId(nextId);
+
+                  if (wicketType === "Run out") {
+                    const selectedIsStriker =
+                      String(nextId) ===
+                      String(strikerId);
+
+                    setRunOutDismissedPosition(
+                      selectedIsStriker
+                        ? "striker"
+                        : "nonStriker"
+                    );
+
+                    setRunOutOtherPosition(
+                      selectedIsStriker
+                        ? "nonStriker"
+                        : "striker"
+                    );
+                  }
+                }}
               >
 
                 {(wicketType === "Boundary Wicket"
@@ -6046,6 +6202,24 @@ if (screen === "finished") {
                         setWicketType(type);
                         if (type === "Boundary Wicket" && striker) {
                           setWicketBatterId(PLAYER_ID(striker));
+                        }
+
+                        if (type === "Run out") {
+                          const selectedIsStriker =
+                            String(wicketBatterId) ===
+                            String(strikerId);
+
+                          setRunOutDismissedPosition(
+                            selectedIsStriker
+                              ? "striker"
+                              : "nonStriker"
+                          );
+
+                          setRunOutOtherPosition(
+                            selectedIsStriker
+                              ? "nonStriker"
+                              : "striker"
+                          );
                         }
                       }}
                     >
@@ -6147,6 +6321,47 @@ if (screen === "finished") {
 
               </div>
             )}
+
+            {wicketType === "Run out" &&
+              battingMode === 2 && (
+                <div className="modal-section">
+                  <label>Final position of out batsman</label>
+                  <select
+                    value={runOutDismissedPosition}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setRunOutDismissedPosition(next);
+                      setRunOutOtherPosition(
+                        next === "striker"
+                          ? "nonStriker"
+                          : "striker"
+                      );
+                    }}
+                  >
+                    <option value="striker">Striker end</option>
+                    <option value="nonStriker">Non-striker end</option>
+                  </select>
+
+                  <label>Final position of other batsman</label>
+                  <select
+                    value={runOutOtherPosition}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === runOutDismissedPosition) return;
+
+                      setRunOutOtherPosition(next);
+                      setRunOutDismissedPosition(
+                        next === "striker"
+                          ? "nonStriker"
+                          : "striker"
+                      );
+                    }}
+                  >
+                    <option value="striker">Striker end</option>
+                    <option value="nonStriker">Non-striker end</option>
+                  </select>
+                </div>
+              )}
 
             {wicketType === "Boundary Wicket" && (
               <div className="modal-section">

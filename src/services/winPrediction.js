@@ -769,6 +769,54 @@ const logistic = (value) => {
 const probabilityFromScoreDifference = (scoreDifference, scale) =>
   clamp(logistic(scoreDifference / Math.max(1, scale)) * 100, 1, 99);
 
+/* =========================================================
+   LAST-WICKET CHASE MODEL
+   ---------------------------------------------------------
+   No fixed run table. The chance is the probability that the
+   last batsman survives long enough to score the runs still
+   needed, so it moves with runs required, balls left, the
+   team's scoring rate and batter-vs-bowler strength. The same
+   model works for any target or match length.
+   ========================================================= */
+const oneWicketRemainingChaseChance = ({
+  runsRemaining,
+  ballsRemaining,
+  scoringRate,
+  batterStrength,
+  bowlerStrength,
+}) => {
+  if (runsRemaining <= 0) return 90;
+  if (ballsRemaining <= 0) return 10;
+
+  // Runs per ball the lone batsman can score at a normal pace.
+  const naturalRate = clamp((scoringRate / 6) * 0.85, 0.3, 2);
+
+  // Chance of getting out on each ball; weaker batter / stronger bowler = higher.
+  const baseHazard = clamp(
+    0.14 * (bowlerStrength / Math.max(1, batterStrength)),
+    0.06,
+    0.3
+  );
+
+  // Batter plays safe when the ask is low and attacks (more risk) when it is high.
+  const requiredPerBall = runsRemaining / ballsRemaining;
+  const effort = clamp(requiredPerBall / naturalRate, 0.6, 2.2);
+  const ballRate = naturalRate * effort;
+  const hazard = clamp(baseHazard * effort * effort, 0.01, 0.75);
+
+  // Balls needed at that pace, and the chance of surviving that long.
+  const ballsNeeded = runsRemaining / ballRate;
+  const survival = Math.pow(1 - hazard, Math.min(ballsNeeded, ballsRemaining));
+
+  // Even at full attack, running out of balls makes the target unreachable.
+  const feasibility =
+    ballsNeeded <= ballsRemaining
+      ? 1
+      : Math.pow(ballsRemaining / ballsNeeded, 3);
+
+  return clamp(survival * feasibility * 100, 10, 90);
+};
+
 const normalisePair = (a) => {
   const safeA = clamp(a, 0.1, 99.9);
   const safeB = clamp(100 - safeA, 0.1, 99.9);
@@ -1060,6 +1108,9 @@ const calculateChaseProbability = ({
 
   const wicketsInHand = Math.max(0, playersForTeam(battingTeam).length - wickets);
   const maxWickets = Math.max(1, playersForTeam(battingTeam).length - 1);
+  // Scorify lets the last batsman continue alone, so "one wicket left" means
+  // exactly one batsman still in hand.
+  const oneWicketLeft = wicketsInHand === 1;
   const wicketRatio = clamp(wickets / maxWickets, 0, 1);
 
   // Positive = batting side is doing better than the chase requires.
@@ -1099,16 +1150,26 @@ const calculateChaseProbability = ({
     score += clamp(-requiredPressure * 1.6, -12, 12);
   }
 
-  // A completely exhausted chase is effectively decided.
-  if (ballsRemaining === 0 && runs < target) {
-    score = 0;
+  let chanceForBattingTeam = probabilityFromScoreDifference(score - 50, 22);
+
+  // One wicket remaining is not the same as being all out. In this state,
+  // target progress should be the dominant signal for the chase probability.
+  if (oneWicketLeft) {
+    chanceForBattingTeam = oneWicketRemainingChaseChance({
+      runsRemaining: runsRequired,
+      ballsRemaining,
+      scoringRate: liveRate,
+      batterStrength: currentBatterA,
+      bowlerStrength: currentBowlerScore,
+    });
   }
 
-  const chanceForBattingTeam = clamp(
-    probabilityFromScoreDifference(score - 50, 22),
-    1,
-    99
-  );
+  // A completely exhausted chase is effectively decided.
+  if (ballsRemaining === 0 && runs < target) {
+    chanceForBattingTeam = 0;
+  }
+
+  chanceForBattingTeam = clamp(chanceForBattingTeam, 1, 99);
 
   const teamBattingId = battingTeam.id;
   const chanceA = teamBattingId === "A"
@@ -1240,6 +1301,14 @@ const calculateFirstInningsProbability = ({
   scoreAorB += (0.5 - wicketRatio) * 4;
   scoreAorB -= recentSixWickets * 1.5;
 
+  const maxWickets = Math.max(1, totalBatters - 1);
+  const wicketsRemaining = Math.max(0, maxWickets - wickets);
+  if (wicketsRemaining === 1) {
+    // A side with one wicket left can still set a competitive total; avoid
+    // collapsing its first-innings chance solely because of wicket count.
+    scoreAorB = clamp(scoreAorB, 10, 90);
+  }
+
   const normalized = normalisePair(
     battingTeam.id === "A" ? scoreAorB : 100 - scoreAorB
   );
@@ -1305,6 +1374,7 @@ const calculateFirstInningsProbability = ({
       recentSixRuns,
       recentSixWickets,
       recentRR,
+      wicketsInHand: Math.max(0, totalBatters - wickets),
     },
   };
 };
@@ -1443,7 +1513,8 @@ export function calculateWinPrediction({
   // Exact terminal outcomes even when the caller has not yet set status=finished.
   if (secondInnings) {
     const target = firstScore + 1;
-    const wicketsLimit = Math.max(1, playersForTeam(context.battingTeam).length - 1);
+    // Scoring.jsx ends the innings only when every batsman is dismissed.
+    const wicketsLimit = Math.max(1, playersForTeam(context.battingTeam).length);
     const ballsRemaining = Math.max(0, totalBalls - balls);
 
     if (runs >= target) {

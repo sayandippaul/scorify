@@ -2376,163 +2376,2746 @@
     text-align: right;
   }
 }
-
 /* =========================================================
-   SHARE MATCH SCORECARD BUTTON
-   Scoped to the existing view-scorecard screen only.
+   ENHANCED MATCH INSIGHTS UI
+   ---------------------------------------------------------
+   Only affects:
+   1. WIN PREDICTION BY OVER
+   2. PLAYER OF THE MATCH
+   3. TURNING POINT OF THE MATCH
+
+   No JSX / logic changes required.
 ========================================================= */
 
-.matches-page .share-match-button {
+
+/* =========================================================
+   1. WIN PREDICTION BY OVER
+========================================================= */
+
+.win-prediction-history {
   position: relative;
-  isolation: isolate;
+  overflow: hidden;
+
+  padding: 18px;
+
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.055),
+      rgba(16, 185, 129, 0.035)
+    ),
+    var(--matches-card, var(--card-bg, #ffffff));
+
+  box-shadow:
+    0 8px 28px rgba(15, 23, 42, 0.07);
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+
+/* Decorative glow */
+
+.win-prediction-history::before {
+  content: "";
+
+  position: absolute;
+
+  top: -70px;
+  right: -70px;
+
+  width: 150px;
+  height: 150px;
+
+  border-radius: 50%;
+
+  background: rgba(37, 99, 235, 0.09);
+
+  filter: blur(20px);
+
+  pointer-events: none;
+}
+
+.win-prediction-history:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 12px 34px rgba(15, 23, 42, 0.10);
+
+  border-color: rgba(37, 99, 235, 0.30);
+}
+
+
+/* Section heading */
+
+.win-prediction-history .section-title {
+  position: relative;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin-bottom: 15px;
+
+  z-index: 1;
+}
+
+
+/* History list */
+
+.win-prediction-history-list {
+  position: relative;
+
+  display: grid;
+
+  gap: 9px;
+
+  z-index: 1;
+}
+
+
+/* Individual over */
+
+.win-prediction-history-record {
+  position: relative;
+
+  padding: 12px 13px;
+
+  border: 1px solid
+    rgba(148, 163, 184, 0.18);
+
+  border-radius: 13px;
+
+  background:
+    var(--matches-card-soft,
+    rgba(148, 163, 184, 0.055));
+
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.025);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+
+  animation:
+    predictionRecordIn
+    0.45s ease both;
+}
+
+
+/* Stagger the rows */
+
+.win-prediction-history-record:nth-child(1) {
+  animation-delay: 0.03s;
+}
+
+.win-prediction-history-record:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.win-prediction-history-record:nth-child(3) {
+  animation-delay: 0.09s;
+}
+
+.win-prediction-history-record:nth-child(4) {
+  animation-delay: 0.12s;
+}
+
+.win-prediction-history-record:nth-child(5) {
+  animation-delay: 0.15s;
+}
+
+.win-prediction-history-record:nth-child(n + 6) {
+  animation-delay: 0.18s;
+}
+
+
+.win-prediction-history-record:hover {
+  transform: translateX(3px);
+
+  border-color:
+    rgba(37, 99, 235, 0.25);
+
+  box-shadow:
+    0 5px 16px rgba(15, 23, 42, 0.07);
+}
+
+
+/* Header */
+
+.win-prediction-history-record-head {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+
+  margin-bottom: 10px;
+}
+
+
+.win-prediction-history-record-head strong {
+  font-size: 10px;
+  font-weight: 950;
+
+  letter-spacing: 0.06em;
+}
+
+
+.win-prediction-history-record-head small {
+  margin-top: 3px;
+
+  font-size: 9px;
+
+  line-height: 1.35;
+}
+
+
+/* LIVE / PRE-MATCH / FINAL badge */
+
+.win-prediction-history-record-head > span {
+  position: relative;
+
+  padding: 4px 8px;
+
+  border: 1px solid
+    rgba(37, 99, 235, 0.18);
+
+  border-radius: 999px;
+
+  background:
+    rgba(37, 99, 235, 0.08);
+
+  color:
+    var(--matches-primary, #2563eb);
+
+  font-size: 8px;
+  font-weight: 950;
+
+  letter-spacing: 0.08em;
+
+  white-space: nowrap;
+
+  box-shadow:
+    0 2px 7px rgba(37, 99, 235, 0.08);
+
+  animation:
+    badgeSoftPulse
+    2.2s ease-in-out infinite;
+}
+
+
+/* Probability row */
+
+.win-prediction-history-probabilities {
+  display: grid;
+
+  grid-template-columns:
+    minmax(78px, 1fr)
+    minmax(120px, 2.7fr)
+    minmax(78px, 1fr);
+
+  align-items: center;
+
+  gap: 10px;
+}
+
+
+/* Team percentages */
+
+.win-prediction-history-probabilities strong {
+  font-size: 10px;
+  font-weight: 900;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  transition:
+    transform 0.2s ease;
+}
+
+.win-prediction-history-probabilities strong:first-child {
+  text-align: left;
+}
+
+.win-prediction-history-probabilities strong:last-child {
+  text-align: right;
+}
+
+
+/* Prediction bar */
+
+.win-prediction-history
+.win-prediction-mini-track {
+  position: relative;
+
+  height: 8px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background:
+    var(
+      --matches-card-soft,
+      rgba(148, 163, 184, 0.16)
+    );
+
+  box-shadow:
+    inset 0 1px 2px
+    rgba(15, 23, 42, 0.08);
+}
+
+
+/* Animated bar */
+
+.win-prediction-history
+.win-prediction-mini-track span {
+  position: relative;
+
+  display: block;
+
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      var(--matches-primary, #2563eb),
+      #60a5fa
+    );
+
+  box-shadow:
+    0 0 9px rgba(37, 99, 235, 0.22);
+
+  transition:
+    width 600ms
+    cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+/* Moving highlight */
+
+.win-prediction-history
+.win-prediction-mini-track span::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: -35%;
+
+  width: 35%;
+  height: 100%;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.42),
+      transparent
+    );
+
+  animation:
+    predictionShimmer
+    2.8s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   2. PLAYER OF THE MATCH
+   ========================================================= */
+
+.match-impact-sections {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+
+  width: 100%;
+
+  margin: 0 0 16px;
+}
+
+
+/* Both cards */
+
+.match-impact-card {
+  position: relative;
+
+  overflow: hidden;
+
+  min-width: 0;
+
+  padding: 18px;
+
+  border: 1px solid
+    rgba(148, 163, 184, 0.18);
+
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(16, 185, 129, 0.045),
+      rgba(37, 99, 235, 0.035)
+    ),
+    var(--matches-card, var(--card-bg, #ffffff));
+
+  color:
+    var(--matches-text,
+    var(--text-color, #111827));
+
+  box-shadow:
+    0 8px 28px rgba(15, 23, 42, 0.065);
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+
+  animation:
+    impactCardIn
+    0.5s ease both;
+}
+
+
+/* Different subtle entrance timing */
+
+.match-impact-card:first-child {
+  animation-delay: 0.05s;
+}
+
+.match-impact-card:last-child {
+  animation-delay: 0.12s;
+}
+
+
+.match-impact-card:hover {
+  transform: translateY(-3px);
+
+  box-shadow:
+    0 13px 35px rgba(15, 23, 42, 0.10);
+
+  border-color:
+    rgba(37, 99, 235, 0.25);
+}
+
+
+/* Decorative glow */
+
+.match-impact-card::before {
+  content: "";
+
+  position: absolute;
+
+  top: -65px;
+  right: -65px;
+
+  width: 140px;
+  height: 140px;
+
+  border-radius: 50%;
+
+  background:
+    rgba(37, 99, 235, 0.075);
+
+  filter: blur(20px);
+
+  pointer-events: none;
+}
+
+
+/* Player of match gets green accent */
+
+.match-impact-card:first-child::before {
+  background:
+    rgba(16, 185, 129, 0.10);
+}
+
+
+/* Section title */
+
+.match-impact-card .section-title {
+  position: relative;
+
+  z-index: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+
+  margin-bottom: 15px;
+}
+
+
+/* Small heading */
+
+.match-impact-card .section-title span {
+  font-size: 11px;
+
+  font-weight: 950;
+
+  letter-spacing: 0.08em;
+
+  color:
+    var(--matches-primary, #2563eb);
+}
+
+
+/* Player of match heading accent */
+
+.match-impact-card:first-child
+.section-title span {
+  color:
+    var(--matches-success, #16a34a);
+}
+
+
+/* Description */
+
+.match-impact-card .section-title small {
+  font-size: 9px;
+
+  line-height: 1.4;
+
+  color:
+    var(
+      --matches-muted,
+      var(--muted-text, #6b7280)
+    );
+}
+
+
+/* Main content */
+
+.match-impact-content {
+  position: relative;
+
+  z-index: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 5px;
+
+  min-width: 0;
+}
+
+
+/* Player / turning point name */
+
+.match-impact-content > strong {
+  font-size: 17px;
+
+  line-height: 1.25;
+
+  font-weight: 950;
+
+  letter-spacing: -0.01em;
+
+  color:
+    var(
+      --matches-text,
+      var(--text-color, #111827)
+    );
+
+  overflow-wrap: anywhere;
+}
+
+
+/* Team / over information */
+
+.match-impact-content > span {
+  font-size: 10px;
+
+  line-height: 1.4;
+
+  font-weight: 700;
+
+  color:
+    var(
+      --matches-muted,
+      var(--muted-text, #6b7280)
+    );
+}
+
+
+/* =========================================================
+   PLAYER STAT PILLS
+========================================================= */
+
+.match-impact-stats {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 7px;
+
+  margin-top: 8px;
+}
+
+
+.match-impact-stats small,
+.match-turning-point-probability small {
+  position: relative;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  min-height: 27px;
+
+  padding: 5px 9px;
+
+  border: 1px solid
+    rgba(37, 99, 235, 0.15);
+
+  border-radius: 999px;
+
+  background:
+    rgba(37, 99, 235, 0.055);
+
+  color:
+    var(
+      --matches-text,
+      var(--text-color, #111827)
+    );
+
+  font-size: 9px;
+
+  font-weight: 850;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+
+.match-impact-stats small:hover,
+.match-turning-point-probability small:hover {
+  transform: translateY(-1px);
+
+  background:
+    rgba(37, 99, 235, 0.10);
+
+  border-color:
+    rgba(37, 99, 235, 0.28);
+}
+
+
+/* =========================================================
+   TURNING POINT
+========================================================= */
+
+.match-turning-point-probability {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 7px;
+
+  margin-top: 8px;
+}
+
+
+/* Turning point pills */
+
+.match-turning-point-probability small {
+  background:
+    rgba(245, 158, 11, 0.07);
+
+  border-color:
+    rgba(245, 158, 11, 0.20);
+}
+
+
+/* Highlight the probability change */
+
+.match-turning-point-probability small:last-child {
+  background:
+    rgba(245, 158, 11, 0.11);
+
+  border-color:
+    rgba(245, 158, 11, 0.32);
+
+  color:
+    #b45309;
+}
+
+
+/* Empty state */
+
+.match-impact-empty {
+  position: relative;
+
+  z-index: 1;
+
+  margin: 0;
+
+  padding: 12px;
+
+  border: 1px dashed
+    rgba(148, 163, 184, 0.30);
+
+  border-radius: 11px;
+
+  background:
+    rgba(148, 163, 184, 0.035);
+
+  color:
+    var(
+      --matches-muted,
+      var(--muted-text, #6b7280)
+    );
+
+  font-size: 10px;
+
+  font-weight: 650;
+
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+
+[data-theme="dark"] .win-prediction-history {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.11),
+      rgba(16, 185, 129, 0.055)
+    ),
+    var(--card-bg, #111827);
+
+  border-color:
+    rgba(96, 165, 250, 0.18);
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+
+[data-theme="dark"] .win-prediction-history-record {
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  border-color:
+    rgba(255, 255, 255, 0.08);
+
+  box-shadow:
+    none;
+}
+
+
+[data-theme="dark"] .win-prediction-history-record:hover {
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  border-color:
+    rgba(96, 165, 250, 0.24);
+
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+
+[data-theme="dark"]
+.win-prediction-history-record-head > span {
+  background:
+    rgba(96, 165, 250, 0.10);
+
+  border-color:
+    rgba(96, 165, 250, 0.20);
+
+  color:
+    #93c5fd;
+}
+
+
+[data-theme="dark"]
+.win-prediction-history
+.win-prediction-mini-track {
+  background:
+    rgba(255, 255, 255, 0.09);
+}
+
+
+[data-theme="dark"]
+.win-prediction-history
+.win-prediction-mini-track span {
+  background:
+    linear-gradient(
+      90deg,
+      #3b82f6,
+      #60a5fa
+    );
+
+  box-shadow:
+    0 0 12px rgba(59, 130, 246, 0.28);
+}
+
+
+/* Dark impact cards */
+
+[data-theme="dark"] .match-impact-card {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.09),
+      rgba(16, 185, 129, 0.045)
+    ),
+    var(--card-bg, #111827);
+
+  border-color:
+    rgba(255, 255, 255, 0.08);
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.20);
+}
+
+
+[data-theme="dark"] .match-impact-card:hover {
+  border-color:
+    rgba(96, 165, 250, 0.25);
+
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.26);
+}
+
+
+[data-theme="dark"]
+.match-impact-stats small {
+  background:
+    rgba(96, 165, 250, 0.08);
+
+  border-color:
+    rgba(96, 165, 250, 0.18);
+
+  color:
+    #e2e8f0;
+}
+
+
+[data-theme="dark"]
+.match-turning-point-probability small {
+  background:
+    rgba(245, 158, 11, 0.08);
+
+  border-color:
+    rgba(245, 158, 11, 0.18);
+
+  color:
+    #fbbf24;
+}
+
+
+[data-theme="dark"]
+.match-turning-point-probability small:last-child {
+  background:
+    rgba(245, 158, 11, 0.13);
+
+  border-color:
+    rgba(245, 158, 11, 0.28);
+
+  color:
+    #fbbf24;
+}
+
+
+[data-theme="dark"] .match-impact-empty {
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  border-color:
+    rgba(255, 255, 255, 0.12);
+}
+
+
+/* =========================================================
+   LIGHT MODE
+========================================================= */
+
+[data-theme="light"] .win-prediction-history {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.035),
+      rgba(16, 185, 129, 0.025)
+    ),
+    #ffffff;
+
+  border-color:
+    rgba(37, 99, 235, 0.14);
+}
+
+
+[data-theme="light"] .match-impact-card {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.025),
+      rgba(16, 185, 129, 0.02)
+    ),
+    #ffffff;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 760px) {
+
+  .match-impact-sections {
+    grid-template-columns: 1fr;
+  }
+
+  .match-impact-card {
+    padding: 16px;
+  }
+
+  .win-prediction-history {
+    padding: 15px;
+  }
+}
+
+
+@media (max-width: 600px) {
+
+  .win-prediction-history-record {
+    padding: 10px;
+  }
+
+  .win-prediction-history-record-head {
+    align-items: flex-start;
+  }
+
+  .win-prediction-history-probabilities {
+    grid-template-columns:
+      minmax(65px, 1fr)
+      minmax(85px, 1.7fr)
+      minmax(65px, 1fr);
+
+    gap: 7px;
+  }
+
+  .match-impact-card {
+    padding: 15px;
+  }
+
+  .match-impact-content > strong {
+    font-size: 15px;
+  }
+}
+
+
+@media (max-width: 390px) {
+
+  .win-prediction-history-probabilities {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .win-prediction-history
+  .win-prediction-mini-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .match-impact-stats small,
+  .match-turning-point-probability small {
+    min-height: 25px;
+    padding: 4px 8px;
+  }
+}
+
+
+/* =========================================================
+   ANIMATIONS
+========================================================= */
+
+@keyframes predictionRecordIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+@keyframes impactCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+@keyframes predictionShimmer {
+  0% {
+    left: -35%;
+  }
+
+  55%,
+  100% {
+    left: 110%;
+  }
+}
+
+
+@keyframes badgeSoftPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
+}
+
+
+/* Respect reduced-motion preference */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .win-prediction-history-record,
+  .match-impact-card,
+  .win-prediction-history-record-head > span,
+  .win-prediction-history
+  .win-prediction-mini-track span::after {
+    animation: none;
+  }
+
+  .win-prediction-history,
+  .win-prediction-history-record,
+  .match-impact-card,
+  .match-impact-stats small,
+  .match-turning-point-probability small {
+    transition: none;
+  }
+}
+/* =========================================================
+   FINISHED MATCH ANALYSIS
+   Responsive • Light/Dark • Animated SVG Graphs
+   Scoped only to .finished-match-analysis
+========================================================= */
+
+.finished-match-analysis {
+  --analysis-bg: var(--matches-card, #ffffff);
+  --analysis-surface: var(--matches-card-soft, #f8fafc);
+  --analysis-border: var(--matches-border, #e5e7eb);
+  --analysis-text: var(--matches-text, #111827);
+  --analysis-muted: var(--matches-muted, #6b7280);
+
+  --analysis-team-a: var(--matches-primary, #2563eb);
+  --analysis-team-b: #f97316;
+
+  --analysis-grid: rgba(100, 116, 139, 0.14);
+  --analysis-axis: rgba(100, 116, 139, 0.42);
+
+  width: 100%;
+  min-width: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  color: var(--analysis-text);
+  overflow: hidden;
+  animation: finishedAnalysisFadeIn 0.5s ease both;
+}
+
+.finished-match-analysis *,
+.finished-match-analysis *::before,
+.finished-match-analysis *::after {
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.finished-match-analysis-header {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      var(--analysis-bg),
+      var(--analysis-surface)
+    );
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.055);
+}
+
+.finished-match-analysis-header > div:first-child {
+  min-width: 0;
+}
+
+.finished-match-analysis-eyebrow {
+  margin: 0 0 5px;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--analysis-team-a) !important;
+}
+
+.finished-match-analysis-header h3 {
+  margin: 0;
+  color: var(--analysis-text);
+  font-size: clamp(18px, 2vw, 23px);
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.finished-match-analysis-header small {
+  display: block;
+  margin-top: 5px;
+  color: var(--analysis-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.finished-analysis-badge {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 46px;
-  margin: 8px 0 14px;
-  padding: 11px 16px;
-  border: 1px solid var(--matches-border);
-  border-radius: 13px;
-  background: var(--matches-card);
-  color: var(--matches-text) !important;
-  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.055);
-  cursor: pointer;
-  font-size: 12px;
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+  font-size: 9px;
+  line-height: 1;
   font-weight: 900;
-  overflow: hidden;
-  transition:
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
 }
 
-.matches-page .share-match-button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(
-    120deg,
-    transparent 20%,
-    rgba(59, 130, 246, 0.12) 48%,
-    transparent 76%
-  );
-  transform: translateX(-110%);
-  transition: transform 0.5s ease;
-}
+/* =========================================================
+   GRAPH CARD
+========================================================= */
 
-.matches-page .share-match-button:hover {
-  transform: translateY(-1px);
-  border-color: var(--matches-primary);
-  box-shadow: 0 9px 22px rgba(37, 99, 235, 0.12);
-}
-
-.matches-page .share-match-button:hover::before {
-  transform: translateX(110%);
-}
-
-.matches-page .share-match-button:active {
-  transform: scale(0.97);
-}
-
-.matches-page .share-match-button:focus-visible {
-  outline: none;
-  border-color: var(--matches-primary);
+.match-analysis-chart-card {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 18px;
+  background: var(--analysis-bg);
   box-shadow:
-    0 0 0 3px rgba(37, 99, 235, 0.14),
-    0 8px 22px rgba(37, 99, 235, 0.10);
+    0 7px 22px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+  animation: analysisCardIn 0.55s ease both;
 }
 
-.matches-page .share-match-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+.match-analysis-chart-card:nth-of-type(2) {
+  animation-delay: 0.06s;
+}
+
+.match-analysis-chart-card:nth-of-type(3) {
+  animation-delay: 0.12s;
+}
+
+.match-analysis-chart-card:nth-of-type(4) {
+  animation-delay: 0.18s;
+}
+
+/* =========================================================
+   GRAPH HEADER
+========================================================= */
+
+.match-analysis-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.match-analysis-chart-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.match-analysis-chart-header strong {
+  display: block;
+  margin: 0;
+  color: var(--analysis-text);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 900;
+}
+
+.match-analysis-chart-header small {
+  display: block;
+  margin-top: 3px;
+  color: var(--analysis-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* =========================================================
+   LEGEND
+========================================================= */
+
+.match-analysis-legend {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px 14px;
+  max-width: 48%;
+}
+
+.match-analysis-legend span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  color: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.match-analysis-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.08);
+}
+
+.legend-team-a {
+  background: var(--analysis-team-a);
+}
+
+.legend-team-b {
+  background: var(--analysis-team-b);
+}
+
+/* =========================================================
+   GRAPH VIEWPORT
+   Important:
+   - no horizontal scrolling
+   - SVG always shrinks to container width
+   - works with dynamic JS viewBox widths
+========================================================= */
+
+.match-analysis-chart-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-x: hidden;
+  border-radius: 13px;
+  background:
+    linear-gradient(
+      180deg,
+      var(--analysis-surface),
+      var(--analysis-bg)
+    );
+}
+
+/* =========================================================
+   SVG
+========================================================= */
+
+.match-analysis-svg {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  /*
+    The JSX already provides viewBox + preserveAspectRatio.
+    100% width forces the complete graph into the viewport.
+  */
+  height: 300px;
+  max-height: 300px;
+
+  overflow: visible;
+  border-radius: 13px;
+}
+
+/* Performance graphs */
+.match-analysis-svg.performance-svg {
+  height: 300px;
+  max-height: 300px;
+}
+
+/* =========================================================
+   SVG GRID
+========================================================= */
+
+.finished-match-analysis .analysis-grid-line {
+  stroke: var(--analysis-grid);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+}
+
+/* Optional axis lines if rendered by axis components */
+.finished-match-analysis .analysis-axis-line {
+  stroke: var(--analysis-axis);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.finished-match-analysis .analysis-axis-label,
+.finished-match-analysis .analysis-y-label {
+  fill: var(--analysis-muted);
+  font-size: 10px;
+  font-weight: 700;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+/* Any plain text generated by the graph components */
+.finished-match-analysis svg text {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+/* =========================================================
+   GRAPH LINES
+========================================================= */
+
+.finished-match-analysis .analysis-line {
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3px;
+
+  /*
+    Animation works even when the SVG path length
+    changes because of a dynamic chart.
+  */
+  stroke-dasharray: 1400;
+  stroke-dashoffset: 1400;
+
+  filter:
+    drop-shadow(
+      0 2px 4px rgba(15, 23, 42, 0.13)
+    );
+
+  animation:
+    analysisLineDraw 1.5s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    forwards;
+}
+
+.finished-match-analysis .team-a-line {
+  stroke: var(--analysis-team-a);
+  animation-delay: 0.08s;
+}
+
+.finished-match-analysis .team-b-line {
+  stroke: var(--analysis-team-b);
+  animation-delay: 0.18s;
+}
+
+.finished-match-analysis .performance-line {
+  stroke: var(--analysis-team-a);
+  animation-delay: 0.08s;
+}
+
+/* =========================================================
+   GRAPH POINTS
+========================================================= */
+
+.finished-match-analysis .analysis-point {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.5px;
+  transform-box: fill-box;
   transform-origin: center;
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  animation:
+    analysisPointPop
+    0.42s
+    cubic-bezier(0.2, 0.9, 0.3, 1.25)
+    both;
 }
 
-.matches-page .share-match-button:hover .share-match-icon {
-  transform: translateY(-2px);
+.finished-match-analysis .team-a-point {
+  fill: var(--analysis-team-a);
+  stroke: var(--analysis-bg);
 }
 
-.matches-page .share-match-button.shared {
-  border-color: rgba(22, 163, 74, 0.45);
-  background: rgba(22, 163, 74, 0.09);
-  color: #15803d !important;
-  animation: shareMatchSuccess 0.45s ease;
+.finished-match-analysis .team-b-point {
+  fill: var(--analysis-team-b);
+  stroke: var(--analysis-bg);
 }
 
-.matches-page .share-match-button.shared .share-match-icon {
-  animation: shareIconSuccess 0.45s ease;
+.finished-match-analysis circle:hover {
+  r: 5.8;
+  filter:
+    drop-shadow(
+      0 2px 5px rgba(15, 23, 42, 0.2)
+    );
 }
 
-[data-theme="dark"] .matches-page .share-match-button {
-  background: #151d2e;
-  color: #f8fafc !important;
-  border-color: #344154;
-  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.22);
+/*
+   Stagger graph points naturally.
+   CSS nth-of-type is intentionally limited so it
+   doesn't create excessive animation on huge datasets.
+*/
+.finished-match-analysis .analysis-point:nth-of-type(1) {
+  animation-delay: 0.12s;
 }
 
-[data-theme="dark"] .matches-page .share-match-button::before {
-  background: linear-gradient(
-    120deg,
-    transparent 18%,
-    rgba(96, 165, 250, 0.16) 48%,
-    transparent 78%
-  );
+.finished-match-analysis .analysis-point:nth-of-type(2) {
+  animation-delay: 0.16s;
 }
 
-[data-theme="dark"] .matches-page .share-match-button:hover {
-  border-color: #60a5fa;
-  background: #1a2639;
-  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.18);
+.finished-match-analysis .analysis-point:nth-of-type(3) {
+  animation-delay: 0.2s;
 }
 
-[data-theme="dark"] .matches-page .share-match-button.shared {
-  border-color: rgba(74, 222, 128, 0.4);
-  background: rgba(22, 163, 74, 0.14);
-  color: #86efac !important;
+.finished-match-analysis .analysis-point:nth-of-type(4) {
+  animation-delay: 0.24s;
 }
+
+.finished-match-analysis .analysis-point:nth-of-type(5) {
+  animation-delay: 0.28s;
+}
+
+/* =========================================================
+   PLAYER LABELS
+========================================================= */
+
+.finished-match-analysis .analysis-player-label {
+  fill: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.finished-match-analysis .team-a-label {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-label {
+  fill: var(--analysis-team-b);
+}
+
+/* =========================================================
+   EMPTY GRAPH
+========================================================= */
+
+.finished-match-analysis .graph-empty,
+.finished-match-analysis .match-analysis-empty {
+  width: 100%;
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 18px;
+  text-align: center;
+  border-radius: 13px;
+  background: var(--analysis-surface);
+}
+
+.finished-match-analysis .graph-empty p,
+.finished-match-analysis .match-analysis-empty p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--analysis-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/*
+   Supports GraphEmpty implementations that use
+   only a div/p without the optional class above.
+*/
+.finished-match-analysis .match-analysis-chart-card > :not(.match-analysis-chart-header):not(.match-analysis-chart-scroll):not(svg) {
+  color: var(--analysis-muted);
+}
+
+/* =========================================================
+   CARD HOVER
+========================================================= */
+
+@media (hover: hover) and (pointer: fine) {
+  .finished-match-analysis .match-analysis-chart-card {
+    transition:
+      transform 0.22s ease,
+      box-shadow 0.22s ease,
+      border-color 0.22s ease;
+  }
+
+  .finished-match-analysis .match-analysis-chart-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 12px 30px rgba(15, 23, 42, 0.08);
+  }
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 760px) {
+  .finished-match-analysis {
+    margin-top: 20px;
+  }
+
+  .finished-match-analysis-header {
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .match-analysis-chart-card {
+    padding: 13px;
+    border-radius: 16px;
+  }
+
+  .match-analysis-chart-header {
+    gap: 10px;
+  }
+
+  .match-analysis-legend {
+    max-width: 45%;
+  }
+
+  .match-analysis-svg,
+  .match-analysis-svg.performance-svg {
+    height: 270px;
+    max-height: 270px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+   Entire graph remains visible in one screen width
+========================================================= */
 
 @media (max-width: 600px) {
-  .matches-page .share-match-button {
+  .finished-match-analysis {
     width: 100%;
-    margin: 7px 0 12px;
-    min-height: 44px;
+    max-width: 100%;
+    margin-top: 18px;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  .finished-match-analysis-header {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 13px;
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .finished-match-analysis-header h3 {
+    font-size: 18px;
+  }
+
+  .finished-match-analysis-header small {
+    font-size: 10px;
+  }
+
+  .finished-analysis-badge {
+    min-height: 25px;
+    padding: 5px 8px;
+    font-size: 8px;
+  }
+
+  .match-analysis-chart-card {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 12px;
+    padding: 11px;
+    border-radius: 15px;
+  }
+
+  .match-analysis-chart-header {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+
+  .match-analysis-chart-header > div:first-child {
+    width: 100%;
+  }
+
+  .match-analysis-chart-header strong {
+    font-size: 12px;
+  }
+
+  .match-analysis-chart-header small {
+    font-size: 9px;
+  }
+
+  .match-analysis-legend {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    gap: 7px 11px;
+  }
+
+  .match-analysis-legend span {
+    font-size: 8px;
+  }
+
+  .match-analysis-legend i {
+    width: 7px;
+    height: 7px;
+    flex-basis: 7px;
+  }
+
+  /*
+     Critical mobile rule:
+     do NOT allow the graph to become wider than the card.
+  */
+  .match-analysis-chart-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    overflow-x: hidden;
+  }
+
+  .match-analysis-svg,
+  .match-analysis-svg.performance-svg {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: 245px;
+    max-height: 245px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .analysis-y-label,
+  .finished-match-analysis .analysis-axis-label {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .analysis-line {
+    stroke-width: 2.5px;
+  }
+
+  .finished-match-analysis .analysis-point {
+    stroke-width: 1.2px;
   }
 }
 
-@keyframes shareMatchSuccess {
-  0% {
-    transform: scale(0.98);
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 390px) {
+  .finished-match-analysis-header {
+    padding: 12px;
   }
-  55% {
-    transform: scale(1.025);
+
+  .match-analysis-chart-card {
+    padding: 9px;
   }
-  100% {
-    transform: scale(1);
+
+  .match-analysis-chart-header {
+    margin-bottom: 7px;
+  }
+
+  .match-analysis-chart-header strong {
+    font-size: 11px;
+  }
+
+  .match-analysis-chart-header small {
+    font-size: 8px;
+  }
+
+  .match-analysis-legend span {
+    font-size: 7.5px;
+  }
+
+  .match-analysis-svg,
+  .match-analysis-svg.performance-svg {
+    height: 220px;
+    max-height: 220px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .analysis-y-label,
+  .finished-match-analysis .analysis-axis-label {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .analysis-line {
+    stroke-width: 2.2px;
+  }
+
+  .finished-match-analysis .analysis-point {
+    stroke-width: 1px;
   }
 }
 
-@keyframes shareIconSuccess {
-  0% {
-    transform: translateY(0) scale(0.9);
+/* =========================================================
+   VERY SMALL DEVICES
+========================================================= */
+
+@media (max-width: 340px) {
+  .finished-match-analysis-header h3 {
+    font-size: 16px;
   }
-  55% {
-    transform: translateY(-2px) scale(1.12);
+
+  .match-analysis-chart-card {
+    padding: 8px;
   }
-  100% {
+
+  .match-analysis-svg,
+  .match-analysis-svg.performance-svg {
+    height: 205px;
+    max-height: 205px;
+  }
+}
+
+/* =========================================================
+   DARK THEME
+   Supports both:
+   [data-theme="dark"] ancestor
+   and .matches-page[data-theme="dark"]
+========================================================= */
+
+[data-theme="dark"] .finished-match-analysis,
+.matches-page[data-theme="dark"] .finished-match-analysis {
+  --analysis-bg: var(--card-bg, #111827);
+  --analysis-surface: var(--surface-bg, #0f172a);
+  --analysis-border: var(--border-color, #334155);
+  --analysis-text: var(--text-color, #f8fafc);
+  --analysis-muted: var(--muted-text, #94a3b8);
+
+  --analysis-grid: rgba(148, 163, 184, 0.14);
+  --analysis-axis: rgba(148, 163, 184, 0.38);
+}
+
+[data-theme="dark"] .finished-match-analysis .finished-match-analysis-header,
+.matches-page[data-theme="dark"] .finished-match-analysis .finished-match-analysis-header {
+  background:
+    linear-gradient(
+      135deg,
+      var(--analysis-bg),
+      rgba(30, 41, 59, 0.92)
+    );
+
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .finished-match-analysis .match-analysis-chart-card,
+.matches-page[data-theme="dark"] .finished-match-analysis .match-analysis-chart-card {
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="dark"] .finished-match-analysis .match-analysis-chart-scroll,
+.matches-page[data-theme="dark"] .finished-match-analysis .match-analysis-chart-scroll {
+  background:
+    linear-gradient(
+      180deg,
+      #0f172a,
+      #111827
+    );
+}
+
+[data-theme="dark"] .finished-match-analysis .finished-analysis-badge,
+.matches-page[data-theme="dark"] .finished-match-analysis .finished-analysis-badge {
+  background: rgba(34, 197, 94, 0.11);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #4ade80;
+}
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .finished-match-analysis,
+  .finished-match-analysis .match-analysis-chart-card,
+  .finished-match-analysis .analysis-line,
+  .finished-match-analysis .analysis-point {
+    animation: none !important;
+  }
+
+  .finished-match-analysis .analysis-line {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+
+  .finished-match-analysis .match-analysis-chart-card {
+    transition: none !important;
+  }
+}
+
+/* =========================================================
+   ANIMATIONS
+========================================================= */
+
+@keyframes finishedAnalysisFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes analysisCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
+@keyframes analysisLineDraw {
+  from {
+    stroke-dashoffset: 1400;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes analysisPointPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+
+/* =========================================================
+   NEW BATTER BAR GRAPH
+   Runs of every batter
+   Light + Dark • Responsive • Animated
+========================================================= */
+
+.finished-match-analysis .analysis-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: analysisBarGrow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.finished-match-analysis .team-a-bar {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-bar {
+  fill: var(--analysis-team-b);
+}
+
+.finished-match-analysis .analysis-bar:hover {
+  opacity: 0.86;
+  filter:
+    drop-shadow(
+      0 3px 6px rgba(15, 23, 42, 0.2)
+    );
+}
+
+.finished-match-analysis .analysis-bar-value {
+  fill: var(--analysis-text);
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(1) {
+  animation-delay: 0.04s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(2) {
+  animation-delay: 0.08s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(3) {
+  animation-delay: 0.12s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(4) {
+  animation-delay: 0.16s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(5) {
+  animation-delay: 0.20s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(6) {
+  animation-delay: 0.24s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(7) {
+  animation-delay: 0.28s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(8) {
+  animation-delay: 0.32s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(9) {
+  animation-delay: 0.36s;
+}
+
+.finished-match-analysis .analysis-bar:nth-of-type(10) {
+  animation-delay: 0.40s;
+}
+
+
+/* =========================================================
+   PLAYER NAMES
+   Tilted + readable
+========================================================= */
+
+.finished-match-analysis .analysis-player-label {
+  fill: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 850;
+  pointer-events: none;
+
+  /*
+     Important:
+     The JSX should use:
+     transform={`rotate(-45 ${x} ${y})`}
+  */
+  white-space: nowrap;
+}
+
+.finished-match-analysis .team-a-label {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-label {
+  fill: var(--analysis-team-b);
+}
+
+
+/* =========================================================
+   BOWLER GRAPH
+   Wickets BAR + Economy Label
+========================================================= */
+
+.finished-match-analysis .analysis-wicket-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation:
+    analysisBarGrow
+    0.72s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.finished-match-analysis .team-a-wicket-bar {
+  fill: var(--analysis-team-a);
+}
+
+.finished-match-analysis .team-b-wicket-bar {
+  fill: var(--analysis-team-b);
+}
+
+.finished-match-analysis .analysis-wicket-bar:hover {
+  opacity: 0.86;
+  filter:
+    drop-shadow(
+      0 3px 6px rgba(15, 23, 42, 0.2)
+    );
+}
+
+.finished-match-analysis .analysis-economy-label {
+  fill: var(--analysis-text);
+  font-size: 9px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.finished-match-analysis .analysis-wickets-label {
+  fill: var(--analysis-muted);
+  font-size: 8px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   PARTNERSHIP ANALYSIS
+========================================================= */
+
+.finished-match-analysis .partnership-analysis-card {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 18px;
+  background: var(--analysis-bg);
+  box-shadow:
+    0 7px 22px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+
+  animation:
+    analysisCardIn
+    0.55s
+    ease
+    both;
+  animation-delay: 0.18s;
+}
+
+.finished-match-analysis .partnership-list {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.finished-match-analysis .partnership-innings {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      var(--analysis-surface),
+      var(--analysis-bg)
+    );
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.finished-match-analysis .partnership-innings:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+.finished-match-analysis .partnership-innings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--analysis-border);
+}
+
+.finished-match-analysis .partnership-innings-header > div {
+  min-width: 0;
+}
+
+.finished-match-analysis .partnership-innings-header strong {
+  display: block;
+  color: var(--analysis-text);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 900;
+}
+
+.finished-match-analysis .partnership-innings-header small {
+  display: block;
+  margin-top: 3px;
+  color: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.finished-match-analysis .partnership-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finished-match-analysis .partnership-item {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--analysis-border);
+  border-radius: 11px;
+  background: var(--analysis-bg);
+
+  animation:
+    partnershipItemIn
+    0.45s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.finished-match-analysis .partnership-item:hover {
+  transform: translateX(2px);
+  border-color: var(--analysis-team-a);
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.finished-match-analysis .partnership-batters {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.finished-match-analysis .partnership-player {
+  min-width: 0;
+  max-width: 42%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.finished-match-analysis .partnership-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--analysis-text);
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 850;
+}
+
+.finished-match-analysis .partnership-vs {
+  flex: 0 0 auto;
+  color: var(--analysis-muted);
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.finished-match-analysis .partnership-score {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--analysis-team-a);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.finished-match-analysis .partnership-balls {
+  color: var(--analysis-muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.finished-match-analysis .partnership-empty {
+  width: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  border: 1px dashed var(--analysis-border);
+  border-radius: 11px;
+  text-align: center;
+  color: var(--analysis-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   DARK MODE
+   New bars + partnership
+========================================================= */
+
+[data-theme="dark"] .finished-match-analysis .analysis-bar-value,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-bar-value {
+  fill: var(--analysis-text);
+}
+
+[data-theme="dark"] .finished-match-analysis .analysis-economy-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-economy-label {
+  fill: var(--analysis-text);
+}
+
+[data-theme="dark"] .finished-match-analysis .analysis-player-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .analysis-player-label {
+  fill: var(--analysis-muted);
+}
+
+[data-theme="dark"] .finished-match-analysis .team-a-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .team-a-label {
+  fill: var(--analysis-team-a);
+}
+
+[data-theme="dark"] .finished-match-analysis .team-b-label,
+.matches-page[data-theme="dark"] .finished-match-analysis .team-b-label {
+  fill: var(--analysis-team-b);
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-innings,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-innings {
+  background:
+    linear-gradient(
+      145deg,
+      #0f172a,
+      #111827
+    );
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-item,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-item {
+  background: #111827;
+}
+
+[data-theme="dark"] .finished-match-analysis .partnership-item:hover,
+.matches-page[data-theme="dark"] .finished-match-analysis .partnership-item:hover {
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.22);
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 760px) {
+  .finished-match-analysis .partnership-list {
+    gap: 11px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 11px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 9px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 8px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+  .finished-match-analysis .analysis-bar-value {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .analysis-economy-label {
+    font-size: 7.5px;
+  }
+
+  .finished-match-analysis .analysis-wickets-label {
+    font-size: 7px;
+  }
+
+  /*
+     Partnership cards stack vertically.
+     This prevents horizontal overflow on phones.
+  */
+  .finished-match-analysis .partnership-list {
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .finished-match-analysis .partnership-analysis-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 11px;
+    border-radius: 15px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .finished-match-analysis .partnership-innings-header {
+    margin-bottom: 8px;
+    padding-bottom: 7px;
+  }
+
+  .finished-match-analysis .partnership-innings-header strong {
+    font-size: 10px;
+  }
+
+  .finished-match-analysis .partnership-innings-header small {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 8px;
+    gap: 6px;
+    border-radius: 9px;
+  }
+
+  .finished-match-analysis .partnership-player {
+    max-width: 40%;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 8.5px;
+  }
+
+  .finished-match-analysis .partnership-vs {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 10px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-empty {
+    min-height: 65px;
+    padding: 12px;
+    font-size: 8px;
+  }
+
+  /* Player names on graph */
+  .finished-match-analysis .analysis-player-label {
+    font-size: 8px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 390px) {
+  .finished-match-analysis .partnership-analysis-card {
+    padding: 9px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 8px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 7px;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 7.5px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 9px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 6.5px;
+  }
+
+  .finished-match-analysis .analysis-bar-value {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .analysis-economy-label {
+    font-size: 6.5px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 7px;
+    font-weight: 850;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL DEVICES
+========================================================= */
+
+@media (max-width: 340px) {
+  .finished-match-analysis .partnership-analysis-card {
+    padding: 8px;
+  }
+
+  .finished-match-analysis .partnership-innings {
+    padding: 7px;
+  }
+
+  .finished-match-analysis .partnership-item {
+    padding: 6px;
+  }
+
+  .finished-match-analysis .partnership-player-name {
+    font-size: 7px;
+  }
+
+  .finished-match-analysis .partnership-score {
+    font-size: 8px;
+  }
+
+  .finished-match-analysis .partnership-balls {
+    font-size: 6px;
+  }
+
+  .finished-match-analysis .analysis-player-label {
+    font-size: 6.5px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
 @media (prefers-reduced-motion: reduce) {
-  .matches-page .share-match-button,
-  .matches-page .share-match-button::before,
-  .matches-page .share-match-icon {
-    transition: none !important;
+  .finished-match-analysis .analysis-bar,
+  .finished-match-analysis .analysis-wicket-bar,
+  .finished-match-analysis .partnership-analysis-card,
+  .finished-match-analysis .partnership-item {
     animation: none !important;
+  }
+
+  .finished-match-analysis .analysis-bar,
+  .finished-match-analysis .analysis-wicket-bar,
+  .finished-match-analysis .partnership-item {
+    transition: none !important;
+  }
+}
+
+
+/* =========================================================
+   NEW ANIMATIONS
+========================================================= */
+
+@keyframes analysisBarGrow {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes partnershipItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================================
+   SCORECARD PDF DOWNLOAD
+   Added only for the View Scorecard PDF action.
+========================================================= */
+
+.scorecard-download-button {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 11px 15px;
+  border: 1px solid var(--matches-primary);
+  border-radius: 13px;
+  background: var(--matches-primary);
+  color: #ffffff !important;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.18);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.scorecard-download-button:hover {
+  background: var(--matches-primary-dark);
+  border-color: var(--matches-primary-dark);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+  transform: translateY(-1px);
+}
+
+.scorecard-download-button:active {
+  transform: scale(0.985);
+}
+
+.scorecard-download-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  animation: scorecardDownloadFloat 1.8s ease-in-out infinite;
+}
+
+.scorecard-download-button:hover .scorecard-download-icon {
+  animation: scorecardDownloadBounce 0.65s ease-in-out;
+}
+
+@keyframes scorecardDownloadFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes scorecardDownloadBounce {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(4px);
+  }
+  70% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+[data-theme="dark"] .scorecard-download-button {
+  box-shadow: 0 9px 24px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .scorecard-download-button:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+/* Print-only complete scorecard. On screen it remains invisible. */
+.scorecard-print-sheet {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  body.scorecard-print-mode {
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body.scorecard-print-mode * {
+    visibility: hidden !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-sheet,
+  body.scorecard-print-mode .scorecard-print-sheet * {
+    visibility: visible !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-sheet {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    z-index: 2147483647 !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-header {
+    margin: 0 0 14px;
+    padding: 0 0 10px;
+    border-bottom: 2px solid #111827;
+  }
+
+  body.scorecard-print-mode .scorecard-print-header .eyebrow {
+    margin-bottom: 4px;
+    color: #2563eb !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-header h1 {
+    margin: 0 0 5px;
+    font-size: 21px;
+    line-height: 1.2;
+    color: #111827 !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-header p {
+    margin: 0 0 4px;
+    color: #4b5563 !important;
+    font-size: 10px;
+  }
+
+  body.scorecard-print-mode .scorecard-print-header > strong {
+    display: block;
+    margin-top: 5px;
+    color: #166534 !important;
+    font-size: 12px;
+  }
+
+  body.scorecard-print-mode .match-innings-scorecard,
+  body.scorecard-print-mode .match-scorecard-block,
+  body.scorecard-print-mode .win-prediction-card,
+  body.scorecard-print-mode .win-prediction-history,
+  body.scorecard-print-mode .match-impact-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.scorecard-print-mode .match-scorecard-table-wrap {
+    overflow: visible !important;
+  }
+
+  body.scorecard-print-mode .match-scorecard-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+  }
+
+  body.scorecard-print-mode .match-scorecard-table th,
+  body.scorecard-print-mode .match-scorecard-table td {
+    overflow-wrap: anywhere !important;
+  }
+
+  body.scorecard-print-mode .scorecard-print-page-break {
+    break-before: page;
+    page-break-before: always;
+    height: 1px;
+  }
+
+  body.scorecard-print-mode .scorecard-download-button,
+  body.scorecard-print-mode .match-scorecard-tabs {
+    display: none !important;
   }
 }
