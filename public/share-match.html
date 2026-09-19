@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Scorify Match Scorecard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --soft: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #0b1120;
+        --card: #151d2e;
+        --soft: #1b2638;
+        --border: #2d3748;
+        --text: #f8fafc;
+        --muted: #9ca8b8;
+        --primary: #60a5fa;
+        --success: #4ade80;
+        --danger: #f87171;
+        --shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body { padding: 20px 14px 42px; }
+
+    .public-scorecard {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+    }
+
+    .public-header {
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: linear-gradient(135deg, var(--card), var(--soft));
+      box-shadow: var(--shadow);
+      animation: publicIn .42s ease both;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .12em;
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .13em;
+    }
+
+    h1, h2, h3, h4, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 6px;
+      font-size: clamp(23px, 5vw, 36px);
+      line-height: 1.1;
+    }
+
+    .meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 13px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(22, 163, 74, .1);
+      color: var(--success);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.7s ease-in-out infinite;
+    }
+
+    .status.finished .status-dot,
+    .status.unfinished .status-dot { animation: none; }
+
+    .score-hero {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 14px;
+      margin-top: 14px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--card);
+    }
+
+    .team-box { min-width: 0; }
+    .team-box.right { text-align: right; }
+
+    .team-name {
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .team-score {
+      font-size: clamp(24px, 7vw, 38px);
+      line-height: 1;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-vs {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .result-card,
+    .info-card,
+    .innings-card {
+      margin-top: 14px;
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 6px 20px rgba(15, 23, 42, .04);
+      animation: publicIn .48s ease both;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title strong {
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .section-title small { color: var(--muted); font-size: 9px; }
+
+    .winner {
+      font-size: 17px;
+      font-weight: 950;
+      color: var(--success);
+    }
+
+    .result-text { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .info-item {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: var(--soft);
+    }
+
+    .info-item span,
+    .info-item strong { display: block; }
+    .info-item span { margin-bottom: 3px; color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+    .info-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table { width: 100%; min-width: 640px; border-collapse: collapse; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; font-size: 10px; }
+    th { background: var(--soft); color: var(--muted); font-size: 8px; font-weight: 900; text-transform: uppercase; }
+    th:first-child, td:first-child { text-align: left; }
+    tr:last-child td { border-bottom: 0; }
+    td strong, td small { display: block; }
+    td small { margin-top: 2px; color: var(--muted); font-size: 8px; }
+
+    .notes {
+      margin: 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.55;
+    }
+
+    .fow-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .fow-list span {
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--text);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .error {
+      width: min(720px, 100%);
+      margin: 10vh auto 0;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .error h1 { font-size: 22px; }
+    .error p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 9px;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 12px 9px 28px; }
+      .public-header { padding: 16px; border-radius: 18px; }
+      .score-hero { gap: 8px; padding: 14px 10px; }
+      .team-name { font-size: 11px; }
+      .team-score { font-size: 27px; }
+      .result-card, .info-card, .innings-card { padding: 13px; border-radius: 15px; }
+      .info-grid { grid-template-columns: 1fr; }
+    }
+
+    @keyframes publicIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: .45; transform: scale(.85); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main id="root" class="public-scorecard"></main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const root = document.getElementById("root");
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get("match");
+
+      const escapeHtml = (value) => String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+      const playerId = (player) => String(
+        player?.id ?? player?._id ?? player?.playerId ?? player?.name ?? ""
+      );
+
+      const playerName = (player) => player?.name || player?.playerName || "Unknown Player";
+
+      const fmtOvers = (balls) => {
+        const n = Number(balls || 0);
+        return `${Math.floor(n / 6)}.${n % 6}`;
+      };
+
+      const fmtSR = (runs, balls) => {
+        const b = Number(balls || 0);
+        return b ? ((Number(runs || 0) / b) * 100).toFixed(2) : "0.00";
+      };
+
+      const fmtEco = (runs, balls) => {
+        const b = Number(balls || 0);
+        return b ? ((Number(runs || 0) / b) * 6).toFixed(2) : "0.00";
+      };
+
+      const decodePayload = (value) => {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return JSON.parse(new TextDecoder().decode(bytes));
+      };
+
+      const getStatus = (match) => {
+        const status = String(match?.status || "").toLowerCase();
+        if (status === "unfinished") return "unfinished";
+        if (status === "finished" || status === "completed" || match?.finishedAt || match?.winner || match?.result || match?.resultText) return "finished";
+        return "live";
+      };
+
+      const resultText = (match) => {
+        if (typeof match?.result === "string") return match.result;
+        return match?.result?.text || match?.resultText || "";
+      };
+
+      const makeTeam = (match, id) => match?.[id] || {
+        id,
+        name: match?.[id === "teamA" ? "teamAName" : "teamBName"] || (id === "teamA" ? "Team A" : "Team B"),
+        players: match?.[id === "teamA" ? "teamAPlayers" : "teamBPlayers"] || []
+      };
+
+      const innings = (match) => [match?.firstInningsData, match?.secondInningsData].filter(Boolean);
+
+      const teamForInnings = (match, inning, index) => {
+        const firstTeamId = match?.firstInningsTeamId === "B" ? "B" : "A";
+        const id = inning?.teamId === "A" || inning?.teamId === "B"
+          ? inning.teamId
+          : (index === 0 ? firstTeamId : (firstTeamId === "A" ? "B" : "A"));
+        return id === "A" ? makeTeam(match, "teamA") : makeTeam(match, "teamB");
+      };
+
+      const renderBatting = (inning, battingTeam) => {
+        const stats = inning?.battingStats || {};
+        const players = Array.isArray(battingTeam?.players) ? battingTeam.players : [];
+        const rows = [];
+        const seen = new Set();
+
+        players.forEach((player, index) => {
+          const id = playerId(player);
+          const s = stats[id] || {};
+          if (s.status === "yet" && !s.balls && !s.runs) return;
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          rows.push({
+            id,
+            name: s.name || s.playerName || playerName(player),
+            runs: Number(s.runs || 0), balls: Number(s.balls || 0),
+            fours: Number(s.fours || 0), sixes: Number(s.sixes || 0),
+            status: s.status || "not out", dismissal: s.dismissal || "",
+            fielder: s.fielder || "", bowler: s.bowler || "", order: s.battingOrder || index + 1
+          });
+        });
+
+        Object.entries(stats).forEach(([id, s]) => {
+          if (seen.has(id)) return;
+          if (!s || (s.status === "yet" && !s.balls && !s.runs)) return;
+          seen.add(id);
+          rows.push({
+            id, name: s.name || s.playerName || "Unknown Player",
+            runs: Number(s.runs || 0), balls: Number(s.balls || 0),
+            fours: Number(s.fours || 0), sixes: Number(s.sixes || 0),
+            status: s.status || "not out", dismissal: s.dismissal || "",
+            fielder: s.fielder || "", bowler: s.bowler || "", order: Number(s.battingOrder || 999)
+          });
+        });
+
+        rows.sort((a, b) => a.order - b.order);
+
+        return rows.length ? rows.map((p) => `
+          <tr>
+            <td><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.status === "out" ? `out • ${p.dismissal}${p.fielder ? ` • ${p.fielder}` : ""}` : p.status === "retired hurt" ? "Retired hurt" : `not out${p.bowler ? ` • Bowler: ${p.bowler}` : ""}`)}</small></td>
+            <td>${p.runs}</td><td>${p.balls}</td><td>${p.fours}</td><td>${p.sixes}</td><td>${fmtSR(p.runs, p.balls)}</td>
+          </tr>`).join("") : `<tr><td colspan="6" class="notes">No batting data saved</td></tr>`;
+      };
+
+      const renderYetToBat = (inning, battingTeam) => {
+        const stats = inning?.battingStats || {};
+        const names = (battingTeam?.players || []).filter((p) => {
+          const s = stats[playerId(p)] || {};
+          return s.status === "yet" && !s.balls && !s.runs;
+        }).map(playerName);
+        return names.length ? names.join(", ") : "None";
+      };
+
+      const renderFow = (inning) => {
+        const items = Array.isArray(inning?.fallOfWickets) ? inning.fallOfWickets : [];
+        return items.length ? items.map((item) => `<span>${escapeHtml(item.wicket)}-${escapeHtml(item.score)} (${escapeHtml(item.batter)}, ${escapeHtml(item.over)})</span>`).join("") : "No wickets";
+      };
+
+      const renderBowling = (inning, bowlingTeam) => {
+        const stats = inning?.bowlingStats || {};
+        const rows = Object.entries(stats).map(([id, s]) => ({
+          id, name: s?.name || s?.playerName || ((bowlingTeam?.players || []).find((p) => playerId(p) === id) ? playerName((bowlingTeam.players || []).find((p) => playerId(p) === id)) : "Unknown Player"),
+          legalBalls: Number(s?.legalBalls ?? s?.balls ?? 0), runs: Number(s?.runs || s?.runsConceded || 0),
+          wickets: Number(s?.wickets || 0), maidens: Number(s?.maidens || 0)
+        })).filter((row) => row.legalBalls || row.runs || row.wickets);
+
+        return rows.length ? rows.map((b) => `
+          <tr><td><strong>${escapeHtml(b.name)}</strong></td><td>${fmtOvers(b.legalBalls)}</td><td>${b.maidens}</td><td>${b.runs}</td><td>${b.wickets}</td><td>${fmtEco(b.runs, b.legalBalls)}</td></tr>`).join("") : `<tr><td colspan="6" class="notes">No bowling data saved</td></tr>`;
+      };
+
+      const renderInnings = (match, inning, index) => {
+        const battingTeam = teamForInnings(match, inning, index);
+        const bowlingTeam = battingTeam?.id === "A" ? makeTeam(match, "teamB") : makeTeam(match, "teamA");
+        const extras = inning?.extras || {};
+        const totalExtras = Number(extras.nb || 0) + Number(extras.wd || 0) + Number(extras.bye || 0) + Number(extras.lb || 0);
+
+        return `
+          <section class="innings-card">
+            <div class="section-title">
+              <strong>INNINGS ${index + 1} • ${escapeHtml(battingTeam?.name || "Team")}</strong>
+              <small>${Number(inning?.runs ?? 0)}/${Number(inning?.wickets ?? 0)}</small>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead>
+                <tbody>${renderBatting(inning, battingTeam)}</tbody>
+              </table>
+            </div>
+
+            <div class="info-card" style="margin-top:10px; box-shadow:none">
+              <div class="section-title"><strong>Yet to Bat</strong><small>Recorded team</small></div>
+              <p class="notes">${escapeHtml(renderYetToBat(inning, battingTeam))}</p>
+            </div>
+
+            <div class="info-card" style="margin-top:10px; box-shadow:none">
+              <div class="section-title"><strong>Fall of Wickets</strong><small>${Array.isArray(inning?.fallOfWickets) ? inning.fallOfWickets.length : 0} wickets</small></div>
+              <div class="fow-list">${renderFow(inning)}</div>
+            </div>
+
+            <div class="info-card" style="margin-top:10px; box-shadow:none">
+              <div class="section-title"><strong>Extras</strong><small>Total ${totalExtras}</small></div>
+              <p class="notes">NB ${Number(extras.nb || 0)}, WD ${Number(extras.wd || 0)}, BYE ${Number(extras.bye || 0)}, LB ${Number(extras.lb || 0)}</p>
+            </div>
+
+            <div class="table-wrap" style="margin-top:10px">
+              <table>
+                <thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead>
+                <tbody>${renderBowling(inning, bowlingTeam)}</tbody>
+              </table>
+            </div>
+          </section>`;
+      };
+
+      try {
+        if (!encoded) throw new Error("Missing match data");
+        const match = decodePayload(encoded);
+        const teamA = makeTeam(match, "teamA");
+        const teamB = makeTeam(match, "teamB");
+        const status = getStatus(match);
+        const result = resultText(match);
+        const tossWinner = match?.secondTossWinner?.name || "";
+        const inningsData = innings(match);
+        const battingFirst = match?.battingTeam || (match?.firstInningsTeamId === "B" ? teamB.name : teamA.name);
+
+        root.innerHTML = `
+          <header class="public-header">
+            <div class="brand">🏏 SCORIFY • PUBLIC SCORECARD</div>
+            <p class="eyebrow">MATCH SCORECARD</p>
+            <h1>${escapeHtml(teamA.name)} vs ${escapeHtml(teamB.name)}</h1>
+            <p class="meta">${match?.createdAt ? new Date(match.createdAt).toLocaleString("en-IN") : ""}</p>
+            <div class="status ${status}"><span class="status-dot"></span>${status.toUpperCase()}</div>
+          </header>
+
+          <section class="score-hero">
+            <div class="team-box">
+              <div class="team-name">${escapeHtml(teamA.name)}</div>
+              <div class="team-score">${Number(match?.scoreA || 0)}/${Number(match?.wicketsA || 0)}</div>
+            </div>
+            <div class="score-vs">VS</div>
+            <div class="team-box right">
+              <div class="team-name">${escapeHtml(teamB.name)}</div>
+              <div class="team-score">${Number(match?.scoreB || 0)}/${Number(match?.wicketsB || 0)}</div>
+            </div>
+          </section>
+
+          ${result || match?.winner ? `
+            <section class="result-card">
+              <div class="section-title"><strong>MATCH RESULT</strong><small>Recorded result</small></div>
+              <div class="winner">${escapeHtml(result || match.winner)}</div>
+              ${result && result !== match.winner ? `<p class="result-text">Winner: ${escapeHtml(match.winner || "—")}</p>` : ""}
+            </section>` : ""}
+
+          <section class="info-card">
+            <div class="section-title"><strong>MATCH INFORMATION</strong><small>Shared from Scorify</small></div>
+            <div class="info-grid">
+              <div class="info-item"><span>Overs</span><strong>${escapeHtml(match?.overs ?? "—")}</strong></div>
+              <div class="info-item"><span>Batting First</span><strong>${escapeHtml(battingFirst)}</strong></div>
+              <div class="info-item"><span>Bowling First</span><strong>${escapeHtml(match?.bowlingTeam || "—")}</strong></div>
+              <div class="info-item"><span>Toss Result</span><strong>${escapeHtml(match?.secondTossResult || "—")}</strong></div>
+              <div class="info-item"><span>Toss Winner</span><strong>${escapeHtml(tossWinner || "—")}</strong></div>
+              <div class="info-item"><span>Created</span><strong>${escapeHtml(match?.createdAt ? new Date(match.createdAt).toLocaleDateString("en-IN") : "—")}</strong></div>
+            </div>
+          </section>
+
+          ${inningsData.map((inning, index) => renderInnings(match, inning, index)).join("")}
+          <div class="footer">Scorify public match link • No login required</div>`;
+      } catch (error) {
+        root.innerHTML = `
+          <section class="error">
+            <div class="brand">🏏 SCORIFY</div>
+            <h1>Match scorecard unavailable</h1>
+            <p>This shared link is missing valid match data or the link was copied incompletely. Ask the sender to create a new share link from the match scorecard.</p>
+          </section>`;
+      }
+    })();
+  </script>
+</body>
+</html>

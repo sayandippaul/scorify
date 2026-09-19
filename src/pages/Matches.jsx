@@ -75,17 +75,28 @@ const scorecardStrikeRate = (runs = 0, balls = 0) =>
 const scorecardEconomy = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 6).toFixed(2) : "0.00";
 
+const getTossPlayerId = (player) =>
+  String(
+    player?.id ??
+      player?.uid ??
+      player?.playerId ??
+      player?._id ??
+      ""
+  );
+
+const sameTossPlayer = (a, b) => {
+  const aId = getTossPlayerId(a);
+  const bId = getTossPlayerId(b);
+  return Boolean(aId && bId && aId === bId);
+};
+
 const getTossWinnerTeamId = (match) => {
   const winner = match?.secondTossWinner;
-  const winnerId = winner?.id ?? winner?.playerId;
-
-  if (!winnerId) return null;
+  if (!getTossPlayerId(winner)) return null;
 
   const teams = [match.teamA, match.teamB].filter(Boolean);
   return teams.find((team) =>
-    (team.players || []).some(
-      (player) => String(scorecardPlayerId(player)) === String(winnerId)
-    )
+    (team.players || []).some((player) => sameTossPlayer(player, winner))
   )?.id || null;
 };
 
@@ -2866,6 +2877,7 @@ function Matches() {
   });
 
   const [viewingMatch, setViewingMatch] = useState(null);
+  const [shareFeedback, setShareFeedback] = useState("");
 
   // --------------------------------------------------
   // LOAD DATA
@@ -3731,9 +3743,10 @@ function Matches() {
       return;
     }
 
-    setSecondTossCaller(
-      Math.random() < 0.5 ? captainA : captainB
-    );
+    // FINAL TOSS: the UI explicitly says Captain A chooses first.
+    // Do not randomize this caller; otherwise Captain B can win when
+    // Heads/Tails matches even though Captain A made the visible choice.
+    setSecondTossCaller(captainA);
     setSecondTossChoice(null);
     setSecondTossResult(null);
     setSecondTossWinner(null);
@@ -3749,23 +3762,19 @@ function Matches() {
     if (secondTossResult || secondTossChoice) return;
 
     const caller = secondTossCaller || captainA;
-    const other =
-      String(caller?.id) === String(captainA?.id) ? captainB : captainA;
+    const other = sameTossPlayer(caller, captainA) ? captainB : captainA;
+    const normalizedChoice = choice === "Heads" ? "Heads" : "Tails";
 
-    setSecondTossChoice(choice);
+    setSecondTossChoice(normalizedChoice);
     setSecondTossSpinning(true);
 
     window.setTimeout(() => {
       const result = Math.random() < 0.5 ? "Heads" : "Tails";
+      const winner = result === normalizedChoice ? caller : other;
 
       setSecondTossResult(result);
+      setSecondTossWinner(winner);
       setSecondTossSpinning(false);
-
-      if (result === choice) {
-        setSecondTossWinner(caller);
-      } else {
-        setSecondTossWinner(other);
-      }
     }, TOSS_FLIP_MS);
   };
 
@@ -3774,11 +3783,12 @@ function Matches() {
   // --------------------------------------------------
 
   const getTossTeams = () => {
-    if (!secondTossWinner) return null;
+    if (!secondTossWinner || !captainA || !captainB) return null;
 
-    const winnerIsA =
-      String(secondTossWinner.id) ===
-      String(captainA.id);
+    const winnerIsA = sameTossPlayer(secondTossWinner, captainA);
+    const winnerIsB = sameTossPlayer(secondTossWinner, captainB);
+
+    if (!winnerIsA && !winnerIsB) return null;
 
     return {
       winnerTeam: winnerIsA ? teamA : teamB,
@@ -5123,9 +5133,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
             setFirstTossWinner(null);
             setNextPickTeam(null);
 
-            setSecondTossCaller(
-              Math.random() < 0.5 ? capA : capB
-            );
+            // Keep the final-toss caller consistent with the final-toss UI.
+            setSecondTossCaller(capA);
             setSecondTossChoice(null);
             setSecondTossResult(null);
             setSecondTossWinner(null);
@@ -5228,8 +5237,7 @@ const teamsWithPlayers = savedTeams.map((team) => {
                 </div>
 
                 <div className="winner-team">
-                  {String(secondTossWinner.id) ===
-                  String(captainA.id)
+                  {sameTossPlayer(secondTossWinner, captainA)
                     ? teamA.name
                     : teamB.name}
                 </div>
@@ -5332,6 +5340,131 @@ const teamsWithPlayers = savedTeams.map((team) => {
   }
 
   // --------------------------------------------------
+  // SHARE VIEW SCORECARD
+  // --------------------------------------------------
+
+  const encodeSharedMatch = (match) => {
+    const payload = {
+      version: 1,
+      match: {
+        id: match?.id ?? null,
+        teamA: match?.teamA ?? null,
+        teamB: match?.teamB ?? null,
+        teamAName: match?.teamAName ?? null,
+        teamBName: match?.teamBName ?? null,
+        teamAPlayers: match?.teamAPlayers ?? null,
+        teamBPlayers: match?.teamBPlayers ?? null,
+        captainA: match?.captainA ?? null,
+        captainB: match?.captainB ?? null,
+        firstTossResult: match?.firstTossResult ?? null,
+        secondTossResult: match?.secondTossResult ?? null,
+        secondTossWinner: match?.secondTossWinner ?? null,
+        battingTeamId: match?.battingTeamId ?? null,
+        bowlingTeamId: match?.bowlingTeamId ?? null,
+        battingTeam: match?.battingTeam ?? null,
+        bowlingTeam: match?.bowlingTeam ?? null,
+        overs: match?.overs ?? null,
+        scoreA: match?.scoreA ?? 0,
+        wicketsA: match?.wicketsA ?? 0,
+        scoreB: match?.scoreB ?? 0,
+        wicketsB: match?.wicketsB ?? 0,
+        status: match?.status ?? null,
+        startedAt: match?.startedAt ?? null,
+        createdAt: match?.createdAt ?? null,
+        updatedAt: match?.updatedAt ?? null,
+        finishedAt: match?.finishedAt ?? null,
+        winner: match?.winner ?? null,
+        result: match?.result ?? null,
+        resultText: match?.resultText ?? null,
+        firstInningsScore: match?.firstInningsScore ?? null,
+        firstInningsWickets: match?.firstInningsWickets ?? null,
+        secondInningsScore: match?.secondInningsScore ?? null,
+        secondInningsWickets: match?.secondInningsWickets ?? null,
+        firstInningsTeamId: match?.firstInningsTeamId ?? null,
+        firstInningsData: match?.firstInningsData ?? null,
+        secondInningsData: match?.secondInningsData ?? null,
+        scoringState: match?.scoringState ?? null,
+      },
+    };
+
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(payload)
+    );
+    let binary = "";
+
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(
+        ...bytes.subarray(index, index + 0x8000)
+      );
+    }
+
+    return btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  };
+
+  const handleShareMatch = async () => {
+    if (!viewingMatch) return;
+
+    try {
+      const encodedMatch = encodeSharedMatch(viewingMatch);
+
+      // Build the public page from the Vite deployment base so sharing also
+      // works when Scorify is hosted below a sub-path (for example /scorify/).
+      // A deployed VITE_PUBLIC_APP_URL can override the base when required.
+      const configuredPublicBase = String(
+        import.meta.env?.VITE_PUBLIC_APP_URL || ""
+      ).trim().replace(/\/+$/, "");
+      const deploymentBase = String(
+        import.meta.env?.BASE_URL || "/"
+      );
+      const sharePageBase = configuredPublicBase
+        ? `${configuredPublicBase}/share-match.html`
+        : new URL("share-match.html", new URL(deploymentBase, window.location.origin)).href;
+
+      const shareUrl = `${sharePageBase}?match=${encodedMatch}`;
+
+      let copied = false;
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          copied = true;
+        }
+      } catch (clipboardError) {
+        console.warn("Clipboard copy unavailable:", clipboardError);
+      }
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `${viewingMatch.teamA?.name || "Team A"} vs ${viewingMatch.teamB?.name || "Team B"}`,
+            text: "Scorify match scorecard",
+            url: shareUrl,
+          });
+          setShareFeedback(copied ? "Link copied" : "Shared");
+          window.setTimeout(() => setShareFeedback(""), 2200);
+          return;
+        } catch (shareError) {
+          if (shareError?.name === "AbortError") return;
+          console.warn("Native sharing unavailable:", shareError);
+        }
+      }
+
+      if (copied) {
+        setShareFeedback("Link copied");
+        window.setTimeout(() => setShareFeedback(""), 2200);
+      } else {
+        window.prompt("Copy this Scorify share link:", shareUrl);
+      }
+    } catch (error) {
+      console.error("Unable to create share link:", error);
+      alert("Unable to create the match share link.");
+    }
+  };
+
+  // --------------------------------------------------
   // VIEW SCORECARD
   // --------------------------------------------------
 
@@ -5353,6 +5486,38 @@ const teamsWithPlayers = savedTeams.map((team) => {
             }}
           >
             ← Back to Matches
+          </button>
+
+          <button
+            type="button"
+            className={`share-match-button${shareFeedback ? " shared" : ""}`}
+            onClick={handleShareMatch}
+            aria-label="Share match scorecard"
+            title="Share match scorecard"
+          >
+            <svg
+              className="share-match-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M12 16V4m0 0 4.5 4.5M12 4 7.5 8.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span>{shareFeedback || "Share Match"}</span>
           </button>
 
           <div className="setup-header">
