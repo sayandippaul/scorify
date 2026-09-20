@@ -554,3 +554,169 @@ export const saveTeam = async (team, ownerId = currentUserId()) => {
 };
 
 export const getCurrentUserId = currentUserId;
+
+/* =========================================================
+   CAREER STATS
+   Aggregates every battingStats / bowlingStats document ever
+   written (one per player per innings per match) into total
+   career runs and career wickets, keyed by playerId.
+   excludeMatchId lets the live match currently being scored
+   be left out, so only completed PAST matches count.
+========================================================= */
+export const getCareerStatsOnce = async (excludeMatchId = null) => {
+  const runsByPlayer = {};
+  const wicketsByPlayer = {};
+
+  try {
+    const battingSnap = await withTimeout(
+      getDocs(collection(db, BATTING_STATS)),
+      "Firestore battingStats lookup"
+    );
+
+    battingSnap.docs.forEach((item) => {
+      const data = item.data() || {};
+
+      if (excludeMatchId && String(data.matchId) === String(excludeMatchId)) {
+        return;
+      }
+
+      const id = String(data.playerId || "");
+      if (!id) return;
+
+      runsByPlayer[id] = (runsByPlayer[id] || 0) + Number(data.runs || 0);
+    });
+  } catch (error) {
+    console.warn("Unable to load career batting stats:", error);
+  }
+
+  try {
+    const bowlingSnap = await withTimeout(
+      getDocs(collection(db, BOWLING_STATS)),
+      "Firestore bowlingStats lookup"
+    );
+
+    bowlingSnap.docs.forEach((item) => {
+      const data = item.data() || {};
+
+      if (excludeMatchId && String(data.matchId) === String(excludeMatchId)) {
+        return;
+      }
+
+      const id = String(data.playerId || "");
+      if (!id) return;
+
+      wicketsByPlayer[id] =
+        (wicketsByPlayer[id] || 0) + Number(data.wickets || 0);
+    });
+  } catch (error) {
+    console.warn("Unable to load career bowling stats:", error);
+  }
+
+  return { runsByPlayer, wicketsByPlayer };
+};
+
+/* =========================================================
+   TEAM / PLAYER / MATCH HELPERS FOR LIVE SQUAD CHANGES
+   Used by the scoring page when a player joins, leaves or
+   moves to the other team during a match.
+========================================================= */
+
+/* One-shot readers built on top of the existing subscriptions. */
+export const getTeamsOnce = () =>
+  new Promise((resolve) => {
+    try {
+      subscribeToTeams(
+        (list) => resolve(Array.isArray(list) ? list : []),
+        () => resolve([])
+      );
+    } catch {
+      resolve([]);
+    }
+  });
+
+export const getPlayersOnce = () =>
+  new Promise((resolve) => {
+    try {
+      subscribeToPlayers(
+        (list) => resolve(Array.isArray(list) ? list : []),
+        () => resolve([])
+      );
+    } catch {
+      resolve([]);
+    }
+  });
+
+export const getMatchesOnce = () =>
+  new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = null;
+
+    const finish = (list) => {
+      if (settled) return;
+      settled = true;
+      resolve(Array.isArray(list) ? list : []);
+      if (typeof unsubscribe === "function") {
+        try {
+          unsubscribe();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    try {
+      unsubscribe = subscribeToMatches(finish, () => finish([]));
+    } catch {
+      finish([]);
+    }
+
+    /* Never hang the caller if Firestore is unreachable. */
+    setTimeout(() => finish(readOfflineQueue()), 6000);
+  });
+
+/* Drop teamPlayers rows for players who are no longer in the team. */
+export const pruneTeamPlayers = async (teamId, keepPlayerIds = []) => {
+  const id = String(teamId);
+  const keep = new Set(keepPlayerIds.map((value) => String(value)));
+
+  const snapshot = await withTimeout(
+    getDocs(query(collection(db, "teamPlayers"), where("teamId", "==", id))),
+    "Firestore teamPlayers lookup"
+  );
+
+  await withTimeout(
+    Promise.all(
+      snapshot.docs
+        .filter((item) => !keep.has(String(item.data()?.playerId)))
+        .map((item) => deleteDoc(item.ref))
+    ),
+    "Firestore teamPlayers cleanup"
+  );
+};
+
+/* Delete a team document together with its teamPlayers rows. */
+export const deleteTeam = async (teamId) => {
+  const id = String(teamId);
+
+  const snapshot = await withTimeout(
+    getDocs(query(collection(db, "teamPlayers"), where("teamId", "==", id))),
+    "Firestore teamPlayers lookup"
+  );
+
+  await withTimeout(
+    Promise.all([
+      deleteDoc(doc(db, "teams", id)),
+      ...snapshot.docs.map((item) => deleteDoc(item.ref)),
+    ]),
+    "Firestore team deletion"
+  );
+
+  try {
+    const queue = JSON.parse(
+      localStorage.getItem(OFFLINE_TEAM_QUEUE) || "[]"
+    ).filter((item) => String(item.id || item.teamId) !== id);
+    localStorage.setItem(OFFLINE_TEAM_QUEUE, JSON.stringify(queue));
+  } catch {
+    /* ignore */
+  }
+};

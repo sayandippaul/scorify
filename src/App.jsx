@@ -405,6 +405,13 @@ function App() {
                     ========================================= */}
 
                 <Route
+                  path="/matches/:matchId/scorecard"
+                  element={
+                    <Matches />
+                  }
+                />
+
+                <Route
                   path="/matches"
                   element={
                     <Matches />

@@ -7,6 +7,13 @@ import {
   flushMatchData,
   saveMatch,
   subscribeToMatch,
+  saveTeam,
+  deleteTeam,
+  pruneTeamPlayers,
+  getTeamsOnce,
+  getPlayersOnce,
+  getMatchesOnce,
+  getCareerStatsOnce,
 } from "../services/matchService";
 
 /* =========================================================
@@ -40,7 +47,7 @@ function ScoringWinPredictionCard({ prediction, live = true }) {
           {fairPrediction.metrics.runsRequired != null && <span><small>Required</small><b>{fairPrediction.metrics.runsRequired}</b></span>}
           <span><small>Current RR</small><b>{Number(fairPrediction.metrics.currentRR || 0).toFixed(2)}</b></span>
           {fairPrediction.metrics.runsRequired != null && <span><small>Required RR</small><b>{Number.isFinite(fairPrediction.metrics.requiredRR) ? Number(fairPrediction.metrics.requiredRR).toFixed(2) : "—"}</b></span>}
-          <span><small>Recent 6</small><b>{fairPrediction.metrics.recentSixRuns}</b></span>
+          <span><small>Recent 6 Balls</small><b>{fairPrediction.metrics.recentSixRuns}</b></span>
         </div>
       )}
     </section>
@@ -61,6 +68,60 @@ const PLAYER_NAME = (player) =>
   player?.name ||
   player?.playerName ||
   "Unknown Player";
+
+/* =========================================================
+   CAREER STATS
+   Career numbers are stored differently across the app,
+   so every known field name is checked here.
+========================================================= */
+
+const CAREER_RUNS = (player, careerStats) => {
+  const id = String(PLAYER_ID(player));
+
+  const aggregated = careerStats?.runsByPlayer?.[id];
+  if (aggregated !== undefined) {
+    const parsedAggregate = Number(aggregated);
+    return Number.isFinite(parsedAggregate) ? parsedAggregate : 0;
+  }
+
+  const value =
+    player?.careerRuns ??
+    player?.totalRuns ??
+    player?.runsScored ??
+    player?.career?.runs ??
+    player?.stats?.runs ??
+    player?.stats?.totalRuns ??
+    player?.battingStats?.runs ??
+    player?.runs ??
+    0;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const CAREER_WICKETS = (player, careerStats) => {
+  const id = String(PLAYER_ID(player));
+
+  const aggregated = careerStats?.wicketsByPlayer?.[id];
+  if (aggregated !== undefined) {
+    const parsedAggregate = Number(aggregated);
+    return Number.isFinite(parsedAggregate) ? parsedAggregate : 0;
+  }
+
+  const value =
+    player?.careerWickets ??
+    player?.totalWickets ??
+    player?.wicketsTaken ??
+    player?.career?.wickets ??
+    player?.stats?.wickets ??
+    player?.stats?.totalWickets ??
+    player?.bowlingStats?.wickets ??
+    player?.wickets ??
+    0;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const UNIQUE_PLAYERS = (players = []) => {
   const map = new Map();
@@ -195,7 +256,6 @@ const getBallTimelineTitle = (ball) => {
   return `Ball ${ball.ball || ""}: ${getBallTimelineLabel(ball)}${wicket}`;
 };
 
-const MATCH_LIST_KEY = "cricket_matches";
 
 const saveMatchEverywhere = (updated, matchId) =>
   saveMatch({ ...updated, id: updated?.id || matchId }).catch((error) => {
@@ -253,6 +313,226 @@ const fairLiveWinPrediction = (prediction, live = true) => {
 };
 
 /* =========================================================
+   SQUAD HELPERS
+========================================================= */
+
+const ROSTER_IDS = (players = []) =>
+  players.map((player) => String(PLAYER_ID(player)));
+
+const SAME_ROSTER = (a = [], b = []) => {
+  const first = [...ROSTER_IDS(a)].sort();
+  const second = [...ROSTER_IDS(b)].sort();
+
+  if (first.length !== second.length) return false;
+
+  return first.every((id, index) => id === second[index]);
+};
+
+const MERGE_PLAYER_LIST = (existing = [], incoming = []) => {
+  const map = new Map();
+
+  [...existing, ...incoming].forEach((player) => {
+    const id = PLAYER_ID(player);
+    if (id && !map.has(id)) {
+      map.set(id, player);
+    }
+  });
+
+  return [...map.values()];
+};
+
+/* =========================================================
+   SQUAD DATA SOURCES
+========================================================= */
+
+const loadPlayerPool = async () => {
+  try {
+    const players = await getPlayersOnce();
+
+    if (Array.isArray(players) && players.length) {
+      return UNIQUE_PLAYERS(players);
+    }
+  } catch (error) {
+    console.warn("Unable to load players:", error);
+  }
+
+  /* Fall back to every player already saved inside a team. */
+  try {
+    const savedTeams = await getTeamsOnce();
+
+    return UNIQUE_PLAYERS(
+      (savedTeams || []).flatMap((team) => TEAM_PLAYERS(team))
+    );
+  } catch (error) {
+    console.warn("Unable to load teams:", error);
+    return [];
+  }
+};
+
+const TEAM_LABEL = (team) =>
+  String(team?.teamName || team?.name || "").trim().toLowerCase();
+
+const MATCH_USES_TEAM = (item, teamId, teamName) => {
+  const ids = [
+    item?.teamAId,
+    item?.teamBId,
+    item?.teamA?.id,
+    item?.teamB?.id,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value));
+
+  const names = [
+    item?.teamAName,
+    item?.teamBName,
+    item?.teamA?.name,
+    item?.teamB?.name,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toLowerCase());
+
+  if (
+    teamId &&
+    teamId !== "A" &&
+    teamId !== "B" &&
+    ids.includes(String(teamId))
+  ) {
+    return true;
+  }
+
+  if (
+    teamName &&
+    names.includes(String(teamName).trim().toLowerCase())
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/*
+ * Team composition changed during the match.
+ *
+ * CASE 1: the original team has already played other matches.
+ *         -> store the new composition as "<name> changed".
+ *            Every existing team stays untouched.
+ *
+ * CASE 2: the original team has never played before.
+ *         -> store the final composition under the same name
+ *            and remove the starting team record.
+ */
+const syncTeamCompositionToDatabase = async ({
+  match,
+  matchId,
+  baseRosters,
+  finalRosters,
+}) => {
+  if (!baseRosters || !finalRosters) return;
+
+  const changedTeams = ["A", "B"].filter(
+    (teamId) =>
+      !SAME_ROSTER(
+        baseRosters[teamId] || [],
+        finalRosters[teamId] || []
+      )
+  );
+
+  if (!changedTeams.length) return;
+
+  const [savedTeams, allMatches] = await Promise.all([
+    getTeamsOnce().catch(() => []),
+    getMatchesOnce().catch(() => []),
+  ]);
+
+  for (const teamId of changedTeams) {
+    const originalName =
+      (teamId === "A"
+        ? match?.teamAName || match?.teamA?.name
+        : match?.teamBName || match?.teamB?.name) ||
+      `Team ${teamId}`;
+
+    /*
+     * matchFields() stores "A" / "B" when no real team id was
+     * recorded, so the saved team is matched by name first.
+     */
+    const savedTeam =
+      (savedTeams || []).find(
+        (team) =>
+          TEAM_LABEL(team) ===
+          String(originalName).trim().toLowerCase()
+      ) || null;
+
+    const rawId =
+      savedTeam?.id ||
+      savedTeam?.teamId ||
+      (teamId === "A" ? match?.teamAId : match?.teamBId) ||
+      match?.[teamId === "A" ? "teamA" : "teamB"]?.id ||
+      null;
+
+    const originalId =
+      rawId && rawId !== "A" && rawId !== "B" ? String(rawId) : null;
+
+    const players = finalRosters[teamId] || [];
+
+    const playedBefore = (allMatches || []).some(
+      (item) =>
+        String(item?.id || item?.matchId || "") !== String(matchId) &&
+        MATCH_USES_TEAM(item, originalId, originalName)
+    );
+
+    try {
+      if (playedBefore) {
+        /* CASE 1 — keep every old team, add a renamed copy. */
+        await saveTeam({
+          ...(savedTeam || {}),
+          id: `${originalId || teamId}_changed_${Date.now()}`,
+          teamId: undefined,
+          name: `${originalName} changed`,
+          teamName: `${originalName} changed`,
+          players,
+        });
+      } else if (originalId) {
+        /* CASE 2 — same name, starting composition replaced. */
+        await saveTeam({
+          ...(savedTeam || {}),
+          id: originalId,
+          teamId: originalId,
+          name: originalName,
+          teamName: originalName,
+          players,
+        });
+
+        await pruneTeamPlayers(
+          originalId,
+          players.map((player) => String(PLAYER_ID(player)))
+        ).catch((error) =>
+          console.warn("Unable to clean old team players:", error)
+        );
+      } else {
+        /* No saved record existed — create one, drop the old id. */
+        const newId = `${teamId}_${Date.now()}`;
+
+        await saveTeam({
+          id: newId,
+          teamId: newId,
+          name: originalName,
+          teamName: originalName,
+          players,
+        });
+
+        if (savedTeam?.id) {
+          await deleteTeam(savedTeam.id).catch((error) =>
+            console.warn("Unable to remove starting team:", error)
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Unable to sync team composition:", error);
+    }
+  }
+};
+
+/* =========================================================
    COMPONENT
 ========================================================= */
 
@@ -288,6 +568,51 @@ export default function Scoring() {
   const [currentOver, setCurrentOver] = useState(0);
 
   /* -------------------------------------------------------
+     SQUADS (live team composition)
+  ------------------------------------------------------- */
+
+  const [rosters, setRosters] = useState(null);
+  const [rosterHistory, setRosterHistory] = useState(null);
+  const [baseRosters, setBaseRosters] = useState(null);
+
+  const [showSquadModal, setShowSquadModal] = useState(false);
+  const [squadTeamTab, setSquadTeamTab] = useState("A");
+  const [playerPool, setPlayerPool] = useState([]);
+  const [poolLoaded, setPoolLoaded] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerRuns, setNewPlayerRuns] = useState("");
+  const [newPlayerWickets, setNewPlayerWickets] = useState("");
+
+  /* -------------------------------------------------------
+     CAREER STATS
+     Total runs / wickets aggregated from every past match's
+     battingStats / bowlingStats records, keyed by player id.
+  ------------------------------------------------------- */
+
+  const [careerStats, setCareerStats] = useState({
+    runsByPlayer: {},
+    wicketsByPlayer: {},
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getCareerStatsOnce(matchId)
+      .then((stats) => {
+        if (!cancelled && stats) {
+          setCareerStats(stats);
+        }
+      })
+      .catch((error) => {
+        console.warn("Unable to load career stats:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
+
+  /* -------------------------------------------------------
      BATTERS
   ------------------------------------------------------- */
 
@@ -306,13 +631,16 @@ export default function Scoring() {
     useState("");
 
   /* -------------------------------------------------------
-     OPENING / BOWLER MODALS
+     OPENING / BOWLER / BATTER MODALS
   ------------------------------------------------------- */
 
   const [showOpenerModal, setShowOpenerModal] =
     useState(false);
 
   const [showBowlerModal, setShowBowlerModal] =
+    useState(false);
+
+  const [showBatterModal, setShowBatterModal] =
     useState(false);
 
   /* -------------------------------------------------------
@@ -489,6 +817,61 @@ export default function Scoring() {
         savedState && Object.keys(savedState.battingStats || {}).length
       );
 
+      /* -------------------------------------------------------
+         SQUADS
+         The live composition is restored first so every other
+         calculation uses the correct players.
+      ------------------------------------------------------- */
+
+      const matchRosters = {
+        A: UNIQUE_PLAYERS(
+          restored.teamAPlayers ||
+            restored.teamA?.players ||
+            restored.teamA?.teamPlayers ||
+            []
+        ),
+        B: UNIQUE_PLAYERS(
+          restored.teamBPlayers ||
+            restored.teamB?.players ||
+            restored.teamB?.teamPlayers ||
+            []
+        ),
+      };
+
+      const restoredRosters = savedState?.rosters
+        ? {
+            A: UNIQUE_PLAYERS(savedState.rosters.A || []),
+            B: UNIQUE_PLAYERS(savedState.rosters.B || []),
+          }
+        : matchRosters;
+
+      const restoredBase = savedState?.baseRosters
+        ? {
+            A: UNIQUE_PLAYERS(savedState.baseRosters.A || []),
+            B: UNIQUE_PLAYERS(savedState.baseRosters.B || []),
+          }
+        : matchRosters;
+
+      const restoredHistory = savedState?.rosterHistory
+        ? {
+            A: MERGE_PLAYER_LIST(
+              savedState.rosterHistory.A || [],
+              restoredRosters.A
+            ),
+            B: MERGE_PLAYER_LIST(
+              savedState.rosterHistory.B || [],
+              restoredRosters.B
+            ),
+          }
+        : {
+            A: MERGE_PLAYER_LIST(matchRosters.A, restoredRosters.A),
+            B: MERGE_PLAYER_LIST(matchRosters.B, restoredRosters.B),
+          };
+
+      setRosters(restoredRosters);
+      setBaseRosters(restoredBase);
+      setRosterHistory(restoredHistory);
+
       if (savedState) {
         setInningsIndex(savedState.inningsIndex ?? 0);
         setInningsRuns(savedState.inningsRuns ?? 0);
@@ -543,12 +926,14 @@ export default function Scoring() {
     if (!match) return null;
 
     const teamAPlayers =
+      rosters?.A ||
       match.teamAPlayers ||
       match.teamA?.players ||
       match.teamA?.teamPlayers ||
       [];
 
     const teamBPlayers =
+      rosters?.B ||
       match.teamBPlayers ||
       match.teamB?.players ||
       match.teamB?.teamPlayers ||
@@ -577,7 +962,7 @@ export default function Scoring() {
         ),
       },
     };
-  }, [match]);
+  }, [match, rosters]);
 
   /* =========================================================
      FIRST BATTING TEAM
@@ -687,6 +1072,35 @@ export default function Scoring() {
     bowlingTeam,
     currentBowlerId,
   ]);
+
+  /* =========================================================
+     PREDICTION INPUT
+     The prediction always uses the live composition so a
+     player joining / leaving / switching team immediately
+     changes team strength and win percentage.
+  ========================================================= */
+
+  const predictionMatch = useMemo(() => {
+    if (!match) return match;
+
+    if (!rosters) return match;
+
+    return {
+      ...match,
+      teamAPlayers: rosters.A,
+      teamBPlayers: rosters.B,
+      teamA: {
+        ...(match.teamA || {}),
+        players: rosters.A,
+        teamPlayers: rosters.A,
+      },
+      teamB: {
+        ...(match.teamB || {}),
+        players: rosters.B,
+        teamPlayers: rosters.B,
+      },
+    };
+  }, [match, rosters]);
 
   /* =========================================================
      PERSIST MATCH
@@ -869,6 +1283,7 @@ export default function Scoring() {
       pendingReplacement.overEnded;
 
     setPendingReplacement(null);
+    setShowBatterModal(false);
 
     /*
      * If wicket was on ball 6,
@@ -1129,6 +1544,7 @@ export default function Scoring() {
     setPendingReplacement(null);
     setExtraPanel(null);
     setShowWicketModal(false);
+    setShowBatterModal(false);
   };
 
   /* =========================================================
@@ -1285,7 +1701,14 @@ export default function Scoring() {
 
     setResult(finalResult);
 
-    persistMatch({
+    const finalRosters = rosters
+      ? {
+          A: UNIQUE_PLAYERS(rosters.A || []),
+          B: UNIQUE_PLAYERS(rosters.B || []),
+        }
+      : null;
+
+    const updatedMatch = persistMatch({
       status: "finished",
       result: finalResult,
       winner,
@@ -1295,9 +1718,32 @@ export default function Scoring() {
       wicketsA,
       wicketsB,
       secondInningsData,
+      ...(finalRosters
+        ? {
+            teamAPlayers: finalRosters.A,
+            teamBPlayers: finalRosters.B,
+            finalRosters,
+            startingRosters: baseRosters,
+          }
+        : {}),
       finishedAt:
         new Date().toISOString(),
     });
+
+    /*
+     * Team composition changes made during the match are
+     * written back to the database once the result is declared.
+     */
+    if (finalRosters && baseRosters) {
+      syncTeamCompositionToDatabase({
+        match: updatedMatch || match,
+        matchId,
+        baseRosters,
+        finalRosters,
+      }).catch((error) => {
+        console.error("Unable to sync teams:", error);
+      });
+    }
 
     setScreen("finished");
   };
@@ -1392,6 +1838,7 @@ export default function Scoring() {
       setHistory([]);
 
       setPendingReplacement(null);
+      setShowBatterModal(false);
 
       setScreen("opening");
 
@@ -1559,6 +2006,35 @@ export default function Scoring() {
     }
 
     /*
+     * SQUAD CHANGE RULE:
+     * If players have left the batting side, the innings ends
+     * as soon as nobody is left who can bat, even when the
+     * wicket count is lower than the original squad size.
+     */
+
+    const statsForCheck =
+      finalInningsData?.battingStats || battingStats;
+
+    const rosterForCheck =
+      finalInningsData?.battingPlayers ||
+      battingTeam?.players ||
+      [];
+
+    const availableCount = rosterForCheck.filter(
+      (player) =>
+        (statsForCheck[PLAYER_ID(player)]?.status || "yet") !==
+        "out"
+    ).length;
+
+    if (
+      rosterForCheck.length >= 0 &&
+      availableCount === 0
+    ) {
+      finishCurrentInnings(runs, wickets, balls, finalInningsData);
+      return true;
+    }
+
+    /*
      * Overs completed.
      */
 
@@ -1588,10 +2064,269 @@ export default function Scoring() {
   useEffect(() => {
     if (pendingReplacement && availableBatters.length === 0) {
       setPendingReplacement(null);
+      setShowBatterModal(false);
     }
   }, [pendingReplacement, availableBatters.length]);
 
+  /* =========================================================
+     SQUAD MANAGEMENT
+     Add / remove / transfer a player while the match is live.
+     Past statistics are never modified, only the future
+     batting and bowling options change.
+  ========================================================= */
 
+  const openSquadManager = async () => {
+    setShowSquadModal(true);
+    setSquadTeamTab(battingTeam?.id || "A");
+
+    if (poolLoaded) return;
+
+    try {
+      const pool = await loadPlayerPool();
+      setPlayerPool(UNIQUE_PLAYERS(pool));
+    } catch (error) {
+      console.warn("Unable to load player pool:", error);
+      setPlayerPool([]);
+    } finally {
+      setPoolLoaded(true);
+    }
+  };
+
+  const rememberInHistory = (teamId, player) => {
+    setRosterHistory((prev) => {
+      const base = prev || { A: [], B: [] };
+
+      return {
+        ...base,
+        [teamId]: MERGE_PLAYER_LIST(base[teamId] || [], [player]),
+      };
+    });
+  };
+
+  /*
+   * Everything that has to follow a squad change:
+   * stats bootstrap, active slots, single-batsman mode
+   * and automatic innings end.
+   */
+  const reconcileAfterSquadChange = (nextRosters) => {
+    setRosters(nextRosters);
+
+    if (screen !== "scoring") {
+      return;
+    }
+
+    const battingId = battingTeam?.id;
+    if (!battingId) return;
+
+    const bowlingId = battingId === "A" ? "B" : "A";
+
+    const battingPlayers = nextRosters[battingId] || [];
+    const bowlingPlayers = nextRosters[bowlingId] || [];
+
+    /* Stats for new players, existing stats never touched. */
+    const nextBatting = clone(battingStats);
+    let order = Object.keys(nextBatting).length;
+
+    battingPlayers.forEach((player) => {
+      const id = PLAYER_ID(player);
+      if (!nextBatting[id]) {
+        order += 1;
+        nextBatting[id] = makeBatter(player, order);
+      }
+    });
+
+    const nextBowling = clone(bowlingStats);
+
+    bowlingPlayers.forEach((player) => {
+      const id = PLAYER_ID(player);
+      if (!nextBowling[id]) {
+        nextBowling[id] = makeBowler(player);
+      }
+    });
+
+    const battingIds = new Set(ROSTER_IDS(battingPlayers));
+    const bowlingIds = new Set(ROSTER_IDS(bowlingPlayers));
+
+    const strikerStillIn =
+      strikerId && battingIds.has(String(strikerId));
+
+    const nonStrikerStillIn =
+      nonStrikerId && battingIds.has(String(nonStrikerId));
+
+    const bowlerStillIn =
+      currentBowlerId && bowlingIds.has(String(currentBowlerId));
+
+    if (!strikerStillIn) setStrikerId("");
+    if (!nonStrikerStillIn) setNonStrikerId("");
+    if (!bowlerStillIn) setCurrentBowlerId("");
+
+    const remaining = battingPlayers.filter(
+      (player) =>
+        (nextBatting[PLAYER_ID(player)]?.status || "yet") !== "out"
+    );
+
+    setBattingStats(nextBatting);
+    setBowlingStats(nextBowling);
+
+    /* Nobody can bat any more -> innings ends automatically. */
+    if (remaining.length === 0) {
+      setPendingReplacement(null);
+      setShowBatterModal(false);
+
+      checkInningsEnd(
+        inningsRuns,
+        inningsWickets,
+        legalBalls,
+        {
+          teamId: battingTeam.id,
+          teamName: battingTeam.name,
+          runs: inningsRuns,
+          wickets: inningsWickets,
+          balls: legalBalls,
+          battingStats: nextBatting,
+          bowlingStats: nextBowling,
+          battingPlayers,
+          extras,
+          deliveries,
+          fallOfWickets,
+          completedOvers,
+        }
+      );
+
+      return;
+    }
+
+    /* Exactly one batsman left -> single-batsman mode. */
+    if (remaining.length === 1) {
+      const lastId = PLAYER_ID(remaining[0]);
+
+      nextBatting[lastId] = {
+        ...nextBatting[lastId],
+        status: "not out",
+      };
+
+      setBattingStats(nextBatting);
+      setBattingMode(1);
+      setStrikerId(lastId);
+      setNonStrikerId("");
+      setPendingReplacement(null);
+      setShowBatterModal(false);
+      return;
+    }
+
+    /* Two or more remain -> refill the empty slot if needed. */
+    const freeBatters = battingPlayers.filter(
+      (player) =>
+        (nextBatting[PLAYER_ID(player)]?.status || "yet") === "yet"
+    );
+
+    if (!strikerStillIn && freeBatters.length) {
+      setPendingReplacement({ slot: "striker", overEnded: false });
+      return;
+    }
+
+    if (
+      battingMode === 2 &&
+      !nonStrikerStillIn &&
+      freeBatters.length
+    ) {
+      setPendingReplacement({ slot: "nonStriker", overEnded: false });
+    }
+  };
+
+  const addPlayerToTeam = (player, teamId) => {
+    if (!player || !rosters) return;
+
+    const id = PLAYER_ID(player);
+    if (!id) return;
+
+    const alreadyIn =
+      ROSTER_IDS(rosters.A).includes(id) ||
+      ROSTER_IDS(rosters.B).includes(id);
+
+    if (alreadyIn) {
+      alert("This player is already playing this match.");
+      return;
+    }
+
+    const nextRosters = {
+      ...rosters,
+      [teamId]: [...(rosters[teamId] || []), player],
+    };
+
+    rememberInHistory(teamId, player);
+    reconcileAfterSquadChange(nextRosters);
+  };
+
+  const removePlayerFromTeam = (playerId, teamId) => {
+    if (!rosters) return;
+
+    const confirmed = window.confirm(
+      "Remove this player from the match? Past statistics stay in the scorecard."
+    );
+
+    if (!confirmed) return;
+
+    const nextRosters = {
+      ...rosters,
+      [teamId]: (rosters[teamId] || []).filter(
+        (player) => String(PLAYER_ID(player)) !== String(playerId)
+      ),
+    };
+
+    reconcileAfterSquadChange(nextRosters);
+  };
+
+  const movePlayerToOtherTeam = (playerId, fromTeamId) => {
+    if (!rosters) return;
+
+    const toTeamId = fromTeamId === "A" ? "B" : "A";
+
+    const player = (rosters[fromTeamId] || []).find(
+      (item) => String(PLAYER_ID(item)) === String(playerId)
+    );
+
+    if (!player) return;
+
+    const confirmed = window.confirm(
+      "Move this player to the other team? Past statistics stay unchanged."
+    );
+
+    if (!confirmed) return;
+
+    const nextRosters = {
+      ...rosters,
+      [fromTeamId]: (rosters[fromTeamId] || []).filter(
+        (item) => String(PLAYER_ID(item)) !== String(playerId)
+      ),
+      [toTeamId]: [...(rosters[toTeamId] || []), player],
+    };
+
+    rememberInHistory(toTeamId, player);
+    reconcileAfterSquadChange(nextRosters);
+  };
+
+  const addBrandNewPlayer = (teamId) => {
+    const name = newPlayerName.trim();
+
+    if (!name) {
+      alert("Enter the player name.");
+      return;
+    }
+
+    const player = {
+      id: `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name,
+      careerRuns: Number(newPlayerRuns || 0) || 0,
+      careerWickets: Number(newPlayerWickets || 0) || 0,
+    };
+
+    addPlayerToTeam(player, teamId);
+
+    setNewPlayerName("");
+    setNewPlayerRuns("");
+    setNewPlayerWickets("");
+  };
 
   const handleEndInnings = () => {
   // Prevent ending an already finished match
@@ -4130,6 +4865,9 @@ export default function Scoring() {
       pendingReplacement,
       result,
       scorecardTab,
+      rosters,
+      rosterHistory,
+      baseRosters,
     };
 
     const updated = {
@@ -4140,6 +4878,12 @@ export default function Scoring() {
       wicketsB,
       deliveries,
       scoringState,
+      ...(rosters
+        ? {
+            teamAPlayers: rosters.A,
+            teamBPlayers: rosters.B,
+          }
+        : {}),
       updatedAt: new Date().toISOString(),
     };
 
@@ -4191,6 +4935,9 @@ export default function Scoring() {
     pendingReplacement,
     result,
     scorecardTab,
+    rosters,
+    rosterHistory,
+    baseRosters,
   ]);
 
   /* =========================================================
@@ -4244,7 +4991,7 @@ export default function Scoring() {
         <ScoringWinPredictionCard
           live={match.status !== "finished" && match.status !== "completed"}
           prediction={calculateWinPrediction({
-            match,
+            match: predictionMatch || match,
             scoringState: savedState,
           })}
         />
@@ -4399,7 +5146,16 @@ if (screen === "finished") {
             </small>
           </div>
         )}
+        {/* add the view scorecard button to view the full match scorecard here */}
 
+        <button
+          type="button"
+          className="score-primary-button finished-back-button"
+          onClick={() => navigate(`/matches/${matchId}/scorecard`)}
+        >
+          View Full Scorecard
+        </button>
+    
         {/* GO TO ALL MATCHES */}
         <button
           type="button"
@@ -4408,12 +5164,262 @@ if (screen === "finished") {
         >
           ← Go to All Matches
         </button>
-
-      </div>
+          </div>
     </div>
   );
 }
 
+
+  /* =========================================================
+     SQUAD MODAL (shared by opening + scoring screens)
+  ========================================================= */
+
+  const squadTeam = teams[squadTeamTab];
+  const squadOtherTeam = teams[squadTeamTab === "A" ? "B" : "A"];
+
+  const poolForSquad = playerPool.filter((player) => {
+    const id = String(PLAYER_ID(player));
+
+    return (
+      !ROSTER_IDS(rosters?.A || []).includes(id) &&
+      !ROSTER_IDS(rosters?.B || []).includes(id)
+    );
+  });
+
+  const squadModal = showSquadModal && (
+    <div className="score-modal-backdrop">
+      <div
+        className="score-modal"
+        style={{
+          width: "100%",
+          maxWidth: "560px",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          overflowX: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="modal-header">
+          <div>
+            <span>SQUAD</span>
+            <h2>Manage Players</h2>
+          </div>
+
+          <button
+            className="close-button"
+            onClick={() => setShowSquadModal(false)}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mode-selector">
+          <button
+            className={squadTeamTab === "A" ? "selected" : ""}
+            onClick={() => setSquadTeamTab("A")}
+          >
+            {teams.A.name}
+          </button>
+
+          <button
+            className={squadTeamTab === "B" ? "selected" : ""}
+            onClick={() => setSquadTeamTab("B")}
+          >
+            {teams.B.name}
+          </button>
+        </div>
+
+        {/* CURRENT SQUAD */}
+        <div className="modal-section">
+          <label>Playing now — {squadTeam?.name}</label>
+
+          {squadTeam?.players?.length ? (
+            squadTeam.players.map((player) => {
+              const id = PLAYER_ID(player);
+
+              return (
+                <div
+                  key={id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    padding: "11px 13px",
+                    marginBottom: "8px",
+                    borderRadius: "12px",
+                    border: "1px solid #d1d5db",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <span style={{ fontWeight: 800 }}>
+                    {PLAYER_NAME(player)}
+                    <small
+                      style={{
+                        display: "block",
+                        fontWeight: 700,
+                        color: "#6b7280",
+                      }}
+                    >
+                      {CAREER_RUNS(player, careerStats)} runs • {CAREER_WICKETS(player, careerStats)} wkts
+                    </small>
+                  </span>
+
+                  <span style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        movePlayerToOtherTeam(id, squadTeamTab)
+                      }
+                      style={{
+                        padding: "8px 11px",
+                        borderRadius: "10px",
+                        border: "1px solid #2563eb",
+                        background: "#eff6ff",
+                        color: "#1d4ed8",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      → {squadOtherTeam?.name}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removePlayerFromTeam(id, squadTeamTab)
+                      }
+                      style={{
+                        padding: "8px 11px",
+                        borderRadius: "10px",
+                        border: "1px solid #ef4444",
+                        background: "#fef2f2",
+                        color: "#b91c1c",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <p className="empty-text">No players in this team</p>
+          )}
+        </div>
+
+        {/* AVAILABLE PLAYERS */}
+        <div className="modal-section">
+          <label>Add a saved player to {squadTeam?.name}</label>
+
+          {!poolLoaded ? (
+            <p className="empty-text">Loading players...</p>
+          ) : poolForSquad.length ? (
+            poolForSquad.map((player) => {
+              const id = PLAYER_ID(player);
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => addPlayerToTeam(player, squadTeamTab)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    minHeight: "56px",
+                    padding: "12px 14px",
+                    marginBottom: "9px",
+                    borderRadius: "13px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#111827",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    boxSizing: "border-box",
+                    WebkitAppearance: "none",
+                    appearance: "none",
+                  }}
+                >
+                  <span style={{ fontWeight: 800 }}>
+                    {PLAYER_NAME(player)}
+                  </span>
+
+                  <small style={{ fontWeight: 700, color: "#6b7280" }}>
+                    {CAREER_RUNS(player, careerStats)} runs • {CAREER_WICKETS(player, careerStats)} wkts
+                  </small>
+                </button>
+              );
+            })
+          ) : (
+            <p className="empty-text">No other saved players</p>
+          )}
+        </div>
+
+        {/* BRAND NEW PLAYER */}
+        <div className="modal-section">
+          <label>Add a new player</label>
+
+          <input
+            type="text"
+            value={newPlayerName}
+            placeholder="Player name"
+            onChange={(e) => setNewPlayerName(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "11px 13px",
+              marginBottom: "8px",
+              borderRadius: "12px",
+              border: "1px solid #d1d5db",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            type="number"
+            value={newPlayerRuns}
+            placeholder="Career runs"
+            onChange={(e) => setNewPlayerRuns(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "11px 13px",
+              marginBottom: "8px",
+              borderRadius: "12px",
+              border: "1px solid #d1d5db",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            type="number"
+            value={newPlayerWickets}
+            placeholder="Career wickets"
+            onChange={(e) => setNewPlayerWickets(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "11px 13px",
+              marginBottom: "10px",
+              borderRadius: "12px",
+              border: "1px solid #d1d5db",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <button
+            type="button"
+            className="score-primary-button"
+            onClick={() => addBrandNewPlayer(squadTeamTab)}
+          >
+            Add to {squadTeam?.name}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   /* =========================================================
      OPENING SCREEN
@@ -4453,7 +5459,7 @@ if (screen === "finished") {
         <ScoringWinPredictionCard
           live={true}
           prediction={calculateWinPrediction({
-            match,
+            match: predictionMatch || match,
             scoringState: {
               inningsIndex,
               inningsRuns,
@@ -4506,6 +5512,19 @@ if (screen === "finished") {
           </button>
 
         </section>
+
+        <section className="next-action-card">
+         
+          <button
+            type="button"
+            className="choose-bowler-button"
+            onClick={openSquadManager}
+          >
+            👥 Manage Squad
+          </button>
+        </section>
+
+        {squadModal}
 
         {showOpenerModal && (
           <div className="score-modal-backdrop">
@@ -4849,25 +5868,61 @@ if (screen === "finished") {
     `}</style>
   );
 
-  const selectedScorecardTeam = scorecardTab === "A" ? teams.A : teams.B;
+  /*
+   * The scorecard keeps every player who has already appeared
+   * for a team, even after that player has left the match or
+   * moved to the other side.
+   */
+  const scorecardPlayersFor = (teamId, statsForTeam) => {
+    const current = rosters?.[teamId] || teams[teamId].players || [];
+    const currentIds = new Set(ROSTER_IDS(current));
+
+    const past = (rosterHistory?.[teamId] || []).filter((player) => {
+      const id = PLAYER_ID(player);
+
+      if (currentIds.has(String(id))) return false;
+
+      const stats = statsForTeam?.[id];
+
+      return Boolean(
+        stats &&
+          (stats.status !== "yet" ||
+            Number(stats.runs || 0) > 0 ||
+            Number(stats.balls || 0) > 0)
+      );
+    });
+
+    return UNIQUE_PLAYERS([...current, ...past]);
+  };
+
   const savedScorecardInnings =
     match.firstInningsData?.teamId === scorecardTab
       ? match.firstInningsData
       : match.secondInningsData?.teamId === scorecardTab
         ? match.secondInningsData
         : null;
+
   const selectedBattingStats =
-    selectedScorecardTeam.id === battingTeam.id
+    teams[scorecardTab].id === battingTeam.id
       ? battingStats
       : savedScorecardInnings?.battingStats || {};
+
   const selectedBowlingStats =
-    selectedScorecardTeam.id === battingTeam.id
+    teams[scorecardTab].id === battingTeam.id
       ? bowlingStats
       : savedScorecardInnings?.bowlingStats || {};
-  const selectedBowlingTeam =
-    selectedScorecardTeam.id === battingTeam.id
-      ? bowlingTeam
-      : teams[selectedScorecardTeam.id === "A" ? "B" : "A"];
+
+  const selectedScorecardTeam = {
+    ...teams[scorecardTab],
+    players: scorecardPlayersFor(scorecardTab, selectedBattingStats),
+  };
+
+  const bowlingSideId = scorecardTab === "A" ? "B" : "A";
+
+  const selectedBowlingTeam = {
+    ...teams[bowlingSideId],
+    players: scorecardPlayersFor(bowlingSideId, {}),
+  };
 
   return (
     <div className="scoring-page">
@@ -4945,7 +6000,7 @@ if (screen === "finished") {
       <ScoringWinPredictionCard
         live={true}
         prediction={calculateWinPrediction({
-          match,
+          match: predictionMatch || match,
           scoringState: {
             inningsIndex,
             inningsRuns,
@@ -4960,91 +6015,6 @@ if (screen === "finished") {
           },
         })}
       />
-      {/* AI */}
-
-      <section className="ai-suggestion-card">
-
-        <div className="ai-title">
-          ✨ AI SUGGESTION
-        </div>
-
-
-        {/* =================================================
-            BATSMAN SUGGESTION
-        ================================================== */}
-
-        <div className="ai-suggestion-part">
-
-          <div className="ai-row">
-
-            <div>
-
-              <span>
-                Next batsman
-              </span>
-
-              <strong>
-                {batterSuggestionMessage
-                  ? batterSuggestionMessage
-                  : nextBatterSuggestion}
-              </strong>
-
-            </div>
-
-          </div>
-
-
-          <button
-            type="button"
-            onClick={
-              suggestAnotherBatter
-            }
-            className="suggest-another-btn"
-          >
-            Suggest Another
-          </button>
-
-        </div>
-
-
-        {/* =================================================
-            BOWLER SUGGESTION
-        ================================================== */}
-
-        <div className="ai-suggestion-part">
-
-          <div className="ai-row">
-
-            <div>
-
-              <span>
-                Next bowler
-              </span>
-
-              <strong>
-                {bowlerSuggestionMessage
-                  ? bowlerSuggestionMessage
-                  : nextBowlerSuggestion}
-              </strong>
-
-            </div>
-
-          </div>
-
-
-          <button
-            type="button"
-            onClick={
-              suggestAnotherBowler
-            }
-            className="suggest-another-btn"
-          >
-            Suggest Another
-          </button>
-
-        </div>
-
-      </section>
 
       {/* BATTERS */}
 
@@ -5134,49 +6104,29 @@ if (screen === "finished") {
 
       </section>
 
-      {/* NEW BATSMAN WINDOW */}
+      {/* NEW BATSMAN REQUIRED */}
 
       {pendingReplacement && availableBatters.length > 0 && (
-        <section className="new-batter-card">
+        <section className="next-action-card">
 
-          <div className="new-batter-title">
-            🏏 BATSMAN OUT
+          <div>
+            <strong>
+              🏏 Select Batsman
+            </strong>
+
+            <small>
+              The previous batsman is out. Choose the
+              new batsman.
+            </small>
           </div>
 
-          <p>
-            Select the new batsman.
-          </p>
-
-          <div className="new-batter-list">
-
-            {availableBatters.map(
-              (player) => (
-                <button
-                  key={
-                    PLAYER_ID(
-                      player
-                    )
-                  }
-                  onClick={() =>
-                    selectNewBatsman(
-                      player
-                    )
-                  }
-                >
-                  <span>
-                    {PLAYER_NAME(
-                      player
-                    )}
-                  </span>
-
-                  <span>
-                    →
-                  </span>
-                </button>
-              )
-            )}
-
-          </div>
+          <button
+            type="button"
+            className="choose-bowler-button"
+            onClick={() => setShowBatterModal(true)}
+          >
+            🏏 Choose Batsman
+          </button>
 
         </section>
       )}
@@ -5209,6 +6159,7 @@ if (screen === "finished") {
           </section>
         )}
 
+    
       {/* OVER */}
 
       <section className="over-card">
@@ -6011,6 +6962,34 @@ if (screen === "finished") {
         </button>
 
       </section>
+
+  {/* SQUAD CHANGES */}
+
+      <section className="next-action-card">
+
+        <div>
+          <strong>
+            👥 Squad Changes
+          </strong>
+
+          <small>
+            Add a new player, remove a player or move a
+            player to the other team. Past statistics stay
+            in the scorecard.
+          </small>
+        </div>
+
+        <button
+          type="button"
+          className="choose-bowler-button"
+          onClick={openSquadManager}
+        >
+          👥 Manage Squad
+        </button>
+
+      </section>
+
+
 {/* end innings */}
 
       <button
@@ -6019,6 +6998,91 @@ if (screen === "finished") {
 >
   End Innings
 </button>
+      {/* AI */}
+
+      <section className="ai-suggestion-card">
+
+        <div className="ai-title">
+          ✨ AI SUGGESTION
+        </div>
+
+
+        {/* =================================================
+            BATSMAN SUGGESTION
+        ================================================== */}
+
+        <div className="ai-suggestion-part">
+
+          <div className="ai-row">
+
+            <div>
+
+              <span>
+                Next batsman
+              </span>
+
+              <strong>
+                {batterSuggestionMessage
+                  ? batterSuggestionMessage
+                  : nextBatterSuggestion}
+              </strong>
+
+            </div>
+
+          </div>
+
+
+          <button
+            type="button"
+            onClick={
+              suggestAnotherBatter
+            }
+            className="suggest-another-btn"
+          >
+            Suggest Another
+          </button>
+
+        </div>
+
+
+        {/* =================================================
+            BOWLER SUGGESTION
+        ================================================== */}
+
+        <div className="ai-suggestion-part">
+
+          <div className="ai-row">
+
+            <div>
+
+              <span>
+                Next bowler
+              </span>
+
+              <strong>
+                {bowlerSuggestionMessage
+                  ? bowlerSuggestionMessage
+                  : nextBowlerSuggestion}
+              </strong>
+
+            </div>
+
+          </div>
+
+
+          <button
+            type="button"
+            onClick={
+              suggestAnotherBowler
+            }
+            className="suggest-another-btn"
+          >
+            Suggest Another
+          </button>
+
+        </div>
+
+      </section>
 
       {/* SCORECARD */}
 
@@ -6068,6 +7132,10 @@ if (screen === "finished") {
         />
 
       </section>
+
+      {/* SQUAD MODAL */}
+
+      {squadModal}
 
       {/* WICKET MODAL */}
 
@@ -6396,6 +7464,100 @@ if (screen === "finished") {
         </div>
       )}
 
+      {/* NEW BATSMAN MODAL */}
+
+      {showBatterModal &&
+        pendingReplacement &&
+        availableBatters.length > 0 && (
+          <div className="score-modal-backdrop">
+
+            <div
+              className="score-modal"
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                overflowX: "hidden",
+                boxSizing: "border-box",
+              }}
+            >
+
+              <div className="modal-header">
+
+                <div>
+
+                  <span>
+                    BATTING
+                  </span>
+
+                  <h2>
+                    Select Batsman
+                  </h2>
+
+                </div>
+
+                <button
+                  className="close-button"
+                  onClick={() =>
+                    setShowBatterModal(false)
+                  }
+                >
+                  ×
+                </button>
+
+              </div>
+
+              <div className="bowler-list">
+
+                {availableBatters.map((player) => {
+
+                  const id = PLAYER_ID(player);
+
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className="bowler-option-button"
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        minHeight: "58px",
+                        padding: "13px 15px",
+                        marginBottom: "10px",
+                        borderRadius: "14px",
+                        border: "1px solid #d1d5db",
+                        background: "#ffffff",
+                        color: "#111827",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        boxSizing: "border-box",
+                        WebkitAppearance: "none",
+                        appearance: "none",
+                      }}
+                      onClick={() => selectNewBatsman(player)}
+                    >
+                      <span style={{ fontWeight: 800, color: "#111827" }}>
+                        {PLAYER_NAME(player)}
+                      </span>
+
+                      <small style={{ fontWeight: 700, color: "#6b7280" }}>
+                        {CAREER_RUNS(player, careerStats)} career runs
+                      </small>
+                    </button>
+                  );
+                })}
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
       {/* BOWLER MODAL */}
 
       {showBowlerModal && (
@@ -6489,6 +7651,7 @@ if (screen === "finished") {
                         {PLAYER_NAME(player)}
                       </span>
                       <small style={{ fontWeight: 700, color: "#6b7280" }}>
+                        {CAREER_WICKETS(player, careerStats)} career wkts •{" "}
                         {formatOvers(bowlingStats[id]?.legalBalls || 0)}
                       </small>
                     </button>

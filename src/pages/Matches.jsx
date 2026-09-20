@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   collection,
   getDocs,
@@ -3030,6 +3030,7 @@ function MatchScorecard({ match }) {
 
 function Matches() {
   const navigate = useNavigate();
+  const { matchId: scorecardMatchId } = useParams();
   const isAdmin =
     Boolean(ADMIN_UID) &&
     String(getCurrentUserId() || "") === String(ADMIN_UID);
@@ -3186,6 +3187,28 @@ function Matches() {
       setViewingMatch(latestMatch);
     }
   }, [matches, viewingMatch]);
+
+  // Open a scorecard requested from the finished scoring screen after the
+  // event-driven matches snapshot has loaded.
+  useEffect(() => {
+    if (!scorecardMatchId || !matches.length) return;
+
+    const requestedMatch = matches.find(
+      (match) =>
+        String(match?.id ?? match?.matchId ?? "") ===
+        String(scorecardMatchId)
+    );
+
+    if (!requestedMatch) return;
+
+    setViewingMatch((current) =>
+      String(current?.id ?? current?.matchId ?? "") ===
+      String(scorecardMatchId)
+        ? current
+        : requestedMatch
+    );
+    setScreen("view-scorecard");
+  }, [matches, scorecardMatchId]);
 
   // --------------------------------------------------
   // AUTO CHANGE LIVE -> UNFINISHED AFTER 12 HOURS

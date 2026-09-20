@@ -514,7 +514,7 @@
 
 .empty-over-message {
   width: 200px;
-  min-height: 92px;
+  height: auto;
   /* display: flex; */
   align-items: center;
   justify-content: center;
@@ -2478,123 +2478,360 @@ html[data-theme="dark"] .deliveries-scroll::-webkit-scrollbar-thumb {
 
 /* =========================================================
    LIVE WIN PREDICTION
+   LIGHT + DARK MODE
+   RESPONSIVE + ANIMATED
    ========================================================= */
 
 .win-prediction-card {
+  position: relative;
   width: 100%;
   margin: 0 0 16px;
-  padding: 17px;
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 17px;
-  background: var(--card-bg, #111827);
-  color: var(--text-color, #f8fafc);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.06);
+  padding: 18px;
+  overflow: hidden;
+
+  border: 1px solid var(--border-color, #dbe3ef);
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      var(--card-bg, #ffffff),
+      var(--card-bg-secondary, #f8fafc)
+    );
+
+  color: var(--text-color, #0f172a);
+
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.07),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+
+  transition:
+    background 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease,
+    transform 300ms ease;
 }
+
+/* Subtle top shine */
+.win-prediction-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 70%;
+  height: 1px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.9),
+    transparent
+  );
+
+  animation: winPredictionShine 4s ease-in-out infinite;
+}
+
+.win-prediction-card:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 14px 32px rgba(15, 23, 42, 0.10),
+    0 4px 10px rgba(15, 23, 42, 0.05);
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
 
 .win-prediction-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+
+  margin-bottom: 17px;
 }
 
 .win-prediction-eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
+  margin: 0 0 5px;
+
+  font-size: 11px;
   line-height: 1.2;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
+
   color: var(--primary-color, #2563eb);
 }
 
 .win-prediction-header small {
-  color: var(--muted-text, #94a3b8);
+  color: var(--muted-text, #64748b);
+
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
+
+/* =========================================================
+   LIVE DOT
+   ========================================================= */
+
 .win-prediction-live-dot {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 9px;
+  position: relative;
+
+  width: 10px;
+  height: 10px;
+
+  flex: 0 0 10px;
+
   border-radius: 50%;
+
   background: #ef4444;
-  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.10);
-  animation: winPredictionPulse 1.3s ease-in-out infinite;
+
+  box-shadow:
+    0 0 0 5px rgba(239, 68, 68, 0.10),
+    0 0 14px rgba(239, 68, 68, 0.35);
+
+  animation:
+    winPredictionPulse 1.5s ease-in-out infinite;
+}
+
+.win-prediction-live-dot::before,
+.win-prediction-live-dot::after {
+  content: "";
+
+  position: absolute;
+
+  inset: -5px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(239, 68, 68, 0.35);
+
+  animation: winPredictionRipple 1.8s ease-out infinite;
+}
+
+.win-prediction-live-dot::after {
+  animation-delay: 0.9s;
+}
+
+
+/* =========================================================
+   TEAM SECTION
+   ========================================================= */
+
+.win-prediction-team {
+  position: relative;
+
+  padding: 10px 11px;
+
+  border-radius: 13px;
+
+  transition:
+    background 250ms ease,
+    transform 250ms ease;
+}
+
+.win-prediction-team:hover {
+  background: rgba(148, 163, 184, 0.07);
+  transform: translateX(2px);
 }
 
 .win-prediction-team + .win-prediction-team {
-  margin-top: 14px;
+  margin-top: 6px;
 }
 
 .win-prediction-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   gap: 12px;
-  margin-bottom: 7px;
+
+  margin-bottom: 8px;
 }
 
 .win-prediction-label strong {
   min-width: 0;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-color, #f8fafc);
+
+  color: var(--text-color, #0f172a);
+
   font-size: 13px;
   font-weight: 900;
+
+  transition: color 250ms ease;
 }
 
 .win-prediction-label b {
   flex: 0 0 auto;
-  color: var(--text-color, #f8fafc);
+
+  color: var(--text-color, #0f172a);
+
   font-size: 14px;
   font-weight: 900;
+
   font-variant-numeric: tabular-nums;
+
+  transition:
+    transform 250ms ease,
+    color 250ms ease;
 }
+
+.win-prediction-team:hover .win-prediction-label b {
+  transform: scale(1.06);
+}
+
+
+/* =========================================================
+   PROGRESS TRACK
+   ========================================================= */
 
 .win-prediction-track,
 .win-prediction-mini-track {
+  position: relative;
+
   width: 100%;
+
   overflow: hidden;
+
   border-radius: 999px;
-  background: var(--input-bg, #1e293b);
+
+  background: var(--input-bg, #e8edf5);
+
+  box-shadow:
+    inset 0 1px 2px rgba(15, 23, 42, 0.08);
+
+  transition: background 300ms ease;
 }
 
 .win-prediction-track {
-  height: 9px;
+  height: 10px;
 }
 
 .win-prediction-fill {
+  position: relative;
+
   display: block;
+
   height: 100%;
+
   min-width: 0;
+
   border-radius: inherit;
-  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  transition:
+    width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  overflow: hidden;
 }
 
+
+/* Moving highlight inside progress bar */
+.win-prediction-fill::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: -60%;
+
+  width: 55%;
+  height: 100%;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+
+  animation: winPredictionBarShine 2.8s ease-in-out infinite;
+}
+
+
+/* Team A */
 .win-prediction-fill-a {
-  background: var(--primary-color, #2563eb);
+  background:
+    linear-gradient(
+      90deg,
+      var(--primary-color, #2563eb),
+      #3b82f6,
+      #60a5fa
+    );
+
+  box-shadow:
+    0 0 10px rgba(37, 99, 235, 0.25);
 }
 
+
+/* Team B */
 .win-prediction-fill-b {
-  background: var(--success-color, #16a34a);
+  background:
+    linear-gradient(
+      90deg,
+      var(--success-color, #16a34a),
+      #22c55e,
+      #4ade80
+    );
+
+  box-shadow:
+    0 0 10px rgba(22, 163, 74, 0.25);
 }
+
+
+/* =========================================================
+   METRICS
+   ========================================================= */
 
 .win-prediction-metrics {
   display: grid;
+
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 15px;
+
+  gap: 9px;
+
+  margin-top: 16px;
 }
 
 .win-prediction-metrics span {
+  position: relative;
+
   min-width: 0;
-  padding: 9px 8px;
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 10px;
-  background: var(--matches-card-soft, rgba(148, 163, 184, 0.08));
+
+  padding: 10px 9px;
+
+  border: 1px solid var(--border-color, #dbe3ef);
+
+  border-radius: 11px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(148, 163, 184, 0.07),
+      rgba(148, 163, 184, 0.025)
+    );
+
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.win-prediction-metrics span:hover {
+  transform: translateY(-2px);
+
+  border-color: var(--primary-color, #2563eb);
+
+  background: rgba(37, 99, 235, 0.055);
+
+  box-shadow:
+    0 5px 14px rgba(15, 23, 42, 0.07);
 }
 
 .win-prediction-metrics small,
@@ -2603,110 +2840,217 @@ html[data-theme="dark"] .deliveries-scroll::-webkit-scrollbar-thumb {
 }
 
 .win-prediction-metrics small {
-  margin-bottom: 3px;
-  color: var(--muted-text, #94a3b8);
+  margin-bottom: 4px;
+
+  color: var(--muted-text, #64748b);
+
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 800;
+
+  letter-spacing: 0.01em;
 }
 
 .win-prediction-metrics b {
-  color: var(--text-color, #f8fafc);
+  color: var(--text-color, #0f172a);
+
   font-size: 12px;
+  font-weight: 900;
+
   font-variant-numeric: tabular-nums;
 }
 
+
+/* =========================================================
+   HISTORY CARD
+   ========================================================= */
+
 .win-prediction-history {
   width: 100%;
+
   margin: 0 0 16px;
-  padding: 15px;
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 17px;
-  background: var(--card-bg, #111827);
-  color: var(--text-color, #f8fafc);
+
+  padding: 16px;
+
+  border: 1px solid var(--border-color, #dbe3ef);
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      var(--card-bg, #ffffff),
+      var(--card-bg-secondary, #f8fafc)
+    );
+
+  color: var(--text-color, #0f172a);
+
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.06);
+
+  transition:
+    background 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease;
 }
+
+
+/* =========================================================
+   OVER HISTORY
+   ========================================================= */
 
 .win-prediction-over-list {
   display: grid;
+
   gap: 8px;
 }
 
 .win-prediction-over-row {
   display: grid;
-  grid-template-columns: 62px minmax(70px, 1fr) minmax(90px, 2fr) minmax(70px, 1fr);
+
+  grid-template-columns:
+    62px
+    minmax(70px, 1fr)
+    minmax(90px, 2fr)
+    minmax(70px, 1fr);
+
   align-items: center;
+
   gap: 9px;
+
   min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 10px;
+
+  padding: 10px;
+
+  border: 1px solid var(--border-color, #dbe3ef);
+
+  border-radius: 11px;
+
+  background: rgba(148, 163, 184, 0.035);
+
+  transition:
+    transform 220ms ease,
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.win-prediction-over-row:hover {
+  transform: translateX(3px);
+
+  border-color: var(--primary-color, #2563eb);
+
+  background: rgba(37, 99, 235, 0.045);
+
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .win-prediction-over-row > span {
-  color: var(--muted-text, #94a3b8);
+  color: var(--muted-text, #64748b);
+
   font-size: 10px;
   font-weight: 800;
+
+  white-space: nowrap;
 }
 
 .win-prediction-over-row strong {
   min-width: 0;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-color, #f8fafc);
+
+  color: var(--text-color, #0f172a);
+
   font-size: 10px;
+  font-weight: 900;
+
   font-variant-numeric: tabular-nums;
 }
 
+
+/* =========================================================
+   MINI HISTORY BAR
+   ========================================================= */
+
 .win-prediction-mini-track {
-  height: 6px;
+  height: 7px;
+
+  background: var(--input-bg, #e8edf5);
 }
 
 .win-prediction-mini-track span {
+  position: relative;
+
   display: block;
+
   height: 100%;
+
   border-radius: inherit;
-  background: var(--primary-color, #2563eb);
-  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  background:
+    linear-gradient(
+      90deg,
+      var(--primary-color, #2563eb),
+      #60a5fa
+    );
+
+  box-shadow:
+    0 0 8px rgba(37, 99, 235, 0.22);
+
+  transition:
+    width 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes winPredictionPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.78); }
+.win-prediction-mini-track span::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: -70%;
+
+  width: 60%;
+  height: 100%;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.5),
+    transparent
+  );
+
+  animation: winPredictionBarShine 3s ease-in-out infinite;
 }
 
-@media (max-width: 600px) {
-  .win-prediction-card,
-  .win-prediction-history {
-    padding: 14px;
-  }
 
-  .win-prediction-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .win-prediction-over-row {
-    grid-template-columns: 52px minmax(65px, 1fr) minmax(70px, 1.5fr) minmax(65px, 1fr);
-    gap: 6px;
-    padding: 8px;
-  }
-}
-
-@media (max-width: 390px) {
-  .win-prediction-over-row {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .win-prediction-over-row .win-prediction-mini-track {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-}
+/* =========================================================
+   DARK MODE
+   ========================================================= */
 
 [data-theme="dark"] .win-prediction-card,
 [data-theme="dark"] .win-prediction-history {
-  background: var(--card-bg, #111827);
+  background:
+    linear-gradient(
+      145deg,
+      #111827,
+      #0f172a
+    );
+
   color: var(--text-color, #f8fafc);
+
   border-color: var(--border-color, #334155);
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="dark"] .win-prediction-card:hover {
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.34),
+    0 3px 10px rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="dark"] .win-prediction-label strong,
@@ -2716,13 +3060,385 @@ html[data-theme="dark"] .deliveries-scroll::-webkit-scrollbar-thumb {
   color: var(--text-color, #f8fafc);
 }
 
-[data-theme="dark"] .win-prediction-track,
-[data-theme="dark"] .win-prediction-mini-track {
-  background: rgba(255, 255, 255, 0.10);
+[data-theme="dark"] .win-prediction-header small,
+[data-theme="dark"] .win-prediction-metrics small,
+[data-theme="dark"] .win-prediction-over-row > span {
+  color: var(--muted-text, #94a3b8);
 }
 
-[data-theme="dark"] .win-prediction-metrics span,
+[data-theme="dark"] .win-prediction-team:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="dark"] .win-prediction-track,
+[data-theme="dark"] .win-prediction-mini-track {
+  background:
+    linear-gradient(
+      90deg,
+      #1e293b,
+      #172033
+    );
+
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .win-prediction-metrics span {
+  border-color: var(--border-color, #334155);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.018)
+    );
+}
+
+[data-theme="dark"] .win-prediction-metrics span:hover {
+  border-color: rgba(96, 165, 250, 0.65);
+
+  background:
+    rgba(37, 99, 235, 0.12);
+
+  box-shadow:
+    0 5px 18px rgba(0, 0, 0, 0.25);
+}
+
 [data-theme="dark"] .win-prediction-over-row {
   border-color: var(--border-color, #334155);
-  background: rgba(255, 255, 255, 0.025);
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+[data-theme="dark"] .win-prediction-over-row:hover {
+  border-color: rgba(96, 165, 250, 0.65);
+
+  background:
+    rgba(37, 99, 235, 0.08);
+
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .win-prediction-fill-a {
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #3b82f6,
+      #60a5fa
+    );
+
+  box-shadow:
+    0 0 14px rgba(59, 130, 246, 0.35);
+}
+
+[data-theme="dark"] .win-prediction-fill-b {
+  background:
+    linear-gradient(
+      90deg,
+      #16a34a,
+      #22c55e,
+      #4ade80
+    );
+
+  box-shadow:
+    0 0 14px rgba(34, 197, 94, 0.30);
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .win-prediction-card,
+  .win-prediction-history {
+    padding: 15px;
+
+    border-radius: 16px;
+  }
+
+  .win-prediction-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    gap: 8px;
+  }
+
+  .win-prediction-over-row {
+    grid-template-columns:
+      58px
+      minmax(65px, 1fr)
+      minmax(80px, 1.5fr)
+      65px;
+
+    gap: 7px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  .win-prediction-card,
+  .win-prediction-history {
+    padding: 13px;
+
+    margin-bottom: 13px;
+
+    border-radius: 15px;
+  }
+
+  .win-prediction-header {
+    margin-bottom: 13px;
+  }
+
+  .win-prediction-eyebrow {
+    font-size: 10px;
+  }
+
+  .win-prediction-header small {
+    font-size: 9px;
+  }
+
+  .win-prediction-live-dot {
+    width: 9px;
+    height: 9px;
+    flex-basis: 9px;
+  }
+
+  .win-prediction-team {
+    padding: 9px;
+
+    border-radius: 11px;
+  }
+
+  .win-prediction-label strong {
+    font-size: 12px;
+  }
+
+  .win-prediction-label b {
+    font-size: 13px;
+  }
+
+  .win-prediction-track {
+    height: 9px;
+  }
+
+  .win-prediction-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    gap: 7px;
+
+    margin-top: 12px;
+  }
+
+  .win-prediction-metrics span {
+    padding: 8px;
+
+    border-radius: 9px;
+  }
+
+  .win-prediction-metrics small {
+    font-size: 8px;
+  }
+
+  .win-prediction-metrics b {
+    font-size: 11px;
+  }
+
+  .win-prediction-over-list {
+    gap: 7px;
+  }
+
+  .win-prediction-over-row {
+    grid-template-columns:
+      48px
+      minmax(60px, 1fr)
+      minmax(65px, 1.3fr)
+      58px;
+
+    gap: 6px;
+
+    padding: 8px;
+
+    border-radius: 9px;
+  }
+
+  .win-prediction-over-row > span,
+  .win-prediction-over-row strong {
+    font-size: 9px;
+  }
+
+  .win-prediction-mini-track {
+    height: 6px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 390px) {
+
+  .win-prediction-card,
+  .win-prediction-history {
+    padding: 11px;
+
+    border-radius: 14px;
+  }
+
+  .win-prediction-header {
+    gap: 8px;
+  }
+
+  .win-prediction-eyebrow {
+    font-size: 9px;
+
+    letter-spacing: 0.09em;
+  }
+
+  .win-prediction-header small {
+    font-size: 8px;
+  }
+
+  .win-prediction-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .win-prediction-over-row {
+    grid-template-columns: 1fr 1fr;
+
+    gap: 6px;
+  }
+
+  .win-prediction-over-row .win-prediction-mini-track {
+    grid-column: 1 / -1;
+
+    grid-row: 2;
+
+    width: 100%;
+  }
+
+  .win-prediction-over-row > span:nth-child(4) {
+    text-align: right;
+  }
+}
+
+
+/* =========================================================
+   EXTRA SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 320px) {
+
+  .win-prediction-card,
+  .win-prediction-history {
+    padding: 10px;
+  }
+
+  .win-prediction-team {
+    padding: 8px;
+  }
+
+  .win-prediction-metrics {
+    gap: 5px;
+  }
+
+  .win-prediction-metrics span {
+    padding: 7px 6px;
+  }
+
+  .win-prediction-over-row {
+    padding: 7px;
+  }
+}
+
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+
+@keyframes winPredictionPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.55;
+    transform: scale(0.78);
+  }
+}
+
+@keyframes winPredictionRipple {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.75);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes winPredictionBarShine {
+  0% {
+    left: -70%;
+  }
+
+  45%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes winPredictionShine {
+  0%,
+  100% {
+    left: -100%;
+  }
+
+  35% {
+    left: 130%;
+  }
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .win-prediction-card,
+  .win-prediction-team,
+  .win-prediction-metrics span,
+  .win-prediction-over-row,
+  .win-prediction-fill,
+  .win-prediction-mini-track span {
+    transition: none !important;
+  }
+
+  .win-prediction-live-dot,
+  .win-prediction-live-dot::before,
+  .win-prediction-live-dot::after,
+  .win-prediction-fill::after,
+  .win-prediction-mini-track span::after,
+  .win-prediction-card::before {
+    animation: none !important;
+  }
 }
