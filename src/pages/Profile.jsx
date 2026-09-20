@@ -91,7 +91,9 @@ function Profile({
       battingRuns: 0,
       ballsFaced: 0,
       strikeRate: "0.00",
+      battingAverage: "—",
       timesOut: 0,
+      twentyRunInnings: 0,
 
       highestScore: 0,
       highestScoreMatch: "—",
@@ -100,13 +102,13 @@ function Profile({
       maidens: 0,
       economy: "0.00",
       wickets: 0,
+      threeWicketHauls: 0,
 
       bestBowlingWickets: 0,
       bestBowlingMatch: "—",
 
       totalMatches: 0,
-      totalPoints: 0,
-      ratingPoints: 0,
+      playerStrength: "0.0",
 
       wins: 0,
       losses: 0,
@@ -198,7 +200,6 @@ function Profile({
 
         const [
           matchesSnapshot,
-          matchPlayersSnapshot,
           battingStatsSnapshot,
           bowlingStatsSnapshot,
         ] = await Promise.all([
@@ -207,13 +208,6 @@ function Profile({
             collection(
               db,
               "matches"
-            )
-          ),
-
-          getDocs(
-            collection(
-              db,
-              "matchPlayers"
             )
           ),
 
@@ -302,566 +296,161 @@ function Profile({
 
 
         /* =====================================================
-           CREATE MATCH MAP
+           CAREER STATISTICS
+
+           Built from the SAME saved scorecards the match
+           scorecard screen shows (first innings, second
+           innings and live state of every match), so the
+           numbers always agree with the scorecard.
            ===================================================== */
 
-        const matchMap =
-          new Map();
+        const matches =
+          matchesSnapshot.docs.map(
+            (matchDoc) => ({
+
+              ...matchDoc.data(),
+
+              id: matchDoc.id,
+
+            })
+          );
 
 
-        matchesSnapshot.forEach(
-          (matchDoc) => {
-
-            const match =
-              matchDoc.data();
-
-
-            const matchId =
-              match.matchId ||
-              matchDoc.id;
+        const battingDocs =
+          battingStatsSnapshot.docs.map(
+            (battingDoc) =>
+              battingDoc.data()
+          );
 
 
-            matchMap.set(
-              matchId,
-              {
-                id: matchId,
-                ...match,
-              }
-            );
+        const bowlingDocs =
+          bowlingStatsSnapshot.docs.map(
+            (bowlingDoc) =>
+              bowlingDoc.data()
+          );
 
-          }
-        );
+
+        const playerIds =
+          new Set(
+            [
+              playerId,
+              user?.uid,
+              user?.id,
+            ]
+              .filter(Boolean)
+              .map(idString)
+          );
+
+
+        const careerStats =
+          computePlayerStatistics({
+            playerIds,
+            battingStats:
+              battingDocs,
+            bowlingStats:
+              bowlingDocs,
+            matches,
+          });
 
 
         /* =====================================================
-           FIND MATCHES PLAYED BY CURRENT PLAYER
+           PLAYER STRENGTH
+
+           Same formula and source the team builder uses:
+           (career runs + wickets x 20) / matches played
            ===================================================== */
 
-        const playedMatches =
-          new Map();
+        const strengthMatchIds =
+          new Set();
+
+        let strengthRuns = 0;
+
+        let strengthWickets = 0;
 
 
-        matchPlayersSnapshot.forEach(
-          (matchPlayerDoc) => {
-
-            const matchPlayer =
-              matchPlayerDoc.data();
-
-
-            const currentPlayerId =
-              matchPlayer.playerId ||
-              matchPlayer.uid;
-
+        battingDocs.forEach(
+          (stat) => {
 
             if (
-              currentPlayerId !==
-              playerId
-            ) {
-
-              return;
-
-            }
-
-
-            if (
-              matchPlayer.isPlaying ===
-              false
-            ) {
-
-              return;
-
-            }
-
-
-            const matchId =
-              matchPlayer.matchId;
-
-
-            if (!matchId) {
-
-              return;
-
-            }
-
-
-            const match =
-              matchMap.get(
-                matchId
-              );
-
-
-            if (!match) {
-
-              return;
-
-            }
-
-
-            playedMatches.set(
-              matchId,
-              {
-                ...matchPlayer,
-                match,
-              }
-            );
-
-          }
-        );
-
-
-        /* =====================================================
-           BATTING STATISTICS
-           ===================================================== */
-
-        let battingRuns = 0;
-
-        let ballsFaced = 0;
-
-        let fours = 0;
-
-        let sixes = 0;
-
-        let timesOut = 0;
-
-
-        let highestScore = 0;
-
-        let highestScoreMatch =
-          "—";
-
-
-        battingStatsSnapshot.forEach(
-          (battingDoc) => {
-
-            const stat =
-              battingDoc.data();
-
-
-            const statPlayerId =
-              stat.playerId ||
-              stat.uid;
-
-
-            if (
-              statPlayerId !==
-              playerId
-            ) {
-
-              return;
-
-            }
-
-
-            const runs =
-              Number(
-                stat.runs
-              ) || 0;
-
-
-            const balls =
-              Number(
-                stat.balls
-              ) || 0;
-
-
-            battingRuns +=
-              runs;
-
-
-            ballsFaced +=
-              balls;
-
-
-            fours +=
-              Number(
-                stat.fours
-              ) || 0;
-
-
-            sixes +=
-              Number(
-                stat.sixes
-              ) || 0;
-
-
-            const status =
-              String(
-                stat.status || ""
-              ).toLowerCase();
-
-
-            const dismissalType =
-              String(
-                stat.dismissalType ||
-                ""
-              ).toLowerCase();
-
-
-            const isOut =
-              status === "out" ||
-              status === "dismissed" ||
-              dismissalType.length > 0;
-
-
-            if (isOut) {
-
-              timesOut += 1;
-
-            }
-
-
-            if (
-              runs >
-              highestScore
-            ) {
-
-              highestScore =
-                runs;
-
-
-              const matchId =
-                stat.matchId;
-
-
-              const match =
-                matchMap.get(
-                  matchId
-                );
-
-
-              highestScoreMatch =
-                getMatchName(
-                  match
-                );
-
-            }
-
-          }
-        );
-
-
-        /* =====================================================
-           BOWLING STATISTICS
-           ===================================================== */
-
-        let totalBowls = 0;
-
-        let maidens = 0;
-
-        let wickets = 0;
-
-        let runsConceded = 0;
-
-        let wides = 0;
-
-        let noBalls = 0;
-
-
-        let bestBowlingWickets = 0;
-
-        let bestBowlingMatch =
-          "—";
-
-
-        bowlingStatsSnapshot.forEach(
-          (bowlingDoc) => {
-
-            const stat =
-              bowlingDoc.data();
-
-
-            const statPlayerId =
-              stat.playerId ||
-              stat.uid;
-
-
-            if (
-              statPlayerId !==
-              playerId
-            ) {
-
-              return;
-
-            }
-
-
-            const balls =
-              Number(
-                stat.balls
-              ) || 0;
-
-
-            totalBowls +=
-              balls;
-
-
-            maidens +=
-              Number(
-                stat.maidens
-              ) || 0;
-
-
-            const currentWickets =
-              Number(
-                stat.wickets
-              ) || 0;
-
-
-            wickets +=
-              currentWickets;
-
-
-            runsConceded +=
-              Number(
-                stat.runsConceded
-              ) || 0;
-
-
-            wides +=
-              Number(
-                stat.wides
-              ) || 0;
-
-
-            noBalls +=
-              Number(
-                stat.noBalls
-              ) || 0;
-
-
-            if (
-              currentWickets >
-              bestBowlingWickets
-            ) {
-
-              bestBowlingWickets =
-                currentWickets;
-
-
-              const matchId =
-                stat.matchId;
-
-
-              const match =
-                matchMap.get(
-                  matchId
-                );
-
-
-              bestBowlingMatch =
-                getMatchName(
-                  match
-                );
-
-            }
-
-          }
-        );
-
-
-        /* =====================================================
-           STRIKE RATE
-           ===================================================== */
-
-        const strikeRate =
-          ballsFaced > 0
-            ? (
-                (battingRuns /
-                  ballsFaced) *
-                100
-              ).toFixed(2)
-            : "0.00";
-
-
-        /* =====================================================
-           ECONOMY
-           ===================================================== */
-
-        const economy =
-          totalBowls > 0
-            ? (
-                (runsConceded /
-                  totalBowls) *
-                6
-              ).toFixed(2)
-            : "0.00";
-
-
-        /* =====================================================
-           TOTAL MATCHES
-           ===================================================== */
-
-        const totalMatches =
-          playedMatches.size;
-
-
-        /* =====================================================
-           WINS / LOSSES
-           ===================================================== */
-
-        let wins = 0;
-
-        let losses = 0;
-
-
-        playedMatches.forEach(
-          (playerMatch) => {
-
-            const match =
-              playerMatch.match;
-
-
-            if (!match) {
-
-              return;
-
-            }
-
-
-            const playerTeamId =
-              playerMatch.teamId;
-
-
-            const winnerId = String(
-              match.winnerId ||
-              match.winner ||
-              match.winnerName ||
-              match.result?.winner ||
-              ""
-            ).trim().toLowerCase();
-
-
-            const teamId = String(
-              playerTeamId
-            ).trim().toLowerCase();
-
-
-            const teamName = String(
-              playerMatch.teamName ||
-              (
-                String(match.teamAId) ===
-                String(playerTeamId)
-                  ? match.teamAName
-                  : String(match.teamBId) ===
-                    String(playerTeamId)
-                    ? match.teamBName
-                    : ""
-              ) ||
-              ""
-            ).trim().toLowerCase();
-
-
-            const winningTeamName =
-              String(
-                match.winnerName ||
-                match.winner ||
-                match.result?.winner ||
-                ""
-              ).trim().toLowerCase();
-
-
-            const resultText =
-              String(
-                match.resultText ||
-                (
-                  typeof match.result ===
-                  "string"
-                    ? match.result
-                    : ""
-                ) ||
-                ""
-              ).trim().toLowerCase();
-
-
-            if (
-              /live|ongoing|upcoming|draw|tie|not started/.test(
-                String(
-                  match.status || ""
-                ).toLowerCase() +
-                " " +
-                resultText
-              )
-            ) {
-
-              return;
-
-            }
-
-
-            if (
-              !winnerId ||
-              (!teamId && !teamName)
-            ) {
-
-              return;
-
-            }
-
-
-            if (
-              winnerId === teamId ||
-              winnerId === teamName ||
-              winningTeamName === teamName ||
-              (
-                teamName &&
-                resultText.includes(
-                  teamName
+              !playerIds.has(
+                idString(
+                  stat.playerId ||
+                  stat.uid
                 )
               )
             ) {
 
-              wins += 1;
-
-            } else {
-
-              losses += 1;
+              return;
 
             }
+
+
+            if (stat.matchId) {
+
+              strengthMatchIds.add(
+                String(stat.matchId)
+              );
+
+            }
+
+
+            strengthRuns +=
+              Number(
+                stat.runs
+              ) || 0;
 
           }
         );
 
 
-        /* =====================================================
-           WIN / LOSS PERCENTAGE
-           ===================================================== */
+        bowlingDocs.forEach(
+          (stat) => {
 
-        const decidedMatches =
-          wins + losses;
+            if (
+              !playerIds.has(
+                idString(
+                  stat.playerId ||
+                  stat.uid
+                )
+              )
+            ) {
+
+              return;
+
+            }
 
 
-        const winPercentage =
-          decidedMatches > 0
+            if (stat.matchId) {
+
+              strengthMatchIds.add(
+                String(stat.matchId)
+              );
+
+            }
+
+
+            strengthWickets +=
+              Number(
+                stat.wickets
+              ) || 0;
+
+          }
+        );
+
+
+        const strengthMatches =
+          strengthMatchIds.size ||
+          careerStats.totalMatches;
+
+
+        const playerStrength =
+          strengthMatches > 0
             ? (
-                (wins /
-                  decidedMatches) *
-                100
-              ).toFixed(2)
-            : "0.00";
-
-
-        const losePercentage =
-          decidedMatches > 0
-            ? (
-                (losses /
-                  decidedMatches) *
-                100
-              ).toFixed(2)
-            : "0.00";
-
-
-        /* =====================================================
-           POINTS
-           ===================================================== */
-
-        const totalPoints =
-          battingRuns +
-          wickets * 20;
-
-
-        const ratingPoints =
-          totalPoints +
-          wins * 10;
+                (strengthRuns +
+                  strengthWickets * 20) /
+                strengthMatches
+              ).toFixed(1)
+            : "0.0";
 
 
         /* =====================================================
@@ -870,43 +459,9 @@ function Profile({
 
         setStatistics({
 
-          battingRuns,
+          ...careerStats,
 
-          ballsFaced,
-
-          strikeRate,
-
-          timesOut,
-
-          highestScore,
-
-          highestScoreMatch,
-
-          totalBowls,
-
-          maidens,
-
-          economy,
-
-          wickets,
-
-          bestBowlingWickets,
-
-          bestBowlingMatch,
-
-          totalMatches,
-
-          totalPoints,
-
-          ratingPoints,
-
-          wins,
-
-          losses,
-
-          winPercentage,
-
-          losePercentage,
+          playerStrength,
 
         });
 
@@ -2251,19 +1806,10 @@ function Profile({
 
 
           <StatCard
-            icon="⭐"
-            label="Total Points"
+            icon="💪"
+            label="Player Strength"
             value={
-              statistics.totalPoints
-            }
-          />
-
-
-          <StatCard
-            icon="📈"
-            label="Rating Points"
-            value={
-              statistics.ratingPoints
+              statistics.playerStrength
             }
           />
 
@@ -2328,9 +1874,9 @@ function Profile({
 
 
             <StatCard
-              label="Balls Faced"
+              label="Batting Average"
               value={
-                statistics.ballsFaced
+                statistics.battingAverage
               }
             />
 
@@ -2347,6 +1893,14 @@ function Profile({
               label="Times Out"
               value={
                 statistics.timesOut
+              }
+            />
+
+
+            <StatCard
+              label="20+ Run Innings"
+              value={
+                statistics.twentyRunInnings
               }
             />
 
@@ -2442,6 +1996,14 @@ function Profile({
               label="Wickets"
               value={
                 statistics.wickets
+              }
+            />
+
+
+            <StatCard
+              label="3 Wicket Hauls"
+              value={
+                statistics.threeWicketHauls
               }
             />
 
@@ -2826,6 +2388,848 @@ function updateLocalUserSession(
   }
 
 }
+
+
+
+/* =========================================
+   PLAYER CAREER STATISTICS
+   -----------------------------------------
+   Built from the SAME saved scorecards that
+   the match scorecard screen shows
+   (firstInningsData / secondInningsData /
+   live scoringState of every match), so the
+   numbers always agree with the scorecard.
+
+   The battingStats / bowlingStats collections
+   are only used as a fallback for a match
+   that has no saved scorecard.
+========================================= */
+
+const idString = (value) =>
+  String(value ?? "").trim();
+
+
+/* Innings of a match, exactly like the match scorecard builds them */
+
+const getMatchInnings = (match) => {
+
+  const savedState =
+    match?.scoringState || {};
+
+
+  const liveInnings =
+    savedState.battingStats
+      ? {
+          battingStats:
+            savedState.battingStats,
+          bowlingStats:
+            savedState.bowlingStats || {},
+        }
+      : null;
+
+
+  const first =
+    match?.firstInningsData ||
+    (
+      Number(savedState.inningsIndex) === 0
+        ? liveInnings
+        : null
+    );
+
+
+  const second =
+    match?.secondInningsData ||
+    (
+      Number(savedState.inningsIndex) === 1
+        ? liveInnings
+        : null
+    );
+
+
+  return [first, second].filter(Boolean);
+
+};
+
+
+/* Find one player's stat inside an innings stat map */
+
+const findPlayerStat = (
+  statMap,
+  playerIds
+) => {
+
+  if (
+    !statMap ||
+    typeof statMap !== "object"
+  ) {
+    return null;
+  }
+
+
+  for (const id of playerIds) {
+
+    if (statMap[id]) {
+      return statMap[id];
+    }
+
+  }
+
+
+  for (const stat of Object.values(statMap)) {
+
+    if (
+      stat &&
+      playerIds.has(
+        idString(
+          stat.id ??
+          stat.playerId ??
+          stat.uid
+        )
+      )
+    ) {
+      return stat;
+    }
+
+  }
+
+
+  return null;
+
+};
+
+
+/* Team roster of a match */
+
+const getRosterIds = (
+  team,
+  fallbackPlayers
+) => {
+
+  const list =
+    Array.isArray(team?.players) &&
+    team.players.length
+      ? team.players
+      : Array.isArray(fallbackPlayers)
+        ? fallbackPlayers
+        : [];
+
+
+  return new Set(
+    list.map((player) =>
+      idString(
+        typeof player === "object"
+          ? (
+              player?.id ??
+              player?.uid ??
+              player?._id ??
+              player?.playerId
+            )
+          : player
+      )
+    )
+  );
+
+};
+
+
+const computePlayerStatistics = ({
+  playerIds,
+  battingStats = [],
+  bowlingStats = [],
+  matches = [],
+  playerStrength = "0.0",
+}) => {
+
+  /* ---------- MATCH LOOKUP FOR FALLBACK ---------- */
+
+  const collectionBatting =
+    new Map();
+
+  battingStats.forEach((stat) => {
+
+    if (
+      !playerIds.has(
+        idString(
+          stat.playerId ||
+          stat.uid
+        )
+      )
+    ) {
+      return;
+    }
+
+
+    const key =
+      idString(stat.matchId);
+
+
+    if (!key) {
+      return;
+    }
+
+
+    collectionBatting.set(
+      key,
+      [
+        ...(collectionBatting.get(key) || []),
+        stat,
+      ]
+    );
+
+  });
+
+
+  const collectionBowling =
+    new Map();
+
+  bowlingStats.forEach((stat) => {
+
+    if (
+      !playerIds.has(
+        idString(
+          stat.playerId ||
+          stat.uid
+        )
+      )
+    ) {
+      return;
+    }
+
+
+    const key =
+      idString(stat.matchId);
+
+
+    if (!key) {
+      return;
+    }
+
+
+    collectionBowling.set(
+      key,
+      [
+        ...(collectionBowling.get(key) || []),
+        stat,
+      ]
+    );
+
+  });
+
+
+  /* ---------- TOTALS ---------- */
+
+  let battingRuns = 0;
+
+  let ballsFaced = 0;
+
+  let timesOut = 0;
+
+  let twentyRunInnings = 0;
+
+  let highestScore = 0;
+
+  let highestScoreMatch =
+    "—";
+
+
+  let totalBowls = 0;
+
+  let maidens = 0;
+
+  let wickets = 0;
+
+  let runsConceded = 0;
+
+  let threeWicketHauls = 0;
+
+  let bestBowlingWickets = 0;
+
+  let bestBowlingRuns = Infinity;
+
+  let bestBowlingMatch =
+    "—";
+
+
+  let totalMatches = 0;
+
+  let wins = 0;
+
+  let losses = 0;
+
+
+  const addBatting = ({
+    runs,
+    balls,
+    isOut,
+    match,
+  }) => {
+
+    battingRuns += runs;
+
+    ballsFaced += balls;
+
+    if (isOut) {
+
+      timesOut += 1;
+
+    }
+
+
+    if (runs >= 20) {
+
+      twentyRunInnings += 1;
+
+    }
+
+
+    if (runs > highestScore) {
+
+      highestScore = runs;
+
+      highestScoreMatch =
+        getMatchName(match);
+
+    }
+
+  };
+
+
+  const addBowling = ({
+    legalBalls,
+    runs,
+    wicketCount,
+    maidenCount,
+    match,
+  }) => {
+
+    totalBowls += legalBalls;
+
+    runsConceded += runs;
+
+    wickets += wicketCount;
+
+    maidens += maidenCount;
+
+    if (wicketCount >= 3) {
+
+      threeWicketHauls += 1;
+
+    }
+
+
+    if (
+      wicketCount > bestBowlingWickets ||
+      (
+        wicketCount > 0 &&
+        wicketCount === bestBowlingWickets &&
+        runs < bestBowlingRuns
+      )
+    ) {
+
+      bestBowlingWickets =
+        wicketCount;
+
+      bestBowlingRuns =
+        runs;
+
+      bestBowlingMatch =
+        getMatchName(match);
+
+    }
+
+  };
+
+
+  /* ---------- EVERY MATCH ---------- */
+
+  matches.forEach((match) => {
+
+    const matchKey =
+      idString(
+        match.matchId ||
+        match.id
+      );
+
+
+    const rosterA =
+      getRosterIds(
+        match.teamA,
+        match.teamAPlayers
+      );
+
+
+    const rosterB =
+      getRosterIds(
+        match.teamB,
+        match.teamBPlayers
+      );
+
+
+    const inTeamA =
+      [...playerIds].some(
+        (id) => rosterA.has(id)
+      );
+
+
+    const inTeamB =
+      [...playerIds].some(
+        (id) => rosterB.has(id)
+      );
+
+
+    let playedInMatch =
+      inTeamA ||
+      inTeamB;
+
+
+    const innings =
+      getMatchInnings(match);
+
+
+    let foundInScorecard =
+      false;
+
+
+    if (innings.length) {
+
+      innings.forEach((inning) => {
+
+        /* ----- batting ----- */
+
+        const bat =
+          findPlayerStat(
+            inning.battingStats,
+            playerIds
+          );
+
+
+        if (bat) {
+
+          const runs =
+            Number(bat.runs) || 0;
+
+          const balls =
+            Number(bat.balls) || 0;
+
+          const status =
+            String(
+              bat.status || ""
+            ).toLowerCase();
+
+
+          const hasBatted =
+            status !== "yet" ||
+            balls > 0 ||
+            runs > 0;
+
+
+          if (hasBatted) {
+
+            foundInScorecard = true;
+
+            addBatting({
+              runs,
+              balls,
+              isOut:
+                status === "out" ||
+                status === "dismissed",
+              match,
+            });
+
+          }
+
+        }
+
+
+        /* ----- bowling ----- */
+
+        const bowl =
+          findPlayerStat(
+            inning.bowlingStats,
+            playerIds
+          );
+
+
+        if (bowl) {
+
+          const legalBalls =
+            Number(
+              bowl.legalBalls ??
+              bowl.balls
+            ) || 0;
+
+          const runs =
+            Number(
+              bowl.runs ??
+              bowl.runsConceded
+            ) || 0;
+
+          const wicketCount =
+            Number(bowl.wickets) || 0;
+
+
+          if (
+            legalBalls ||
+            runs ||
+            wicketCount
+          ) {
+
+            foundInScorecard = true;
+
+            addBowling({
+              legalBalls,
+              runs,
+              wicketCount,
+              maidenCount:
+                Number(bowl.maidens) || 0,
+              match,
+            });
+
+          }
+
+        }
+
+      });
+
+    } else {
+
+      /* Fallback: match without a saved scorecard */
+
+      (collectionBatting.get(matchKey) || [])
+        .forEach((stat) => {
+
+          const runs =
+            Number(stat.runs) || 0;
+
+          const balls =
+            Number(stat.balls) || 0;
+
+          const status =
+            String(
+              stat.status || ""
+            ).toLowerCase();
+
+
+          if (
+            status === "yet" &&
+            !balls &&
+            !runs
+          ) {
+            return;
+          }
+
+
+          foundInScorecard = true;
+
+          addBatting({
+            runs,
+            balls,
+            isOut:
+              status === "out" ||
+              status === "dismissed" ||
+              String(
+                stat.dismissalType || ""
+              ).length > 0,
+            match,
+          });
+
+        });
+
+
+      (collectionBowling.get(matchKey) || [])
+        .forEach((stat) => {
+
+          const legalBalls =
+            Number(
+              stat.legalBalls ??
+              stat.balls
+            ) || 0;
+
+          const runs =
+            Number(
+              stat.runsConceded ??
+              stat.runs
+            ) || 0;
+
+          const wicketCount =
+            Number(stat.wickets) || 0;
+
+
+          if (
+            !legalBalls &&
+            !runs &&
+            !wicketCount
+          ) {
+            return;
+          }
+
+
+          foundInScorecard = true;
+
+          addBowling({
+            legalBalls,
+            runs,
+            wicketCount,
+            maidenCount:
+              Number(stat.maidens) || 0,
+            match,
+          });
+
+        });
+
+    }
+
+
+    if (foundInScorecard) {
+
+      playedInMatch = true;
+
+    }
+
+
+    if (!playedInMatch) {
+
+      return;
+
+    }
+
+
+    totalMatches += 1;
+
+
+    /* ----- win / loss (only for a decided match, and only when
+           the player belongs to exactly one side) ----- */
+
+    if (
+      inTeamA === inTeamB
+    ) {
+
+      return;
+
+    }
+
+
+    const teamId =
+      inTeamA
+        ? "a"
+        : "b";
+
+
+    const teamName =
+      String(
+        (
+          inTeamA
+            ? (
+                match.teamAName ||
+                match.teamA?.name
+              )
+            : (
+                match.teamBName ||
+                match.teamB?.name
+              )
+        ) ||
+        ""
+      ).trim().toLowerCase();
+
+
+    const winnerName =
+      String(
+        match.winnerName ||
+        match.winner ||
+        match.result?.winner ||
+        ""
+      ).trim().toLowerCase();
+
+
+    const winnerId =
+      String(
+        match.winnerId ||
+        match.result?.winnerId ||
+        ""
+      ).trim().toLowerCase();
+
+
+    const resultText =
+      String(
+        match.resultText ||
+        (
+          typeof match.result === "string"
+            ? match.result
+            : match.result?.text
+        ) ||
+        ""
+      ).trim().toLowerCase();
+
+
+    if (
+      /live|ongoing|upcoming|draw|tie|not started/.test(
+        String(match.status || "").toLowerCase() +
+        " " +
+        resultText
+      )
+    ) {
+
+      return;
+
+    }
+
+
+    if (
+      !winnerName &&
+      !winnerId &&
+      !resultText
+    ) {
+
+      return;
+
+    }
+
+
+    let isWinner;
+
+    if (winnerId) {
+
+      isWinner =
+        winnerId === teamId ||
+        winnerId === teamName;
+
+    } else if (winnerName) {
+
+      isWinner =
+        winnerName === teamName ||
+        winnerName === teamId;
+
+    } else {
+
+      isWinner =
+        Boolean(teamName) &&
+        resultText.includes(
+          `${teamName} won`
+        );
+
+    }
+
+
+    if (isWinner) {
+
+      wins += 1;
+
+    } else {
+
+      losses += 1;
+
+    }
+
+  });
+
+
+  /* ---------- DERIVED VALUES ---------- */
+
+  const strikeRate =
+    ballsFaced > 0
+      ? (
+          (battingRuns /
+            ballsFaced) *
+          100
+        ).toFixed(2)
+      : "0.00";
+
+
+  /*
+   * Cricket rule: career runs divided by times dismissed.
+   * Not-out innings add runs but no dismissal.
+   */
+
+  const battingAverage =
+    timesOut > 0
+      ? (
+          battingRuns /
+          timesOut
+        ).toFixed(2)
+      : "—";
+
+
+  const economy =
+    totalBowls > 0
+      ? (
+          (runsConceded /
+            totalBowls) *
+          6
+        ).toFixed(2)
+      : "0.00";
+
+
+  const decidedMatches =
+    wins + losses;
+
+
+  const winPercentage =
+    decidedMatches > 0
+      ? (
+          (wins /
+            decidedMatches) *
+          100
+        ).toFixed(2)
+      : "0.00";
+
+
+  const losePercentage =
+    decidedMatches > 0
+      ? (
+          (losses /
+            decidedMatches) *
+          100
+        ).toFixed(2)
+      : "0.00";
+
+
+  return {
+
+    battingRuns,
+
+    ballsFaced,
+
+    strikeRate,
+
+    battingAverage,
+
+    timesOut,
+
+    twentyRunInnings,
+
+    highestScore,
+
+    highestScoreMatch,
+
+    totalBowls,
+
+    maidens,
+
+    economy,
+
+    wickets,
+
+    threeWicketHauls,
+
+    bestBowlingWickets,
+
+    bestBowlingMatch,
+
+    totalMatches,
+
+    playerStrength,
+
+    wins,
+
+    losses,
+
+    winPercentage,
+
+    losePercentage,
+
+  };
+
+};
 
 
 export default Profile;

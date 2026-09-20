@@ -3032,7 +3032,7 @@ function Matches() {
   const navigate = useNavigate();
   const isAdmin =
     Boolean(ADMIN_UID) &&
-    String(getCurrentUserId() || "") === ADMIN_UID;
+    String(getCurrentUserId() || "") === String(ADMIN_UID);
 
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -3093,6 +3093,9 @@ function Matches() {
   });
 
   const [viewingMatch, setViewingMatch] = useState(null);
+
+  // Id of the match currently being deleted (prevents double clicks).
+  const [deletingMatchId, setDeletingMatchId] = useState(null);
 
   // --------------------------------------------------
   // LOAD DATA
@@ -4195,6 +4198,67 @@ function Matches() {
   );
 
   // --------------------------------------------------
+  // DELETE ONLY THE SELECTED MATCH (ADMIN)
+  // --------------------------------------------------
+
+  const handleDeleteMatch = async (match) => {
+    if (!isAdmin) {
+      alert("Only the admin can delete matches.");
+      return;
+    }
+
+    // Lock onto the exact match whose button was clicked.
+    const rawMatchId = match?.id ?? match?.matchId;
+    const matchId = String(rawMatchId ?? "").trim();
+
+    if (!matchId) {
+      alert("Unable to delete: this match has no valid id.");
+      return;
+    }
+
+    if (deletingMatchId) return;
+
+    const matchLabel = `${
+      match?.teamA?.name || match?.teamAName || "Team A"
+    } vs ${
+      match?.teamB?.name || match?.teamBName || "Team B"
+    }`;
+
+    if (
+      !window.confirm(
+        `Delete "${matchLabel}" and all its related score data?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingMatchId(matchId);
+
+    try {
+      await deleteMatchCascade(rawMatchId);
+
+      // Remove ONLY the deleted match from the list.
+      setMatches((current) =>
+        current.filter(
+          (item) =>
+            String(item?.id ?? item?.matchId ?? "") !== matchId
+        )
+      );
+
+      setViewingMatch((current) =>
+        current && String(current.id ?? current.matchId ?? "") === matchId
+          ? null
+          : current
+      );
+    } catch (error) {
+      console.error("Unable to delete match:", matchId, error);
+      alert(error?.message || "Unable to delete match.");
+    } finally {
+      setDeletingMatchId(null);
+    }
+  };
+
+  // --------------------------------------------------
   // DARK MODE / FORM CONTROL FIX
   // --------------------------------------------------
 
@@ -4352,19 +4416,12 @@ function Matches() {
                         <button
                           type="button"
                           className="danger-button full-button "
-                          onClick={async () => {
-                            if (!window.confirm("Delete this match and all related score data?")) return;
-                            try {
-                              await deleteMatchCascade(match.id);
-                              setMatches((current) =>
-                                current.filter((item) => String(item.id) !== String(match.id))
-                              );
-                            } catch (error) {
-                              alert(error.message || "Unable to delete match.");
-                            }
-                          }}
+                          disabled={Boolean(deletingMatchId)}
+                          onClick={() => handleDeleteMatch(match)}
                         >
-                          Delete Match
+                          {String(deletingMatchId) === String(match.id ?? match.matchId)
+                            ? "Deleting..."
+                            : "Delete Match"}
                         </button>
                       )}
                     </div>
@@ -4495,6 +4552,26 @@ function Matches() {
                 placeholder="Enter Team B name"
               />
             </div>
+          </div>
+
+          <div className="setup-card">
+            <label>Match Overs</label>
+            <select
+              value={matchOvers}
+              onChange={(e) => setMatchOvers(e.target.value)}
+            >
+              <option value="1">1 Over</option>
+              <option value="2">2 Overs</option>
+              <option value="3">3 Overs</option>
+              <option value="4">4 Overs</option>
+              <option value="5">5 Overs</option>
+              <option value="6">6 Overs</option>
+              <option value="7">7 Overs</option>
+              <option value="8">8 Overs</option>
+              <option value="9">9 Overs</option>
+              <option value="10">10 Overs</option>
+              <option value="15">15 Overs</option>
+            </select>
           </div>
 
           <button
@@ -4852,26 +4929,6 @@ function Matches() {
               points
             </div>
           </div>
- <div className="setup-card">
-            <label>Match Overs</label>
-            <select
-              value={matchOvers}
-              onChange={(e) => setMatchOvers(e.target.value)}
-            >
-              <option value="1">1 Over</option>
-              <option value="2">2 Overs</option>
-              <option value="3">3 Overs</option>
-              <option value="4">4 Overs</option>
-              <option value="5">5 Overs</option>
-              <option value="6">6 Overs</option>
-              <option value="7">7 Overs</option>
-              <option value="8">8 Overs</option>
-              <option value="9">9 Overs</option>
-              <option value="10">10 Overs</option>
-              <option value="15">15 Overs</option>
-            </select>
-          </div>
-
           <div className="player-picker">
             <div className="picker-header">
               <h3>Available Players</h3>

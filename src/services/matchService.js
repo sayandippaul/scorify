@@ -378,10 +378,15 @@ export const deleteMatchCascade = async (matchId, ownerId = currentUserId()) => 
   const matchSnapshot = await withTimeout(getDocs(query(collection(db, MATCHES), where("matchId", "==", id))), "Firestore match lookup");
   const matchData = matchSnapshot.docs[0]?.data();
 
+  // FIX: this used an undefined variable (ADMIN_ID). The imported constant is ADMIN_UID.
+  const isAdminUser =
+    Boolean(ADMIN_UID) &&
+    String(ownerId || "") === String(ADMIN_UID);
+
   if (
     matchData?.createdBy &&
     String(matchData.createdBy) !== String(ownerId) &&
-    String(ownerId) !== ADMIN_ID
+    !isAdminUser
   ) {
     throw new Error("Only the match creator can delete this match.");
   }
@@ -404,6 +409,12 @@ export const deleteMatchCascade = async (matchId, ownerId = currentUserId()) => 
   }
 
   await withTimeout(Promise.all(deletions), "Firestore match deletion");
+
+  // FIX: also drop the deleted match from the offline queue. Otherwise
+  // subscribeToMatches keeps showing it and syncOfflineMatches re-uploads it.
+  writeOfflineQueue(
+    readOfflineQueue().filter((item) => String(item.id) !== id)
+  );
 };
 
 export const flushMatchData = async (
