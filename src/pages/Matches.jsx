@@ -69,6 +69,50 @@ const scorecardPlayerName = (player) =>
 const scorecardOvers = (balls = 0) =>
   `${Math.floor(Number(balls || 0) / 6)}.${Number(balls || 0) % 6}`;
 
+const testCompletedOvers = (balls = 0) =>
+  Math.ceil(Math.max(0, Number(balls || 0)) / 6);
+
+const testDisplayDay = ({ match, innings = [], scoringState = {} }) => {
+  const maxDays = Math.max(1, Number(match?.maxDays || match?.testDays || 5));
+  const oversPerDay = Math.max(1, Number(match?.oversPerDay || match?.testOvers || 90));
+  const totalOvers = innings.reduce(
+    (total, item) => total + testCompletedOvers(item?.balls),
+    0
+  );
+  const oversBasedDay = Math.floor(totalOvers / oversPerDay) + 1;
+  const savedDay = Math.max(
+    Number(scoringState?.currentDay) || 1,
+    Number(match?.currentDay) || 1
+  );
+
+  return Math.min(
+    maxDays,
+    Math.max(1, savedDay || 1, oversBasedDay)
+  );
+};
+
+const isTestMatchRecord = (match) =>
+  String(match?.matchType || "").toLowerCase() === "test";
+
+const testInningsSuffix = (index) =>
+  index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th";
+
+const testInningsDisplayLabel = (innings, index, match) =>
+  `${index + 1}${testInningsSuffix(index)} innings: ${innings.runs || 0}/${innings.wickets || 0}${
+    innings.declared ||
+    (Array.isArray(match?.declaredInnings) &&
+      match.declaredInnings.includes(Number(innings.inningsIndex)))
+      ? " (d)"
+      : ""
+  }${
+    match?.followOnEnforced && Number(innings.inningsIndex) === 2
+      ? " (f/o)"
+      : ""
+  }`;
+
+const testTeamInnings = (playedInnings, teamId) =>
+  playedInnings.filter((innings) => innings.teamId === teamId);
+
 const scorecardStrikeRate = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 100).toFixed(2) : "0.00";
 
@@ -89,19 +133,33 @@ const getTossWinnerTeamId = (match) => {
   )?.id || null;
 };
 
-function LiveWinPredictionCard({ prediction, title = "LIVE WIN PREDICTION" }) {
+function LiveWinPredictionCard({ prediction, title = "LIVE WIN PREDICTION", testMatch = false }) {
   if (!prediction) return null;
 
-  const teamA = Math.round(Number(prediction.A || 0));
-  const teamB = Math.round(Number(prediction.B || 0));
-  const phaseLabel = prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE";
+  const isTestPrediction = testMatch || prediction.testMatch;
+  const live = isTestPrediction && prediction.phase !== "finished";
+  const rawA = Math.max(0, Number(prediction.A || 0));
+  const rawB = Math.max(0, Number(prediction.B || 0));
+  const rawDraw = Math.max(0, Number(prediction.draw || 0));
+  const total = rawA + rawB + rawDraw;
+  const fairPrediction = live && total > 0
+    ? {
+        ...prediction,
+        A: 5 + (rawA / total) * 85,
+        draw: 5 + (rawDraw / total) * 85,
+        B: 100 - (5 + (rawA / total) * 85) - (5 + (rawDraw / total) * 85),
+      }
+    : prediction;
+  const teamA = Math.round(Number(fairPrediction.A || 0));
+  const teamB = Math.round(Number(fairPrediction.B || 0));
+  const phaseLabel = fairPrediction.phase === "pre-match" ? "PRE-MATCH" : fairPrediction.phase === "finished" ? "FINAL" : "LIVE";
 
   return (
     <section className="win-prediction-card" aria-label={title}>
       <div className="win-prediction-header">
         <div>
           <p className="win-prediction-eyebrow">{title}</p>
-          <small>{phaseLabel}{prediction.h2hIncluded ? " • H2H included" : ""}</small>
+          <small>{phaseLabel}{fairPrediction.h2hIncluded ? " • H2H included" : ""}</small>
         </div>
         <span className="win-prediction-live-dot" />
       </div>
@@ -115,6 +173,18 @@ function LiveWinPredictionCard({ prediction, title = "LIVE WIN PREDICTION" }) {
           <span className="win-prediction-fill win-prediction-fill-a" style={{ width: `${teamA}%` }} />
         </div>
       </div>
+
+      {isTestPrediction && (
+        <div className="win-prediction-team">
+          <div className="win-prediction-label">
+            <strong>Draw</strong>
+            <b>{Math.round(Number(fairPrediction.draw || 0))}%</b>
+          </div>
+          <div className="win-prediction-track" aria-hidden="true">
+            <span className="win-prediction-fill" style={{ width: `${Math.round(Number(fairPrediction.draw || 0))}%`, background: "#94a3b8" }} />
+          </div>
+        </div>
+      )}
 
       <div className="win-prediction-team">
         <div className="win-prediction-label">
@@ -188,6 +258,87 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
       players: match?.teamBPlayers || [],
     },
   };
+
+  if (isTestMatchRecord(match)) {
+    const savedInnings = Array.isArray(match?.testInnings)
+      ? match.testInnings
+      : Array.isArray(match?.innings) ? match.innings : [];
+    const currentIndex = Number(scoringState?.inningsIndex);
+    const liveInnings = Number.isInteger(currentIndex) && currentIndex >= 0
+      ? {
+          inningsIndex: currentIndex,
+          teamId: Array.isArray(match?.inningsOrder)
+            ? match.inningsOrder[currentIndex]
+            : currentIndex % 2 === 0
+              ? (match?.firstInningsTeamId === "B" ? "B" : "A")
+              : (match?.firstInningsTeamId === "B" ? "A" : "B"),
+          teamName: undefined,
+          runs: Number(scoringState.inningsRuns || 0),
+          wickets: Number(scoringState.inningsWickets || 0),
+          balls: Number(scoringState.legalBalls || 0),
+          battingStats: scoringState.battingStats || {},
+          bowlingStats: scoringState.bowlingStats || {},
+          extras: scoringState.extras,
+          deliveries: Array.isArray(scoringState.deliveries) ? scoringState.deliveries : [],
+          fallOfWickets: scoringState.fallOfWickets,
+          completedOvers: scoringState.completedOvers,
+          day: scoringState.currentDay,
+        }
+      : null;
+    const matchFinished =
+      ["finished", "completed"].includes(
+        String(match?.status || "").toLowerCase()
+      ) ||
+      match?.result != null ||
+      match?.winner != null ||
+      match?.finishedAt != null;
+    const savedCurrentInnings = savedInnings.find(
+      (item) => Number(item.inningsIndex) === currentIndex
+    );
+    const liveHasMoreCompleteData =
+      liveInnings &&
+      (!savedCurrentInnings ||
+        Number(liveInnings.balls || 0) > Number(savedCurrentInnings.balls || 0) ||
+        Number(liveInnings.runs || 0) > Number(savedCurrentInnings.runs || 0) ||
+        Number(liveInnings.wickets || 0) > Number(savedCurrentInnings.wickets || 0) ||
+        (Array.isArray(liveInnings.deliveries) &&
+          liveInnings.deliveries.length >
+            (Array.isArray(savedCurrentInnings?.deliveries)
+              ? savedCurrentInnings.deliveries.length
+              : 0)));
+    const shouldMergeLiveInnings = liveInnings &&
+      (!matchFinished || liveHasMoreCompleteData || !savedInnings.length);
+    const mergedInnings = shouldMergeLiveInnings
+      ? [
+          ...savedInnings.filter((item) => Number(item.inningsIndex) !== currentIndex),
+          liveInnings,
+        ]
+      : savedInnings;
+    return mergedInnings
+      .slice()
+      .sort((a, b) => Number(a.inningsIndex || 0) - Number(b.inningsIndex || 0))
+      .map((innings, index) => {
+        const inningsIndex = Number.isInteger(Number(innings.inningsIndex))
+          ? Number(innings.inningsIndex)
+          : index;
+        const teamId = innings.teamId === "B" ? "B" : "A";
+
+        return {
+        ...innings,
+        inningsIndex,
+        teamId,
+        teamName: innings.teamName || teams[teamId]?.name,
+        declared: Boolean(
+          innings.declared ||
+          (Array.isArray(match?.declaredInnings) &&
+            match.declaredInnings.includes(inningsIndex))
+        ),
+        deliveries: Array.isArray(innings.deliveries) ? innings.deliveries : [],
+        battingStats: innings.battingStats || {},
+        bowlingStats: innings.bowlingStats || {},
+        };
+      });
+  }
 
   const firstSaved = match?.firstInningsData || null;
   const secondSaved = match?.secondInningsData || null;
@@ -373,6 +524,7 @@ const buildPredictionHistory = ({ match, scoringState }) => {
 
 function PredictionOverHistory({ match, scoringState }) {
   const records = buildPredictionHistory({ match, scoringState });
+  const isTestMatch = isTestMatchRecord(match);
 
   if (!records.length) return null;
 
@@ -388,6 +540,7 @@ function PredictionOverHistory({ match, scoringState }) {
           const prediction = record.prediction;
           const teamA = Math.round(Number(prediction.A || 0));
           const teamB = Math.round(Number(prediction.B || 0));
+          const draw = Math.round(Number(prediction.draw || 0));
 
           return (
             <div className="win-prediction-history-record" key={record.key}>
@@ -399,13 +552,36 @@ function PredictionOverHistory({ match, scoringState }) {
                 <span>{prediction.phase === "pre-match" ? "PRE-MATCH" : prediction.phase === "finished" ? "FINAL" : "LIVE"}</span>
               </div>
 
-              <div className="win-prediction-history-probabilities">
-                <strong>{prediction.teamA} {teamA}%</strong>
-                <div className="win-prediction-mini-track" aria-hidden="true">
-                  <span style={{ width: `${teamA}%` }} />
+              {isTestMatch ? (
+                <div className="win-prediction-history-probabilities test-prediction-history-probabilities">
+                  <div className="prediction-history-outcome">
+                    <strong>{prediction.teamA} {teamA}%</strong>
+                    <div className="win-prediction-mini-track" aria-hidden="true">
+                      <span style={{ width: `${teamA}%` }} />
+                    </div>
+                  </div>
+                  <div className="prediction-history-outcome">
+                    <strong>Draw {draw}%</strong>
+                    <div className="win-prediction-mini-track draw" aria-hidden="true">
+                      <span style={{ width: `${draw}%` }} />
+                    </div>
+                  </div>
+                  <div className="prediction-history-outcome">
+                    <strong>{prediction.teamB} {teamB}%</strong>
+                    <div className="win-prediction-mini-track" aria-hidden="true">
+                      <span style={{ width: `${teamB}%` }} />
+                    </div>
+                  </div>
                 </div>
-                <strong>{prediction.teamB} {teamB}%</strong>
-              </div>
+              ) : (
+                <div className="win-prediction-history-probabilities">
+                  <strong>{prediction.teamA} {teamA}%</strong>
+                  <div className="win-prediction-mini-track" aria-hidden="true">
+                    <span style={{ width: `${teamA}%` }} />
+                  </div>
+                  <strong>{prediction.teamB} {teamB}%</strong>
+                </div>
+              )}
             </div>
           );
         })}
@@ -521,6 +697,7 @@ const getPlayerOfTheMatch = (match) => {
   const finished =
     String(match?.status || "").toLowerCase() === "finished" ||
     String(match?.status || "").toLowerCase() === "completed";
+  const isTestMatch = isTestMatchRecord(match);
   if (!finished) return null;
 
   const performances = recordedPlayerPerformances({ match })
@@ -606,6 +783,18 @@ const getTurningPoint = ({ match, scoringState }) => {
 };
 
 function MatchMatchImpactSections({ match, scoringState }) {
+  const teamA = match?.teamA || {
+    id: "A",
+    name: match?.teamAName || "Team A",
+    players: match?.teamAPlayers || [],
+  };
+  const teamB = match?.teamB || {
+    id: "B",
+    name: match?.teamBName || "Team B",
+    players: match?.teamBPlayers || [],
+  };
+  const teamAName = teamA.name;
+  const teamBName = teamB.name;
   const player = getPlayerOfTheMatch(match);
   const turningPoint = getTurningPoint({ match, scoringState });
   const finished =
@@ -854,6 +1043,7 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
 function FinishedMatchAnalysisGraphs({ match }) {
   if (!match) return null;
 
+  const isTestMatch = isTestMatchRecord(match);
   const finished =
     String(match?.status || "").toLowerCase() === "finished" ||
     String(match?.status || "").toLowerCase() === "completed";
@@ -904,10 +1094,15 @@ function FinishedMatchAnalysisGraphs({ match }) {
      INNINGS
   ======================================================= */
 
-  const innings = [
-    match.firstInningsData,
-    match.secondInningsData,
-  ].filter(Boolean);
+  const innings = isTestMatchRecord(match)
+    ? scorecardHistoryInnings({
+        match,
+        scoringState: match.scoringState || {},
+      })
+    : [
+        match.firstInningsData,
+        match.secondInningsData,
+      ].filter(Boolean);
 
 
   /* =======================================================
@@ -1042,6 +1237,11 @@ function FinishedMatchAnalysisGraphs({ match }) {
             teamB:
               Number(
                 prediction.B || 0
+              ),
+
+            draw:
+              Number(
+                prediction.draw || 0
               ),
           });
         }
@@ -1375,6 +1575,16 @@ function FinishedMatchAnalysisGraphs({ match }) {
       chartPadding
     );
 
+  const predictionDraw = isTestMatch
+    ? createPoints(
+        predictionPoints.map((point) => point.draw),
+        predictionMax,
+        chartWidth,
+        chartHeight,
+        chartPadding
+      )
+    : [];
+
 
   /* =======================================================
      BATTER GRAPH
@@ -1566,6 +1776,12 @@ function FinishedMatchAnalysisGraphs({ match }) {
           <i className="legend-team-b" />
           {teamBName}
         </span>
+        {isTestMatch && (
+          <span>
+            <i className="legend-draw" />
+            Draw
+          </span>
+        )}
 
       </div>
 
@@ -1634,6 +1850,14 @@ function FinishedMatchAnalysisGraphs({ match }) {
             fill="none"
           />
 
+          {isTestMatch && (
+            <path
+              d={createLinePath(predictionDraw)}
+              className="analysis-line draw-line"
+              fill="none"
+            />
+          )}
+
 
           {/* Team A points */}
 
@@ -1700,6 +1924,22 @@ function FinishedMatchAnalysisGraphs({ match }) {
                   {point.value.toFixed(
                     1
                   )}
+
+                  {isTestMatch && predictionDraw.map((point, index) => (
+                    <circle
+                      key={`prediction-draw-${index}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r="3.2"
+                      className="analysis-point draw-point"
+                    >
+                      <title>
+                        Over {predictionPoints[index]?.over}.{predictionPoints[index]?.ball}
+                        {" • Draw: "}
+                        {point.value.toFixed(1)}%
+                      </title>
+                    </circle>
+                  ))}
                   %
                 </title>
               </circle>
@@ -2523,23 +2763,25 @@ function FinishedMatchAnalysisGraphs({ match }) {
       };
 
 
-      const firstPartnerships =
-        buildPartnerships(
-          match?.firstInningsData,
-          1
-        );
+      const partnershipInnings = isTestMatchRecord(match)
+        ? scorecardHistoryInnings({
+            match,
+            scoringState: match.scoringState || {},
+          })
+        : [
+            match?.firstInningsData,
+            match?.secondInningsData,
+          ].filter(Boolean);
 
-      const secondPartnerships =
-        buildPartnerships(
-          match?.secondInningsData,
-          2
-        );
+      const inningsPartnerships = partnershipInnings.map((innings, index) => ({
+        title: `${index + 1}${testInningsSuffix(index)} Innings`,
+        team: innings.teamName || (innings.teamId === "B" ? teamBName : teamAName),
+        items: buildPartnerships(innings, index + 1),
+      }));
 
-
-      const allPartnerships = [
-        ...firstPartnerships,
-        ...secondPartnerships,
-      ];
+      const allPartnerships = inningsPartnerships.flatMap(
+        (inningsData) => inningsData.items
+      );
 
 
       if (!allPartnerships.length) {
@@ -2554,31 +2796,7 @@ function FinishedMatchAnalysisGraphs({ match }) {
       return (
         <div className="partnership-list">
 
-          {[
-            {
-              title:
-                "1st Innings",
-              team:
-                match
-                  ?.firstInningsData
-                  ?.teamName ||
-                teamAName,
-              items:
-                firstPartnerships,
-            },
-
-            {
-              title:
-                "2nd Innings",
-              team:
-                match
-                  ?.secondInningsData
-                  ?.teamName ||
-                teamBName,
-              items:
-                secondPartnerships,
-            },
-          ].map(
+          {          inningsPartnerships.map(
             (
               inningsData,
               inningsIndex
@@ -2750,6 +2968,28 @@ function MatchScorecard({ match }) {
     match,
     scoringState: savedState,
   });
+  const isTestMatch = isTestMatchRecord(match);
+  const testScorecardInnings = isTestMatch
+    ? scorecardHistoryInnings({ match, scoringState: savedState })
+    : [];
+  const testTotals = testScorecardInnings.reduce((totals, innings) => {
+    totals[innings.teamId === "B" ? "B" : "A"] += Number(innings.runs || 0);
+    return totals;
+  }, { A: 0, B: 0 });
+  const testLeadText = isTestMatch
+    ? testTotals.A === testTotals.B
+      ? "Scores level"
+      : testTotals.A > testTotals.B
+        ? `${teamA.name} lead by ${testTotals.A - testTotals.B}`
+        : `${teamB.name} lead by ${testTotals.B - testTotals.A}`
+    : "";
+  const currentTestDisplayDay = isTestMatch
+    ? testDisplayDay({
+        match,
+        innings: testScorecardInnings,
+        scoringState: savedState,
+      })
+    : 1;
 
   const handleDownloadScorecardPdf = () => {
     const printSheet = document.querySelector(".scorecard-print-sheet");
@@ -2902,6 +3142,7 @@ function MatchScorecard({ match }) {
       <div className="scorecard-print-sheet" aria-hidden="true">
         <div className="scorecard-print-header">
           <p className="eyebrow">MATCH SCORECARD</p>
+          {isTestMatch && <strong className="test-match-label">TEST MATCH</strong>}
           <h1>{teamA.name} vs {teamB.name}</h1>
           {match?.createdAt && (
             <p>
@@ -2919,7 +3160,22 @@ function MatchScorecard({ match }) {
           )}
         </div>
 
-        <LiveWinPredictionCard prediction={prediction} />
+        <LiveWinPredictionCard prediction={prediction} testMatch={isTestMatch} />
+        {isTestMatch && (
+          <section className="test-scorecard-innings">
+            <h2>Test Match Innings</h2>
+            {testScorecardInnings.map((innings, index) => (
+              <div key={`${innings.teamId}-${index}`} className="test-scorecard-innings-block">
+                <h3>
+                  {innings.teamName} — {index + 1}{testInningsSuffix(index)} Innings
+                  {innings.declared || (Array.isArray(match.declaredInnings) && match.declaredInnings.includes(Number(innings.inningsIndex))) ? " (d)" : ""}
+                  {match.followOnEnforced && Number(innings.inningsIndex) === 2 ? " (f/o)" : ""}
+                </h3>
+                {inningsFor(innings, innings.teamId === "B" ? teamB : teamA)}
+              </div>
+            ))}
+          </section>
+        )}
         <PredictionOverHistory match={match} scoringState={savedState} />
         <MatchMatchImpactSections match={match} scoringState={savedState} />
 
@@ -2979,25 +3235,56 @@ function MatchScorecard({ match }) {
           <span>Download PDF</span>
         </button>
 
-        <LiveWinPredictionCard prediction={prediction} />
+        <LiveWinPredictionCard prediction={prediction} testMatch={isTestMatch} />
+      {isTestMatch && <strong className="test-match-label">TEST MATCH</strong>}
       <PredictionOverHistory match={match} scoringState={savedState} />
       <MatchMatchImpactSections match={match} scoringState={savedState} />
-      <div className="match-scorecard-tabs" role="tablist" aria-label="Match innings">
-        <button
-          type="button"
-          className={activeInnings === "first" ? "active" : ""}
-          onClick={() => setActiveInnings("first")}
-        >
-          {firstInnings?.teamName || (firstTeamId === "B" ? teamB.name : teamA.name)}
-        </button>
-        <button
-          type="button"
-          className={activeInnings === "second" ? "active" : ""}
-          onClick={() => setActiveInnings("second")}
-        >
-          {secondInnings?.teamName || (secondTeamId === "A" ? teamA.name : teamB.name)}
-        </button>
-      </div>
+      {isTestMatch ? (
+        <>
+          <div className="test-scorecard-summary">
+            <strong>Day {currentTestDisplayDay} / {Number(match.maxDays || match.testDays || 5)}</strong>
+            <span>
+              {testScorecardInnings.reduce((total, innings) => total + testCompletedOvers(innings.balls), 0)} total overs played
+              {" • "}
+              {testScorecardInnings.length} innings played
+              {" • "}
+              {currentTestDisplayDay} days played
+            </span>
+            <span>{testLeadText}</span>
+          </div>
+          <div className="match-scorecard-tabs test-scorecard-tabs" role="tablist" aria-label="Test match innings">
+            {testScorecardInnings.map((innings, index) => (
+              <button
+                key={`${innings.teamId}-${index}`}
+                type="button"
+                className={activeInnings === `test-${index}` ? "active" : ""}
+                onClick={() => setActiveInnings(`test-${index}`)}
+              >
+                {innings.teamName}
+                {innings.declared || (Array.isArray(match.declaredInnings) && match.declaredInnings.includes(Number(innings.inningsIndex))) ? " (d)" : ""}
+                {match.followOnEnforced && Number(innings.inningsIndex) === 2 ? " (f/o)" : ""}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="match-scorecard-tabs" role="tablist" aria-label="Match innings">
+          <button
+            type="button"
+            className={activeInnings === "first" ? "active" : ""}
+            onClick={() => setActiveInnings("first")}
+          >
+            {firstInnings?.teamName || (firstTeamId === "B" ? teamB.name : teamA.name)}
+          </button>
+          <button
+            type="button"
+            className={activeInnings === "second" ? "active" : ""}
+            onClick={() => setActiveInnings("second")}
+          >
+            {secondInnings?.teamName || (secondTeamId === "A" ? teamA.name : teamB.name)}
+          </button>
+        </div>
+      )}
 
       <div className="match-toss-summary">
         <span className="match-toss-coin">{tossResult === "Tails" ? "T" : "H"}</span>
@@ -3007,7 +3294,17 @@ function MatchScorecard({ match }) {
         </span>
       </div>
 
-      {activeInnings === "first"
+      {isTestMatch
+        ? (() => {
+            const selectedIndex = String(activeInnings).startsWith("test-")
+              ? Number(String(activeInnings).replace("test-", ""))
+              : 0;
+            const selected = testScorecardInnings[selectedIndex];
+            return selected
+              ? inningsFor(selected, selected.teamId === "B" ? teamB : teamA)
+              : <p className="match-scorecard-note">This innings has not started yet.</p>;
+          })()
+        : activeInnings === "first"
         ? firstInnings
           ? inningsFor(firstInnings, teamA)
           : <p className="match-scorecard-note">Detailed first-innings scorecard is not available for this match.</p>
@@ -3086,6 +3383,11 @@ function Matches() {
   const [bowlingTeam, setBowlingTeam] = useState(null);
 
   const [matchOvers, setMatchOvers] = useState(5);
+  // Kept separate from `overs` so existing limited-overs matches remain
+  // completely backward compatible.
+  const [matchType, setMatchType] = useState("limited-overs");
+  const [testOvers, setTestOvers] = useState(90);
+  const [testDays, setTestDays] = useState(5);
 
   const [score, setScore] = useState({
     runs: 0,
@@ -3211,7 +3513,7 @@ function Matches() {
   }, [matches, scorecardMatchId]);
 
   // --------------------------------------------------
-  // AUTO CHANGE LIVE -> UNFINISHED AFTER 12 HOURS
+  // AUTO CHANGE LIVE -> UNFINISHED AFTER 7 days
   // --------------------------------------------------
 
   useEffect(() => {
@@ -3224,7 +3526,7 @@ function Matches() {
             match.status === "live" &&
             match.startedAt &&
             Date.now() - new Date(match.startedAt).getTime() >=
-              12 * 60 * 60 * 1000
+              7* 24 * 60 * 60 * 1000
           ) {
             changed = true;
 
@@ -3297,6 +3599,9 @@ function Matches() {
     setBattingTeam(null);
     setBowlingTeam(null);
     setMatchOvers(5);
+    setMatchType("limited-overs");
+    setTestOvers(90);
+    setTestDays(5);
 
     setScore({
       runs: 0,
@@ -4105,7 +4410,27 @@ function Matches() {
       bowlingTeamId,
       battingTeam: batting.name,
       bowlingTeam: bowling.name,
-      overs: Number(matchOvers),
+      overs: matchType === "test" ? null : Number(matchOvers),
+      matchType,
+      testOvers: matchType === "test"
+        ? Math.min(90, Math.max(3, Number(testOvers) || 90))
+        : null,
+      oversPerDay: matchType === "test"
+        ? Math.min(90, Math.max(3, Number(testOvers) || 90))
+        : null,
+      testDays: matchType === "test" ? 5 : null,
+      maxDays: matchType === "test" ? 5 : null,
+      currentDay: matchType === "test" ? 1 : null,
+      testInnings: [],
+      innings: [],
+      inningsOrder: matchType === "test"
+        ? [battingTeamId, bowlingTeamId, battingTeamId, bowlingTeamId]
+        : null,
+      currentInnings: 0,
+      followOnAvailable: false,
+      followOnEnforced: false,
+      declaredInnings: [],
+      drawState: matchType === "test" ? "possible" : null,
       scoreA: 0,
       wicketsA: 0,
       scoreB: 0,
@@ -4126,7 +4451,7 @@ function Matches() {
     }
 
     // Scoring is handled by the dedicated Scoring page.
-    navigate(`/scoring/${id}`);
+    navigate(matchType === "test" ? `/test-scoring/${id}` : `/scoring/${id}`);
   };
 
   // --------------------------------------------------
@@ -4207,10 +4532,18 @@ function Matches() {
       return match.result;
     }
 
+    const isTestDraw =
+      isTestMatchRecord(match) &&
+      (
+        String(match.drawState || "").toLowerCase() === "draw" ||
+        String(match.winner || "").toUpperCase() === "DRAW" ||
+        String(match.result?.winner || "").toUpperCase() === "DRAW"
+      );
+
     return (
       match.result?.text ||
       match.resultText ||
-      ""
+      (isTestDraw ? "Match drawn" : "")
     );
   };
 
@@ -4348,6 +4681,11 @@ function Matches() {
 
                   <div className="match-card">
                     <div className="match-card-top">
+                      <span className="match-format-badge">
+                        {String(match.matchType || "limited-overs").toLowerCase() === "test"
+                          ? "TEST MATCH"
+                          : "LIMITED OVERS"}
+                      </span>
                       {getMatchStatus(match) === "live" && (
                         <span className="live-badge">
                           <span className="live-dot"></span>
@@ -4372,27 +4710,103 @@ function Matches() {
                       </span>
                     </div>
 
-                    <div className="teams-display">
-                      <div className="match-team">
-                        <strong>{match.teamA.name}</strong>
+                    {isTestMatchRecord(match) ? (() => {
+                      const playedInnings = scorecardHistoryInnings({
+                        match,
+                        scoringState: match.scoringState || {},
+                      });
+                      const renderTeam = (team, teamId) => (
+                        <div className="match-team test-match-team">
+                          <strong>{team.name}</strong>
+                          <div className="test-team-innings">
+                            {testTeamInnings(playedInnings, teamId).map((innings, teamInningsIndex) => (
+                              <span key={`${teamId}-${innings.inningsIndex}`}>
+                                {testInningsDisplayLabel(
+                                  innings,
+                                  teamInningsIndex,
+                                  match
+                                )}
+                              </span>
+                            ))}
+                            {!testTeamInnings(playedInnings, teamId).length && (
+                              <span>0/0</span>
+                            )}
+                          </div>
+                        </div>
+                      );
 
-                        <span>
-                          {match.scoreA || 0}/
-                          {match.wicketsA || 0}
-                        </span>
+                      return (
+                        <div className="teams-display test-teams-display">
+                          {renderTeam(match.teamA, "A")}
+                          <div className="vs">VS</div>
+                          {renderTeam(match.teamB, "B")}
+                        </div>
+                      );
+                    })() : (
+                      <div className="teams-display">
+                        <div className="match-team">
+                          <strong>{match.teamA.name}</strong>
+                          <span>
+                            {match.scoreA || 0}/
+                            {match.wicketsA || 0}
+                          </span>
+                        </div>
+
+                        <div className="vs">VS</div>
+
+                        <div className="match-team">
+                          <strong>{match.teamB.name}</strong>
+                          <span>
+                            {match.scoreB || 0}/
+                            {match.wicketsB || 0}
+                          </span>
+                        </div>
                       </div>
+                    )}
 
-                      <div className="vs">VS</div>
+                    {isTestMatchRecord(match) && (() => {
+                      const playedInnings = scorecardHistoryInnings({
+                        match,
+                        scoringState: match.scoringState || {},
+                      });
+                      const totalOvers = playedInnings.reduce(
+                        (total, innings) => total + testCompletedOvers(innings.balls),
+                        0
+                      );
+                      const totals = playedInnings.reduce(
+                        (result, innings) => {
+                          result[innings.teamId] += Number(innings.runs || 0);
+                          return result;
+                        },
+                        { A: 0, B: 0 }
+                      );
+                      const leadText = totals.A === totals.B
+                        ? "Scores level"
+                        : totals.A > totals.B
+                          ? `${match.teamA.name} lead by ${totals.A - totals.B}`
+                          : `${match.teamB.name} lead by ${totals.B - totals.A}`;
+                      const displayDay = testDisplayDay({
+                        match,
+                        innings: playedInnings,
+                        scoringState: match.scoringState || {},
+                      });
 
-                      <div className="match-team">
-                        <strong>{match.teamB.name}</strong>
-
-                        <span>
-                          {match.scoreB || 0}/
-                          {match.wicketsB || 0}
-                        </span>
-                      </div>
-                    </div>
+                      return (
+                        <div className="test-mini-scorecard">
+                          <span>
+                            Overs: {totalOvers} • Day {displayDay} / {Number(match.maxDays || match.testDays || 5)}
+                          </span>
+                          <span>{leadText}</span>
+                          <div className="test-mini-innings">
+                            {playedInnings.map((innings, index) => (
+                              <span key={`${innings.teamId}-${innings.inningsIndex ?? index}`}>
+                                {innings.teamName} — {testInningsDisplayLabel(innings, index, match)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {getMatchStatus(match) === "finished" &&
                       (getMatchResultText(match) || match.winner) && (
@@ -4408,7 +4822,7 @@ function Matches() {
                     {getMatchStatus(match) === "unfinished" && (
                       <div className="unfinished-text">
                         Match was automatically marked
-                        unfinished after 12 hours.
+                        unfinished after 7 days.
                       </div>
                     )}
 
@@ -4484,6 +4898,22 @@ function Matches() {
             </p>
           </div>
 
+           <div className="setup-card match-type-card">
+            <label htmlFor="match-type">Match type</label>
+            <select
+              id="match-type"
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value)}
+            >
+              <option value="limited-overs">Limited overs</option>
+              <option value="test">Test match</option>
+            </select>
+            {matchType === "test" && (
+              <p className="subtitle">Four innings • no free hits • draw and follow-on tracking enabled.</p>
+            )}
+          </div>
+       
+
           <div className="team-mode-grid">
             <button
               type="button"
@@ -4526,7 +4956,7 @@ function Matches() {
               </p>
             </button>
           </div>
-        </div>
+          </div>
       </>
     );
   }
@@ -4577,7 +5007,7 @@ function Matches() {
             </div>
           </div>
 
-          <div className="setup-card">
+          {matchType !== "test" && <div className="setup-card">
             <label>Match Overs</label>
             <select
               value={matchOvers}
@@ -4593,9 +5023,17 @@ function Matches() {
               <option value="8">8 Overs</option>
               <option value="9">9 Overs</option>
               <option value="10">10 Overs</option>
+              <option value="12">12 Overs</option>
               <option value="15">15 Overs</option>
+              <option value="20">20 Overs</option>
             </select>
-          </div>
+          </div>}
+          {matchType === "test" && (
+            <div className="setup-card">
+              <label>Overs per day</label>
+              <input type="number" min="3" max="90" value={testOvers} onChange={(e) => setTestOvers(e.target.value)} />
+            </div>
+          )}
 
           <button
             type="button"
@@ -4607,6 +5045,15 @@ function Matches() {
               }
               if (teamA.name.trim().toLowerCase() === teamB.name.trim().toLowerCase()) {
                 alert("Team names must be different.");
+                return;
+              }
+              if (
+                matchType === "test" &&
+                (!Number.isInteger(Number(testOvers)) ||
+                  Number(testOvers) < 3 ||
+                  Number(testOvers) > 90)
+              ) {
+                alert("Overs per day for Test matches must be between 3 and 90.");
                 return;
               }
               setScreen("captains");
@@ -5362,13 +5809,19 @@ const teamsWithPlayers = savedTeams.map((team) => {
         <ExistingTeamsScreen
           teams={teamsWithPlayers}
           players={players}
+          matchType={matchType}
+          testOvers={testOvers}
+          testDays={testDays}
           onBack={() => setScreen("team-mode")}
           onContinue={(
             selectedA,
             selectedB,
             capA,
             capB,
-            selectedOvers
+            selectedOvers,
+            selectedMatchType,
+            selectedTestOvers,
+            selectedTestDays
           ) => {
             setTeamA({
               id: "A",
@@ -5389,6 +5842,9 @@ const teamsWithPlayers = savedTeams.map((team) => {
             setCaptainA(capA);
             setCaptainB(capB);
             setMatchOvers(Number(selectedOvers) || 5);
+            setMatchType(selectedMatchType || "limited-overs");
+            setTestOvers(Number(selectedTestOvers) || 90);
+            setTestDays(Number(selectedTestDays) || 5);
 
             setFirstTossChoice(null);
             setFirstTossResult(null);
@@ -5655,10 +6111,11 @@ const teamsWithPlayers = savedTeams.map((team) => {
             type="button"
             className="back-button"
             onClick={() => {
-              setViewingMatch(null);
-              setScreen("list");
-            }}
-          >
+                setViewingMatch(null);
+                setScreen("list");
+                navigate("/matches");
+              }}
+            >
             ← Back to Matches
           </button>
 
@@ -5700,53 +6157,77 @@ const teamsWithPlayers = savedTeams.map((team) => {
               )}
             </div>
 
-            <div className="scorecard-teams">
-              <div>
-                
-                <strong>
-                  {viewingMatch.teamA.name}{getTossWinnerTeamId(viewingMatch) === "A" && (
-                  <small className="scorecard-toss-badge">
-                    <small className="scorecard-toss-coin">
-                      {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
-                    </small>
-                    {/* Toss winner */}
-                  </small>
-                )}
-                
-                </strong>
+            {isTestMatchRecord(viewingMatch) ? (() => {
+              const playedInnings = scorecardHistoryInnings({
+                match: viewingMatch,
+                scoringState: viewingMatch.scoringState || {},
+              });
+              const renderTeam = (team, teamId) => (
+                <div className="test-scorecard-team">
+                  <strong>{team.name}</strong>
+                  <div className="test-team-innings">
+                    {testTeamInnings(playedInnings, teamId).map((innings, teamInningsIndex) => (
+                      <span key={`${teamId}-${innings.inningsIndex}`}>
+                        {testInningsDisplayLabel(
+                          innings,
+                          teamInningsIndex,
+                          viewingMatch
+                        )}
+                      </span>
+                    ))}
+                    {!testTeamInnings(playedInnings, teamId).length && (
+                      <span>0/0</span>
+                    )}
+                  </div>
+                </div>
+              );
 
+              return (
+                <div className="scorecard-teams test-scorecard-teams">
+                  {renderTeam(viewingMatch.teamA, "A")}
+                  <div className="score-vs">VS</div>
+                  {renderTeam(viewingMatch.teamB, "B")}
+                </div>
+              );
+            })() : (
+              <div className="scorecard-teams">
+                <div>
+                  <strong>
+                    {viewingMatch.teamA.name}
+                    {getTossWinnerTeamId(viewingMatch) === "A" && (
+                      <small className="scorecard-toss-badge">
+                        <small className="scorecard-toss-coin">
+                          {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
+                        </small>
+                      </small>
+                    )}
+                  </strong>
+                  <span>
+                    {viewingMatch.scoreA || 0}/
+                    {viewingMatch.wicketsA || 0}
+                  </span>
+                </div>
 
-                <span>
-                  {viewingMatch.scoreA || 0}/
-                  {viewingMatch.wicketsA || 0}
-                </span>
+                <div className="score-vs">VS</div>
+
+                <div>
+                  <strong>
+                    {viewingMatch.teamB.name}
+                    {getTossWinnerTeamId(viewingMatch) === "B" && (
+                      <small className="scorecard-toss-badge">
+                        <small className="scorecard-toss-coin">
+                          {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
+                        </small>
+                      </small>
+                    )}
+                  </strong>
+                  <span>
+                    {viewingMatch.scoreB || 0}/
+                    {viewingMatch.wicketsB || 0}
+                  </span>
+                </div>
               </div>
-
-              <div className="score-vs">VS</div>
-
-              <div>
-                
-                <strong>
-                  {viewingMatch.teamB.name}
- {getTossWinnerTeamId(viewingMatch) === "B" && (
-                  <small className="scorecard-toss-badge">
-                    <small className="scorecard-toss-coin">
-                      {viewingMatch.secondTossResult === "Tails" ? "T" : "H"}
-                    </small>
-                    {/* Toss winner */}
-                  </small>
-                )}
-               
-
-                </strong>
-
-
-                <span>
-                  {viewingMatch.scoreB || 0}/
-                  {viewingMatch.wicketsB || 0}
-                </span>
-              </div>
-            </div>
+            )}
 
             {(viewingMatch.winner ||
               getMatchResultText(viewingMatch)) && (
@@ -5761,26 +6242,69 @@ const teamsWithPlayers = savedTeams.map((team) => {
             )}
 
             <div className="scorecard-info-grid">
-              <div>
-                <span>Overs</span>
-                <strong>
-                  {viewingMatch.overs}
-                </strong>
-              </div>
+              {isTestMatchRecord(viewingMatch) ? (() => {
+                const playedInnings = scorecardHistoryInnings({
+                  match: viewingMatch,
+                  scoringState: viewingMatch.scoringState || {},
+                });
+                const totalOvers = playedInnings.reduce(
+                  (total, innings) => total + testCompletedOvers(innings.balls),
+                  0
+                );
+                const displayDay = testDisplayDay({
+                  match: viewingMatch,
+                  innings: playedInnings,
+                  scoringState: viewingMatch.scoringState || {},
+                });
+                const totals = playedInnings.reduce(
+                  (result, innings) => {
+                    result[innings.teamId] += Number(innings.runs || 0);
+                    return result;
+                  },
+                  { A: 0, B: 0 }
+                );
+                const leadText = totals.A === totals.B
+                  ? "Scores level"
+                  : totals.A > totals.B
+                    ? `${viewingMatch.teamA.name} lead by ${totals.A - totals.B} runs`
+                    : `${viewingMatch.teamB.name} lead by ${totals.B - totals.A} runs`;
 
-              <div>
+                return (
+                  <>
+                    <div>
+                      <span>Total match overs played</span>
+                      <strong>{totalOvers}</strong>
+                    </div>
+                    <div>
+                      <span>Days played</span>
+                      <strong>{displayDay}</strong>
+                    </div>
+                    <div>
+                      <span>Match position</span>
+                      <strong>{leadText}</strong>
+                    </div>
+                  </>
+                );
+              })() : (
+                <div>
+                  <span>Overs</span>
+                  <strong>{viewingMatch.overs}</strong>
+                </div>
+              )}
+
+              {!isTestMatchRecord(viewingMatch) && <div>
                 <span>Batting First</span>
                 <strong>
                   {viewingMatch.battingTeam}
                 </strong>
-              </div>
+              </div>}
 
-              <div>
+              {!isTestMatchRecord(viewingMatch) && <div>
                 <span>Bowling First</span>
                 <strong>
                   {viewingMatch.bowlingTeam}
                 </strong>
-              </div>
+              </div>}
             </div>
           </div>
 
@@ -5800,6 +6324,9 @@ const teamsWithPlayers = savedTeams.map((team) => {
 function ExistingTeamsScreen({
   teams,
   players,
+  matchType = "limited-overs",
+  testOvers = 90,
+  testDays = 5,
   onBack,
   onContinue,
 }) {
@@ -5809,6 +6336,8 @@ function ExistingTeamsScreen({
   const [captainAId, setCaptainAId] = useState("");
   const [captainBId, setCaptainBId] = useState("");
   const [selectedOvers, setSelectedOvers] = useState("5");
+  const [testOversValue, setTestOversValue] = useState(testOvers);
+  const [testDaysValue, setTestDaysValue] = useState(testDays);
 
   // --------------------------------------------------
   // SAFE ID HELPER
@@ -6114,6 +6643,16 @@ const getTeamPlayers = (team) => {
   // --------------------------------------------------
 
   const continueSetup = () => {
+    if (
+      matchType === "test" &&
+      (!Number.isInteger(Number(testOversValue)) ||
+        Number(testOversValue) < 3 ||
+        Number(testOversValue) > 90)
+    ) {
+      alert("Overs per day for Test matches must be between 3 and 90.");
+      return;
+    }
+
     // Teams
     if (!selectedA || !selectedB) {
       alert(
@@ -6225,7 +6764,10 @@ const getTeamPlayers = (team) => {
       },
       captainA,
       captainB,
-      selectedOvers
+      selectedOvers,
+      matchType,
+      testOversValue,
+      testDaysValue
     );
   };
 
@@ -6341,6 +6883,12 @@ const getTeamPlayers = (team) => {
           )}
 
         </div>
+        {matchType === "test" && (
+          <div className="setup-card">
+            <label>Overs per day</label>
+            <input type="number" min="3" max="90" value={testOversValue} onChange={(e) => setTestOversValue(e.target.value)} />
+          </div>
+        )}
 
         {/* ==============================
             TEAM B
@@ -6426,7 +6974,7 @@ const getTeamPlayers = (team) => {
 
       </div>
 
-      <div className="setup-card">
+      {matchType !== "test" && <div className="setup-card">
         <label htmlFor="existing-match-overs">Match Overs</label>
         <select
           id="existing-match-overs"
@@ -6443,9 +6991,11 @@ const getTeamPlayers = (team) => {
           <option value="8">8 Overs</option>
           <option value="9">9 Overs</option>
           <option value="10">10 Overs</option>
+          <option value="12">12 Overs</option>
           <option value="15">15 Overs</option>
+          <option value="20">20 Overs</option>
         </select>
-      </div>
+      </div>}
 
       {/* ==============================
           CONTINUE

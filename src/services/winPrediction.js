@@ -1399,6 +1399,7 @@ export function calculateWinPrediction({
   };
 
   const winner = resolvedWinner(match, state, teams);
+  const isTest = String(match.matchType || "").toLowerCase() === "test";
 
   if (isFinished(match, winner)) {
     if (winner === "A") {
@@ -1425,14 +1426,96 @@ export function calculateWinPrediction({
 
     if (winner === "D") {
       return {
-        A: 50,
-        B: 50,
+        A: 0,
+        B: 0,
+        draw: 100,
         teamA: names.A,
         teamB: names.B,
         phase: "finished",
         reason: "draw",
       };
     }
+  }
+
+  if (isTest) {
+    const recorded = Array.isArray(match.testInnings)
+      ? match.testInnings
+      : Array.isArray(state?.testInnings) ? state.testInnings : [];
+    const inningsByIndex = new Map();
+    recorded.forEach((item) => {
+      const index = Number(item?.inningsIndex);
+      if (Number.isInteger(index) && index >= 0) {
+        inningsByIndex.set(index, item);
+      }
+    });
+    if (state?.inningsIndex != null) {
+      const index = Number(state.inningsIndex);
+      const teamId = Array.isArray(match.inningsOrder) && match.inningsOrder[index]
+        ? match.inningsOrder[index]
+        : index % 2 === 0 ? "A" : "B";
+      inningsByIndex.set(index, {
+        ...(inningsByIndex.get(index) || {}),
+        inningsIndex: index,
+        teamId,
+        runs: toNumber(state.inningsRuns),
+        wickets: toNumber(state.inningsWickets),
+        balls: toNumber(state.legalBalls),
+      });
+    }
+    const innings = [...inningsByIndex.values()].sort(
+      (a, b) => Number(a.inningsIndex) - Number(b.inningsIndex)
+    );
+    const totals = innings.reduce((acc, item) => {
+      const id = item.teamId === "B" ? "B" : "A";
+      acc[id] += toNumber(item.runs);
+      return acc;
+    }, { A: 0, B: 0 });
+    const currentIndex = Number(state?.inningsIndex ?? innings.length - 1);
+    const currentTeam = Array.isArray(match.inningsOrder) && match.inningsOrder[currentIndex]
+      ? match.inningsOrder[currentIndex]
+      : currentIndex % 2 === 0 ? "A" : "B";
+    const currentRuns = toNumber(state?.inningsRuns);
+    const currentWickets = toNumber(state?.inningsWickets);
+    const currentTeamPreviousRuns = innings
+      .filter((item) => item.teamId === currentTeam && Number(item.inningsIndex ?? -1) < currentIndex)
+      .reduce((total, item) => total + toNumber(item.runs), 0);
+    const chaseTarget = toNumber(innings.find((item) => Number(item.inningsIndex) === 0)?.runs)
+      - currentTeamPreviousRuns + 1;
+    const aggregateMargin = totals.A - totals.B;
+    const chaseProgress = currentIndex === 3 && chaseTarget > 0
+      ? clamp(currentRuns / chaseTarget, 0, 1)
+      : 0;
+    const wicketsInHand = Math.max(0, 10 - currentWickets);
+    const inningsProgress = clamp(
+      toNumber(state?.legalBalls) / Math.max(1, toNumber(match.oversPerDay || match.testOvers || 90) * 6),
+      0,
+      1
+    );
+    const draw = currentIndex === 3
+      ? clamp(46 - chaseProgress * 30 - (10 - wicketsInHand) * 1.8 - inningsProgress * 8, 8, 46)
+      : clamp(52 - Math.abs(aggregateMargin) * 0.08 - Math.max(0, currentIndex) * 3 - inningsProgress * 6, 28, 52);
+    const available = 100 - draw;
+    let lead;
+    if (currentIndex === 3 && chaseTarget > 0 && currentRuns > 0) {
+      const chaseStrength = (chaseProgress - 0.5) * 58 + (wicketsInHand - 5) * 2.5;
+      lead = currentTeam === "A"
+        ? 50 + chaseStrength
+        : 50 - chaseStrength;
+    } else {
+      lead = 50 + aggregateMargin * 0.22;
+    }
+    lead = 50 + clamp(lead - 50, -available * 0.42, available * 0.42);
+    const chanceA = Math.max(5, (lead / 100) * available);
+    const chanceB = Math.max(5, available - (lead / 100) * available);
+    const chanceTotal = chanceA + chanceB;
+    const finalA = (chanceA / chanceTotal) * available;
+    return {
+      A: round1(finalA),
+      B: round1(available - finalA),
+      draw: round1(draw),
+      teamA: names.A, teamB: names.B, phase: state ? "live" : "pre-match",
+      h2hIncluded: false, testMatch: true,
+    };
   }
 
   const h2h = extractH2H(match, teams);
@@ -1517,7 +1600,7 @@ export function calculateWinPrediction({
     const wicketsLimit = Math.max(1, playersForTeam(context.battingTeam).length);
     const ballsRemaining = Math.max(0, totalBalls - balls);
 
-    if (runs >= target) {
+    if (runs > 0 && target > 0 && runs >= target) {
       return {
         A: context.battingTeamId === "A" ? 100 : 0,
         B: context.battingTeamId === "B" ? 100 : 0,

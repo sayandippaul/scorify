@@ -23,6 +23,11 @@ import {
 
 import "./profile.css";
 
+const formatBowlingOvers = (balls) => {
+  const totalBalls = Math.max(0, Math.floor(Number(balls) || 0));
+  return `${Math.floor(totalBalls / 6)}.${totalBalls % 6}`;
+};
+
 
 function Profile({
   user,
@@ -1969,9 +1974,9 @@ function Profile({
           <div className="profile-stat-grid">
 
             <StatCard
-              label="Total Balls"
+              label="Total Overs"
               value={
-                statistics.totalBowls
+                formatBowlingOvers(statistics.totalBowls)
               }
             />
 

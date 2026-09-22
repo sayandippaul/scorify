@@ -33,6 +33,11 @@ import {
 import { ADMIN_UID } from "../config/security";
 const DEFAULT_PASSWORD = "cricket";
 
+const formatBowlingOvers = (balls) => {
+  const totalBalls = Math.max(0, Math.floor(Number(balls) || 0));
+  return `${Math.floor(totalBalls / 6)}.${totalBalls % 6}`;
+};
+
 
 /* =========================================
    SECONDARY FIREBASE AUTH
@@ -3307,9 +3312,9 @@ const isAdmin =
                   <div className="profile-stat-grid">
 
                     <StatCard
-                      label="Total Balls"
+                      label="Total Overs"
                       value={
-                        statistics.totalBowls
+                        formatBowlingOvers(statistics.totalBowls)
                       }
                     />
 

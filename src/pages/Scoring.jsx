@@ -25,6 +25,7 @@ function ScoringWinPredictionCard({ prediction, live = true }) {
   if (!fairPrediction) return null;
   const a = Math.round(Number(fairPrediction.A || 0));
   const b = Math.round(Number(fairPrediction.B || 0));
+  const draw = Math.round(Number(fairPrediction.draw || 0));
   return (
     <section className="win-prediction-card" aria-label="Live win prediction">
       <div className="win-prediction-header">
@@ -38,6 +39,12 @@ function ScoringWinPredictionCard({ prediction, live = true }) {
         <div className="win-prediction-label"><strong>{fairPrediction.teamA}</strong><b>{a}%</b></div>
         <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-a" style={{ width: `${a}%` }} /></div>
       </div>
+      {fairPrediction.testMatch && (
+        <div className="win-prediction-team">
+          <div className="win-prediction-label"><strong>Draw</strong><b>{draw}%</b></div>
+          <div className="win-prediction-track"><span className="win-prediction-fill" style={{ width: `${draw}%`, background: "#94a3b8" }} /></div>
+        </div>
+      )}
       <div className="win-prediction-team">
         <div className="win-prediction-label"><strong>{fairPrediction.teamB}</strong><b>{b}%</b></div>
         <div className="win-prediction-track"><span className="win-prediction-fill win-prediction-fill-b" style={{ width: `${b}%` }} /></div>
@@ -151,6 +158,9 @@ const TEAM_PLAYERS = (team, fallback = []) => {
 const formatOvers = (balls = 0) => {
   return `${Math.floor(Number(balls) / 6)}.${Number(balls) % 6}`;
 };
+
+const completedTestOvers = (balls = 0) =>
+  Math.ceil(Math.max(0, Number(balls) || 0) / 6);
 
 const strikeRate = (runs, balls) => {
   if (!balls) return "0.00";
@@ -286,9 +296,29 @@ const fairLiveWinPrediction = (prediction, live = true) => {
 
   const rawA = Number(prediction.A);
   const rawB = Number(prediction.B);
+  const rawDraw = Number(prediction.draw || 0);
 
   if (!Number.isFinite(rawA) || !Number.isFinite(rawB)) {
     return prediction;
+  }
+
+  if (prediction.testMatch) {
+    const testTotal = rawA + rawB + Math.max(0, rawDraw);
+    if (testTotal <= 0) return prediction;
+    const minimum = 5;
+    const available = 100 - minimum * 3;
+    const normalized = [
+      Math.max(0, rawA) / testTotal,
+      Math.max(0, rawDraw) / testTotal,
+      Math.max(0, rawB) / testTotal,
+    ];
+    const scaled = normalized.map((value) => minimum + value * available);
+    return {
+      ...prediction,
+      A: Number(scaled[0].toFixed(2)),
+      draw: Number(scaled[1].toFixed(2)),
+      B: Number((100 - scaled[0] - scaled[1]).toFixed(2)),
+    };
   }
 
   const total = rawA + rawB;
@@ -559,6 +589,10 @@ export default function Scoring() {
   ------------------------------------------------------- */
 
   const [inningsIndex, setInningsIndex] = useState(0);
+  const [currentDay, setCurrentDay] = useState(1);
+  const [testDayStartOvers, setTestDayStartOvers] = useState(0);
+  const [followOnEnforced, setFollowOnEnforced] = useState(false);
+  const [declaredInnings, setDeclaredInnings] = useState([]);
 
   const [inningsRuns, setInningsRuns] = useState(0);
   const [inningsWickets, setInningsWickets] =
@@ -733,6 +767,7 @@ export default function Scoring() {
 
   const [currentOverBalls, setCurrentOverBalls] =
     useState([]);
+  const overCompletionRef = useRef("");
 
   const [deliveries, setDeliveries] =
     useState([]);
@@ -779,6 +814,8 @@ export default function Scoring() {
 
   const [scorecardTab, setScorecardTab] =
     useState("A");
+  const [testScorecardTab, setTestScorecardTab] =
+    useState(0);
 
   /* =========================================================
      LOAD MATCH
@@ -891,7 +928,27 @@ export default function Scoring() {
         setExtras(savedState.extras ?? emptyExtras());
         setFallOfWickets(savedState.fallOfWickets ?? []);
         setCompletedOvers(savedState.completedOvers ?? []);
-        setFreeHit(savedState.freeHit ?? false);
+        setFreeHit(restored.matchType === "test" ? false : (savedState.freeHit ?? false));
+
+        const restoredCurrentDay = Number(
+          savedState.currentDay ?? restored.currentDay ?? 1
+        ) || 1;
+        const restoredOversPerDay = Number(
+          restored.oversPerDay || restored.testOvers || 90
+        ) || 90;
+        const restoredDayStartOvers = Number(
+          savedState.testDayStartOvers ?? restored.testDayStartOvers
+        );
+
+        setCurrentDay(restoredCurrentDay);
+        setTestDayStartOvers(
+          Number.isFinite(restoredDayStartOvers)
+            ? Math.max(0, restoredDayStartOvers)
+            : Math.max(0, (restoredCurrentDay - 1) * restoredOversPerDay)
+        );
+
+        setFollowOnEnforced(savedState.followOnEnforced ?? restored.followOnEnforced ?? false);
+        setDeclaredInnings(savedState.declaredInnings ?? restored.declaredInnings ?? []);
         setHistory(savedState.history ?? []);
         setPendingReplacement(savedState.pendingReplacement ?? null);
         setResult(savedState.result ?? saved.result ?? null);
@@ -1001,6 +1058,30 @@ export default function Scoring() {
     return "A";
   }, [match]);
 
+  const isTestMatch = String(match?.matchType || "").toLowerCase() === "test";
+
+  useEffect(() => {
+    if (screen !== "finished" || !matchId) return undefined;
+
+    const redirectTimer = window.setTimeout(() => {
+      navigate(`/matches/${matchId}/scorecard`, { replace: true });
+    }, 2000);
+
+    return () => window.clearTimeout(redirectTimer);
+  }, [screen, matchId, navigate]);
+
+  const testInningsOrder = useMemo(() => {
+    if (!isTestMatch) return null;
+    if (Array.isArray(match?.inningsOrder) && match.inningsOrder.length >= 4) {
+      return match.inningsOrder;
+    }
+    const first = firstBattingTeamId;
+    const second = first === "A" ? "B" : "A";
+    return followOnEnforced
+      ? [first, second, second, first]
+      : [first, second, first, second];
+  }, [isTestMatch, match?.inningsOrder, firstBattingTeamId, followOnEnforced]);
+
   /* =========================================================
      CURRENT TEAMS
   ========================================================= */
@@ -1008,7 +1089,11 @@ export default function Scoring() {
   const battingTeam = useMemo(() => {
     if (!teams) return null;
 
-    if (inningsIndex === 0) {
+    if (isTestMatch && testInningsOrder) {
+      return teams[testInningsOrder[inningsIndex] || firstBattingTeamId];
+    }
+
+    if (inningsIndex % 2 === 0) {
       return teams[firstBattingTeamId];
     }
 
@@ -1020,7 +1105,12 @@ export default function Scoring() {
   }, [
     teams,
     inningsIndex,
+    currentDay,
+    followOnEnforced,
+    declaredInnings,
     firstBattingTeamId,
+    isTestMatch,
+    testInningsOrder,
   ]);
 
   const bowlingTeam = useMemo(() => {
@@ -1032,6 +1122,86 @@ export default function Scoring() {
       ? teams.B
       : teams.A;
   }, [teams, battingTeam]);
+
+  const getTestChaseTarget = (innings, battingTeamId) => {
+    const priorInnings = (Array.isArray(innings) ? innings : [])
+      .filter((item) => Number(item.inningsIndex) < 3);
+    const opponentId = battingTeamId === "A" ? "B" : "A";
+    const opponentRuns = priorInnings
+      .filter((item) => item.teamId === opponentId)
+      .reduce((total, item) => total + Number(item.runs || 0), 0);
+    const battingRuns = priorInnings
+      .filter((item) => item.teamId === battingTeamId)
+      .reduce((total, item) => total + Number(item.runs || 0), 0);
+
+    return Math.max(1, opponentRuns - battingRuns + 1);
+  };
+
+  const testSituation = useMemo(() => {
+    if (!isTestMatch || !battingTeam) return null;
+    const saved = Array.isArray(match?.testInnings) ? match.testInnings : [];
+    const current = {
+      inningsIndex,
+      teamId: battingTeam.id,
+      teamName: battingTeam.name,
+      runs: inningsRuns,
+      wickets: inningsWickets,
+      balls: legalBalls,
+    };
+    const innings = [
+      ...saved.filter((item) => Number(item.inningsIndex) !== inningsIndex),
+      current,
+    ];
+    const totals = innings.reduce((result, item) => {
+      const key = item.teamId === "A" ? "A" : "B";
+      result[key] += Number(item.runs || 0);
+      return result;
+    }, { A: 0, B: 0 });
+    const opponent = battingTeam.id === "A" ? "B" : "A";
+    const difference = totals[battingTeam.id] - totals[opponent];
+    return {
+      totals,
+      label: difference > 0
+        ? `Lead by ${difference}`
+        : difference < 0
+          ? `Trail by ${Math.abs(difference)}`
+          : "Scores level",
+      target: inningsIndex === 3
+        ? getTestChaseTarget(innings, battingTeam.id)
+        : null,
+    };
+  }, [
+    isTestMatch,
+    battingTeam,
+    match?.testInnings,
+    inningsIndex,
+    inningsRuns,
+    inningsWickets,
+    legalBalls,
+  ]);
+
+  const testTotalCompletedOvers = isTestMatch
+    ? (match?.testInnings || [])
+        .filter((item) => Number(item.inningsIndex) !== inningsIndex)
+        .reduce((total, item) => total + completedTestOvers(item.balls), 0) +
+      completedTestOvers(legalBalls)
+    : 0;
+  const testDisplayDay = isTestMatch
+    ? Math.min(
+        Number(match?.maxDays || match?.testDays || 5),
+        Math.max(
+          Number(currentDay) || 1,
+          Math.floor(
+            testTotalCompletedOvers /
+              Number(match?.oversPerDay || match?.testOvers || 90)
+          ) + 1
+        )
+      )
+    : currentDay;
+  const canEndTestDay =
+    isTestMatch &&
+    currentOverBalls.length === 0 &&
+    legalBalls % 6 === 0;
 
   /* =========================================================
      CURRENT PLAYERS
@@ -1444,6 +1614,10 @@ export default function Scoring() {
     inningsWickets,
     legalBalls,
     currentOver,
+    currentDay,
+    testDayStartOvers,
+    followOnEnforced,
+    declaredInnings,
     strikerId,
     nonStrikerId,
     currentBowlerId,
@@ -1462,7 +1636,7 @@ export default function Scoring() {
       clone(fallOfWickets),
     completedOvers:
       clone(completedOvers),
-    freeHit,
+    freeHit: isTestMatch ? false : freeHit,
   });
 
   const pushHistory = () => {
@@ -1491,6 +1665,12 @@ export default function Scoring() {
 
     setCurrentOver(
       snapshot.currentOver
+    );
+
+    setTestDayStartOvers(
+      Number.isFinite(Number(snapshot.testDayStartOvers))
+        ? Math.max(0, Number(snapshot.testDayStartOvers))
+        : 0
     );
 
     setStrikerId(
@@ -1537,9 +1717,7 @@ export default function Scoring() {
       snapshot.completedOvers
     );
 
-    setFreeHit(
-      snapshot.freeHit
-    );
+    setFreeHit(isTestMatch ? false : snapshot.freeHit);
 
     setPendingReplacement(null);
     setExtraPanel(null);
@@ -1643,12 +1821,198 @@ export default function Scoring() {
      FINISH MATCH
   ========================================================= */
 
+  const finishTestAtLimit = () => {
+    if (!isTestMatch || screen === "finished") return;
+
+    const currentInnings = {
+      teamId: battingTeam?.id,
+      teamName: battingTeam?.name,
+      runs: inningsRuns,
+      wickets: inningsWickets,
+      balls: legalBalls,
+      battingStats,
+      bowlingStats,
+      extras,
+      deliveries,
+      fallOfWickets,
+      completedOvers,
+      inningsIndex,
+      day: currentDay,
+    };
+    const savedInnings = [
+      ...(match?.testInnings || []).filter(
+        (item) => Number(item.inningsIndex) !== inningsIndex
+      ),
+      currentInnings,
+    ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex));
+    const totals = savedInnings.reduce((result, innings) => {
+      result[innings.teamId === "A" ? "A" : "B"] += Number(innings.runs || 0);
+      return result;
+    }, { A: 0, B: 0 });
+
+    // Reaching the maximum Test-match day limit without a chase win is a draw.
+    // A win is resolved earlier when the fourth-innings target is reached or
+    // the chasing side is dismissed.
+    finishMatch("DRAW", "Match drawn", {
+      scoreA: totals.A,
+      scoreB: totals.B,
+      drawState: "draw",
+      prediction: { A: 0, B: 0, draw: 100 },
+      testInnings: savedInnings,
+      innings: savedInnings,
+      inningsOrder: testInningsOrder,
+    });
+  };
+
+  const declareDraw = ({ confirm = true } = {}) => {
+    if (!isTestMatch || screen === "finished") return;
+    if (confirm && !window.confirm("Declare this Test match as a draw?")) return;
+    const currentInnings = {
+      teamId: battingTeam?.id,
+      teamName: battingTeam?.name,
+      runs: inningsRuns,
+      wickets: inningsWickets,
+      balls: legalBalls,
+      battingStats,
+      bowlingStats,
+      extras,
+      deliveries,
+      fallOfWickets,
+      completedOvers,
+      inningsIndex,
+      day: currentDay,
+    };
+    const savedInnings = [
+      ...(match?.testInnings || []).filter(
+        (item) => Number(item.inningsIndex) !== inningsIndex
+      ),
+      currentInnings,
+    ];
+    finishMatch("DRAW", "Match drawn", {
+      scoreA: totals.A,
+      scoreB: totals.B,
+      drawState: "draw",
+      prediction: { A: 0, B: 0, draw: 100 },
+      testInnings: savedInnings,
+      innings: savedInnings,
+    });
+  };
+
+  const endTestDay = () => {
+    if (!canEndTestDay) return;
+    if (currentDay >= Number(match?.maxDays || match?.testDays || 5)) {
+      finishTestAtLimit();
+      return;
+    }
+    if (!window.confirm(`End day ${currentDay} and continue on day ${currentDay + 1}?`)) return;
+
+    const nextDay = currentDay + 1;
+    const nextDayStartOvers = Math.max(
+      0,
+      Number(testTotalCompletedOvers || currentOver || 0)
+    );
+
+    setCurrentDay(nextDay);
+    setTestDayStartOvers(nextDayStartOvers);
+
+    persistMatch({
+      currentDay: nextDay,
+      testDayStartOvers: nextDayStartOvers,
+    });
+  };
+
+  const enforceFollowOn = () => {
+    if (!isTestMatch || inningsIndex !== 2) return;
+    const first = Number(match?.testInnings?.[0]?.runs || 0);
+    const second = Number(match?.testInnings?.[1]?.runs || 0);
+    if (first < second * 2) return;
+    persistMatch({
+      followOnAvailable: false,
+      followOnEnforced: true,
+      inningsOrder: [
+        firstBattingTeamId,
+        firstBattingTeamId === "A" ? "B" : "A",
+        firstBattingTeamId === "A" ? "B" : "A",
+        firstBattingTeamId,
+      ],
+    });
+    setFollowOnEnforced(true);
+  };
+
+  const declineFollowOn = () => {
+    if (!isTestMatch || inningsIndex !== 2) return;
+    persistMatch({
+      followOnAvailable: false,
+      followOnEnforced: false,
+      inningsOrder: [
+        firstBattingTeamId,
+        firstBattingTeamId === "A" ? "B" : "A",
+        firstBattingTeamId,
+        firstBattingTeamId === "A" ? "B" : "A",
+      ],
+    });
+  };
+
   const finishMatch = (
     winner,
     text,
     finalValues = {},
     finalInningsData = null
   ) => {
+    const finalTestInnings = Array.isArray(finalValues.testInnings)
+      ? finalValues.testInnings.find(
+          (item) => Number(item.inningsIndex) === Number(inningsIndex)
+        )
+      : null;
+    const currentTestInnings = isTestMatch && battingTeam
+      ? {
+          teamId: battingTeam.id,
+          teamName: battingTeam.name,
+          runs: inningsRuns,
+          wickets: inningsWickets,
+          balls: legalBalls,
+          battingStats,
+          bowlingStats,
+          extras,
+          deliveries,
+          fallOfWickets,
+          completedOvers,
+          declared: Boolean(
+            finalInningsData?.declared ||
+            finalTestInnings?.declared ||
+            declaredInnings.includes(inningsIndex)
+          ),
+          inningsIndex,
+          day: currentDay,
+          completedOversCount: completedTestOvers(legalBalls),
+        }
+      : null;
+    const persistedTestInnings = isTestMatch
+      ? [
+          ...((Array.isArray(finalValues.testInnings)
+            ? finalValues.testInnings
+            : Array.isArray(match?.testInnings)
+              ? match.testInnings
+              : []
+          ).filter(
+            (item) => Number(item.inningsIndex) !== Number(inningsIndex)
+          )),
+          ...(finalInningsData || currentTestInnings
+            ? [{
+                ...(finalInningsData || currentTestInnings),
+                inningsIndex,
+                completedOversCount: completedTestOvers(
+                  finalInningsData?.balls ?? currentTestInnings?.balls ?? legalBalls
+                ),
+              }]
+            : []),
+        ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex))
+      : null;
+    const persistedDeclaredInnings = isTestMatch
+      ? persistedTestInnings
+          .filter((item) => item.declared)
+          .map((item) => Number(item.inningsIndex))
+      : null;
     const scoreA = Number(
       finalValues.scoreA ??
         (battingTeam?.id === "A"
@@ -1683,7 +2047,12 @@ export default function Scoring() {
       scoreB,
       wicketsA,
       wicketsB,
+      draw: winner === "DRAW" ? 100 : undefined,
     };
+
+    const finalInningsSnapshot = isTestMatch
+      ? (finalInningsData || currentTestInnings)
+      : null;
 
     const secondInningsData = finalInningsData || {
       teamId: battingTeam?.id,
@@ -1713,11 +2082,39 @@ export default function Scoring() {
       result: finalResult,
       winner,
       resultText: text,
+      drawState: winner === "DRAW" ? "draw" : finalValues.drawState,
+      prediction: finalValues.prediction,
       scoreA,
       scoreB,
       wicketsA,
       wicketsB,
       secondInningsData,
+      ...(isTestMatch
+        ? {
+            testInnings: persistedTestInnings,
+            innings: persistedTestInnings,
+            declaredInnings: persistedDeclaredInnings,
+            scoringState: {
+              ...(match?.scoringState || {}),
+              inningsIndex,
+              inningsRuns: Number(finalInningsSnapshot?.runs ?? inningsRuns),
+              inningsWickets: Number(finalInningsSnapshot?.wickets ?? inningsWickets),
+              legalBalls: Number(finalInningsSnapshot?.balls ?? legalBalls),
+              currentDay,
+              battingStats: finalInningsSnapshot?.battingStats || battingStats,
+              bowlingStats: finalInningsSnapshot?.bowlingStats || bowlingStats,
+              extras: finalInningsSnapshot?.extras ?? extras,
+              deliveries: Array.isArray(finalInningsSnapshot?.deliveries)
+                ? finalInningsSnapshot.deliveries
+                : deliveries,
+              fallOfWickets: finalInningsSnapshot?.fallOfWickets || fallOfWickets,
+              completedOvers: finalInningsSnapshot?.completedOvers || completedOvers,
+              result: finalResult,
+            },
+          }
+        : {}),
+      ...(!isTestMatch && finalValues.innings ? { innings: finalValues.innings } : {}),
+      ...(finalValues.inningsOrder ? { inningsOrder: finalValues.inningsOrder } : {}),
       ...(finalRosters
         ? {
             teamAPlayers: finalRosters.A,
@@ -1758,6 +2155,145 @@ export default function Scoring() {
     finalBalls = legalBalls,
     finalInningsData = null
   ) => {
+    if (isTestMatch) {
+      const inningsData = finalInningsData || {
+        teamId: battingTeam.id,
+        teamName: battingTeam.name,
+        runs: finalRuns,
+        wickets: finalWickets,
+        balls: finalBalls,
+        battingStats,
+        bowlingStats,
+        extras,
+        deliveries,
+        fallOfWickets,
+        completedOvers,
+        declared: declaredInnings.includes(inningsIndex),
+      };
+      const savedInnings = [
+        ...(match.testInnings || []).filter(
+          (item) => Number(item.inningsIndex) !== inningsIndex
+        ),
+        {
+          ...inningsData,
+          inningsIndex,
+          day: currentDay,
+          completedOversCount: completedTestOvers(inningsData.balls),
+        },
+      ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex));
+
+      if (inningsIndex === 2) {
+        const aggregateRuns = savedInnings.reduce((totals, item) => {
+          const teamId = item.teamId === "A" ? "A" : "B";
+          totals[teamId] += Number(item.runs || 0);
+          return totals;
+        }, { A: 0, B: 0 });
+        const twiceBattingTeamId = battingTeam.id;
+        const oneInningsTeamId = twiceBattingTeamId === "A" ? "B" : "A";
+        const twiceBattingRuns = aggregateRuns[twiceBattingTeamId];
+        const oneInningsRuns = aggregateRuns[oneInningsTeamId];
+
+        if (twiceBattingRuns < oneInningsRuns) {
+          const margin = oneInningsRuns - twiceBattingRuns;
+          const winnerName = teams[oneInningsTeamId].name;
+          finishMatch(
+            winnerName,
+            `${winnerName} won by an innings and ${margin} run${margin === 1 ? "" : "s"}`,
+            {
+              scoreA: aggregateRuns.A,
+              scoreB: aggregateRuns.B,
+              drawState: "decided",
+              testInnings: savedInnings,
+              innings: savedInnings,
+              inningsOrder: testInningsOrder,
+            }
+          );
+          return;
+        }
+      }
+
+      if (inningsIndex < 3) {
+        const nextOrder = followOnEnforced
+          ? [firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId]
+          : [firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A"];
+        persistMatch({
+          testInnings: savedInnings,
+          innings: savedInnings,
+          inningsOrder: nextOrder,
+          currentInnings: inningsIndex + 1,
+          currentDay,
+          followOnEnforced,
+          followOnAvailable:
+            inningsIndex === 1 &&
+            Number(savedInnings.find((item) => Number(item.inningsIndex) === 0)?.runs || 0) >=
+              Number(savedInnings.find((item) => Number(item.inningsIndex) === 1)?.runs || 0) * 2,
+        });
+        setInningsIndex(inningsIndex + 1);
+        setInningsRuns(0);
+        setInningsWickets(0);
+        setLegalBalls(0);
+        setCurrentOver(Math.max(0, completedTestOvers(finalBalls) - 1));
+        setStrikerId("");
+        setNonStrikerId("");
+        setCurrentBowlerId("");
+        setBattingStats({});
+        setBowlingStats({});
+        setCurrentOverBalls([]);
+        setDeliveries([]);
+        setExtras(emptyExtras());
+        setFallOfWickets([]);
+        setCompletedOvers([]);
+        setFreeHit(false);
+        setHistory([]);
+        setPendingReplacement(null);
+        setScreen("opening");
+        return;
+      }
+
+      const teamRuns = savedInnings.reduce((totals, item) => {
+        const key = item.teamId === "A" ? "A" : "B";
+        totals[key] += Number(item.runs || 0);
+        return totals;
+      }, { A: 0, B: 0 });
+      const target = getTestChaseTarget(savedInnings, battingTeam.id);
+      const wonByChase =
+        finalBalls > 0 &&
+        target > 0 &&
+        finalRuns >= target;
+      const drawnAtTargetMinusOne =
+        target > 0 && finalRuns === target - 1;
+      const winnerId = wonByChase
+        ? battingTeam.id
+        : drawnAtTargetMinusOne || teamRuns.A === teamRuns.B
+          ? null
+          : teamRuns.A > teamRuns.B ? "A" : "B";
+      const winnerName = winnerId ? teams[winnerId].name : null;
+      const inningsCounts = savedInnings.reduce((counts, item) => {
+        const key = item.teamId === "A" ? "A" : "B";
+        counts[key] += 1;
+        return counts;
+      }, { A: 0, B: 0 });
+      const margin = winnerId ? Math.abs(teamRuns.A - teamRuns.B) : 0;
+      const resultText = wonByChase
+        ? `${winnerName} won by ${wicketsInHand(battingTeam.players.length, finalWickets)} wickets`
+        : winnerId
+          ? `${winnerName} won by ${
+              inningsCounts[winnerId] < inningsCounts[winnerId === "A" ? "B" : "A"]
+                ? `an innings and ${margin} run${margin === 1 ? "" : "s"}`
+                : `${margin} run${margin === 1 ? "" : "s"}`
+            }`
+          : "Match drawn";
+      finishMatch(winnerName, resultText, {
+        scoreA: teamRuns.A,
+        scoreB: teamRuns.B,
+        testInnings: savedInnings,
+        innings: savedInnings,
+        inningsOrder: testInningsOrder,
+        drawState: winnerId ? "decided" : "draw",
+      });
+      return;
+    }
+
     if (inningsIndex === 0) {
       const inningsData = finalInningsData || {
         teamId: battingTeam.id,
@@ -1920,11 +2456,77 @@ export default function Scoring() {
     balls,
     finalInningsData = null
   ) => {
+    if (isTestMatch) {
+      if (inningsIndex === 3) {
+        const currentInnings = finalInningsData || {
+          teamId: battingTeam.id,
+          teamName: battingTeam.name,
+          runs,
+          wickets,
+          balls,
+          battingStats,
+          bowlingStats,
+          extras,
+          deliveries,
+          fallOfWickets,
+          completedOvers,
+          inningsIndex,
+          day: currentDay,
+        };
+        const savedInnings = [
+          ...(match.testInnings || []).filter(
+            (item) => Number(item.inningsIndex) !== inningsIndex
+          ),
+          {
+            ...currentInnings,
+            inningsIndex,
+            day: currentDay,
+            completedOversCount: completedTestOvers(balls),
+          },
+        ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex));
+        const totals = savedInnings.reduce((result, item) => {
+          result[item.teamId === "A" ? "A" : "B"] += Number(item.runs || 0);
+          return result;
+        }, { A: 0, B: 0 });
+        const chaseTarget = getTestChaseTarget(
+          savedInnings,
+          battingTeam.id
+        );
+
+        if (balls > 0 && chaseTarget > 0 && runs >= chaseTarget) {
+          const remaining = wicketsInHand(battingTeam.players.length, wickets);
+          finishMatch(battingTeam.name, `${battingTeam.name} won by ${remaining} wicket${remaining === 1 ? "" : "s"}`, {
+            scoreA: totals.A,
+            scoreB: totals.B,
+            testInnings: savedInnings,
+            innings: savedInnings,
+            inningsOrder: testInningsOrder,
+            drawState: "decided",
+          }, currentInnings);
+          return true;
+        }
+      }
+
+      const totalBatters = battingTeam?.players?.length || 0;
+      if (
+        (totalBatters > 0 && wickets >= totalBatters) ||
+        (finalInningsData?.battingPlayers &&
+          finalInningsData.battingPlayers.length > 0 &&
+          finalInningsData.battingPlayers.every(
+            (player) => (finalInningsData.battingStats?.[PLAYER_ID(player)]?.status || "yet") === "out"
+          ))
+      ) {
+        finishCurrentInnings(runs, wickets, balls, finalInningsData);
+        return true;
+      }
+      return false;
+    }
+
     /*
      * Chase completed.
      */
 
-    if (inningsIndex === 1) {
+    if (!isTestMatch && inningsIndex === 1) {
       const target =
         Number(
           match.firstInningsScore || 0
@@ -2059,6 +2661,14 @@ export default function Scoring() {
       seen.add(id);
       return stats[id]?.status !== "out";
     });
+  };
+
+  const getSingleBatterAfterWicket = (remaining) => {
+    if (remaining.length === 1) {
+      return remaining[0];
+    }
+
+    return null;
   };
 
   useEffect(() => {
@@ -2352,9 +2962,16 @@ export default function Scoring() {
 
   const completeOver = (
     bowlerId,
-    completedBalls = currentOverBalls
+    completedBalls = currentOverBalls,
+    { swapStrikeAtOverEnd = true } = {}
   ) => {
     const overBalls = completedBalls;
+    const validCount = overBalls.filter((ball) => ball.validBall).length;
+    const completionKey = `${inningsIndex}:${currentOver}:${legalBalls}`;
+    if (validCount < 6 || overCompletionRef.current === completionKey) {
+      return;
+    }
+    overCompletionRef.current = completionKey;
 
     const bowlerRuns =
       overBalls.reduce(
@@ -2365,12 +2982,6 @@ export default function Scoring() {
           ),
         0
       );
-
-    const validCount =
-      overBalls.filter(
-        (ball) =>
-          ball.validBall
-      ).length;
 
     /*
      * A maiden is only awarded
@@ -2405,6 +3016,7 @@ export default function Scoring() {
      */
 
     if (
+      swapStrikeAtOverEnd &&
       battingMode === 2 &&
       strikerId &&
       nonStrikerId
@@ -2447,18 +3059,49 @@ export default function Scoring() {
       }
     }
 
-    setCurrentOver(
-      (prev) => prev + 1
-    );
+    const nextOver = currentOver + 1;
+    setCurrentOver(nextOver);
 
     setCurrentOverBalls([]);
 
     setCurrentBowlerId("");
+
+    if (isTestMatch) {
+      const oversPerDay = Number(match?.oversPerDay || match?.testOvers || 90);
+      const maxDays = Number(match?.maxDays || match?.testDays || 5);
+      const dayStartOvers = Math.max(0, Number(testDayStartOvers || 0));
+      const dayLimit = dayStartOvers + oversPerDay;
+
+      if (nextOver >= dayLimit) {
+        if (currentDay >= maxDays) {
+          finishTestAtLimit();
+        } else {
+          const nextDay = currentDay + 1;
+          const nextDayStartOvers = nextOver;
+
+          setCurrentDay(nextDay);
+          setTestDayStartOvers(nextDayStartOvers);
+
+          persistMatch({
+            currentDay: nextDay,
+            testDayStartOvers: nextDayStartOvers,
+          });
+        }
+      }
+    }
   };
 
   /* =========================================================
      NORMAL RUN
   ========================================================= */
+
+  const finishStaleCompletedOver = () => {
+    if (currentOverBalls.filter((ball) => ball.validBall).length < 6) {
+      return false;
+    }
+    completeOver(currentBowlerId, currentOverBalls);
+    return true;
+  };
 
   const recordNormalRun = (
     runs
@@ -2472,6 +3115,8 @@ export default function Scoring() {
       );
       return;
     }
+
+    if (finishStaleCompletedOver()) return;
 
     pushHistory();
 
@@ -2647,6 +3292,8 @@ export default function Scoring() {
       return;
     }
 
+    if (finishStaleCompletedOver()) return;
+
     pushHistory();
 
     const ball = {
@@ -2721,6 +3368,8 @@ export default function Scoring() {
       alert("Select striker and bowler first.");
       return false;
     }
+
+    if (finishStaleCompletedOver()) return false;
 
     if (wicket && !["Run out", "Boundary Wicket"].includes(wicket.type)) {
       alert("On a No Ball, only Run out or Boundary Wicket is allowed.");
@@ -2900,8 +3549,10 @@ export default function Scoring() {
       if (wasStriker) setStrikerId("");
       if (wasNonStriker) setNonStrikerId("");
 
-      if (remaining.length === 1) {
-        const lastId = PLAYER_ID(remaining[0]);
+      const singleBatter = getSingleBatterAfterWicket(remaining);
+
+      if (singleBatter) {
+        const lastId = PLAYER_ID(singleBatter);
         newBatting[lastId] = { ...newBatting[lastId], status: "not out" };
         setBattingStats(newBatting);
         setBattingMode(1);
@@ -2927,7 +3578,7 @@ export default function Scoring() {
     }
 
     /* NB is not legal; the next legal delivery remains free hit. */
-    setFreeHit(true);
+    setFreeHit(isTestMatch ? false : true);
     return true;
   };
 
@@ -2940,6 +3591,7 @@ export default function Scoring() {
       alert("Select a bowler first.");
       return false;
     }
+    if (finishStaleCompletedOver()) return false;
     if (wicket && wicket.type !== "Stumped") {
       alert("On a Wide, only Stumped is allowed.");
       return false;
@@ -3107,6 +3759,8 @@ export default function Scoring() {
       return;
     }
 
+    if (finishStaleCompletedOver()) return;
+
     pushHistory();
 
     const bye =
@@ -3265,6 +3919,8 @@ export default function Scoring() {
       );
       return;
     }
+
+    if (finishStaleCompletedOver()) return;
 
     pushHistory();
 
@@ -4048,6 +4704,14 @@ export default function Scoring() {
     const overEnded =
       newBalls % 6 === 0;
 
+    if (isTestMatch && overEnded) {
+      completeOver(
+        bowlerKey,
+        [...currentOverBalls, ball],
+        { swapStrikeAtOverEnd: false }
+      );
+    }
+
     /*
      * =====================================================
      * FIND REMAINING BATSMEN
@@ -4067,9 +4731,12 @@ export default function Scoring() {
      * Put that batsman directly on strike.
      */
 
-    if (remainingBatsmen.length === 1) {
+    const singleBatter =
+      getSingleBatterAfterWicket(remainingBatsmen);
+
+    if (singleBatter) {
       const lastBatsman =
-        remainingBatsmen[0];
+        singleBatter;
 
       const lastBatsmanId =
         PLAYER_ID(lastBatsman);
@@ -4247,9 +4914,12 @@ export default function Scoring() {
      * If exactly one batsman remains,
      * continue directly in single-batsman mode.
      */
-    if (remainingBatsmen.length === 1) {
+    const singleBatter =
+      getSingleBatterAfterWicket(remainingBatsmen);
+
+    if (singleBatter) {
       const lastBatsman =
-        remainingBatsmen[0];
+        singleBatter;
 
       const lastBatsmanId =
         PLAYER_ID(lastBatsman);
@@ -4849,6 +5519,9 @@ export default function Scoring() {
       inningsWickets,
       legalBalls,
       currentOver,
+      currentDay,
+      followOnEnforced,
+      declaredInnings,
       strikerId,
       nonStrikerId,
       battingMode,
@@ -4860,7 +5533,8 @@ export default function Scoring() {
       extras,
       fallOfWickets,
       completedOvers,
-      freeHit,
+      freeHit: isTestMatch ? false : freeHit,
+      testDayStartOvers,
       history,
       pendingReplacement,
       result,
@@ -4870,6 +5544,29 @@ export default function Scoring() {
       baseRosters,
     };
 
+    const liveTestInnings = isTestMatch
+      ? [
+          ...(Array.isArray(match.testInnings) ? match.testInnings : []).filter(
+            (item) => Number(item.inningsIndex) !== inningsIndex
+          ),
+          {
+            inningsIndex,
+            teamId: battingTeam?.id,
+            teamName: battingTeam?.name,
+            runs: inningsRuns,
+            wickets: inningsWickets,
+            balls: legalBalls,
+            battingStats,
+            bowlingStats,
+            extras,
+            deliveries,
+            fallOfWickets,
+            completedOvers,
+            day: currentDay,
+          },
+        ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex))
+      : undefined;
+
     const updated = {
       ...match,
       scoreA,
@@ -4878,6 +5575,7 @@ export default function Scoring() {
       wicketsB,
       deliveries,
       scoringState,
+      ...(isTestMatch ? { testInnings: liveTestInnings, innings: liveTestInnings } : {}),
       ...(rosters
         ? {
             teamAPlayers: rosters.A,
@@ -4915,6 +5613,7 @@ export default function Scoring() {
     matchId,
     battingTeam,
     inningsIndex,
+    isTestMatch,
     inningsRuns,
     inningsWickets,
     legalBalls,
@@ -4930,6 +5629,8 @@ export default function Scoring() {
     extras,
     fallOfWickets,
     completedOvers,
+    currentDay,
+    testDayStartOvers,
     freeHit,
     history,
     pendingReplacement,
@@ -4983,7 +5684,14 @@ export default function Scoring() {
         </header>
 
         <section className="main-score-card">
-          <div className="innings-team-name">{liveTeamId === "A" ? match.teamAName : match.teamBName}</div>
+          <div className="innings-team-name">
+            {liveTeamId === "A" ? match.teamAName : match.teamBName}
+            {isTestMatch && (
+              <small className="test-innings-overs">
+                {formatOvers(savedState.legalBalls || 0)}
+              </small>
+            )}
+          </div>
           <div className="big-score">{liveRuns}<span>/{liveWickets}</span></div>
           <div className="overs-text">{formatOvers(savedState.legalBalls || 0)} / {match.overs || 0} overs</div>
         </section>
@@ -5021,150 +5729,19 @@ export default function Scoring() {
 ========================================================= */
 
 if (screen === "finished") {
-  const fallbackScoreA = Number(match?.scoreA || 0);
-  const fallbackScoreB = Number(match?.scoreB || 0);
-  const fallbackWicketsA = Number(match?.wicketsA || 0);
-  const fallbackWicketsB = Number(match?.wicketsB || 0);
-  const fallbackFirstTeamId = match?.firstInningsTeamId === "B" ? "B" : "A";
-  const fallbackChasingTeamId = fallbackFirstTeamId === "A" ? "B" : "A";
-  const fallbackChasingScore = fallbackChasingTeamId === "A" ? fallbackScoreA : fallbackScoreB;
-  const fallbackDefendingScore = fallbackFirstTeamId === "A" ? fallbackScoreA : fallbackScoreB;
-  const fallbackChasingWickets = fallbackChasingTeamId === "A" ? fallbackWicketsA : fallbackWicketsB;
-  const fallbackChasingTeam = teams?.[fallbackChasingTeamId];
-  const winnerName =
-    result?.winner ||
-    (fallbackScoreA === fallbackScoreB
-      ? ""
-      : fallbackChasingScore > fallbackDefendingScore
-        ? fallbackChasingTeam?.name
-        : teams?.[fallbackFirstTeamId]?.name);
-
-  const resultText =
-    result?.text ||
-    (fallbackScoreA === fallbackScoreB
-      ? "Match drawn"
-      : fallbackChasingScore > fallbackDefendingScore
-        ? `${fallbackChasingTeam?.name} won by ${wicketsInHand(
-            fallbackChasingTeam?.players?.length,
-            fallbackChasingWickets
-          )} wickets`
-        : `${teams?.[fallbackFirstTeamId]?.name} won by ${fallbackDefendingScore - fallbackChasingScore} runs`);
-
-  const scoreA = Number(
-    result?.scoreA ?? match?.scoreA ?? 0
-  );
-
-  const scoreB = Number(
-    result?.scoreB ?? match?.scoreB ?? 0
-  );
-
-  const wicketsA = Number(
-    result?.wicketsA ?? match?.wicketsA ?? 0
-  );
-
-  const wicketsB = Number(
-    result?.wicketsB ?? match?.wicketsB ?? 0
-  );
-
-  const isTie =
-    result?.winner === null ||
-    result?.winner === "Match tied" ||
-    result?.winner === "Match drawn" ||
-    resultText.toLowerCase().includes("tied") ||
-    resultText.toLowerCase().includes("draw");
-
   return (
-    <div className="scoring-page">
-      <div className="finished-card">
-
-        {/* RESULT ICON */}
-        <div className="finished-icon">
-          {isTie ? "🤝" : "🏆"}
+    <div className="scoring-page finished-redirect-page" role="status" aria-live="polite">
+      <div className="finished-redirect-card">
+        <div className="finished-redirect-spinner" aria-hidden="true">
+          <span />
         </div>
-
-        {/* WINNER */}
-        <h1 className="finished-winner">
-          {isTie ? "Match Drawn" : winnerName}
-        </h1>
-
-        {/* WIN MARGIN */}
-        <p className="finished-result-text">
-          {resultText}
-        </p>
-
-        {/* SMALL SCORECARD */}
-        <div className="finished-mini-scorecard">
-
-          {/* TEAM A */}
-          <div className="finished-team-score">
-            <div className="finished-team-name">
-              {teams?.A?.name || "Team A"}
-            </div>
-
-            <div className="finished-team-final-score">
-              {scoreA}/{wicketsA}
-            </div>
-
-            <div className="finished-team-label">
-              Final Score
-            </div>
-          </div>
-
-          {/* VS */}
-          <div className="finished-score-vs">
-            VS
-          </div>
-
-          {/* TEAM B */}
-          <div className="finished-team-score">
-            <div className="finished-team-name">
-              {teams?.B?.name || "Team B"}
-            </div>
-
-            <div className="finished-team-final-score">
-              {scoreB}/{wicketsB}
-            </div>
-
-            <div className="finished-team-label">
-              Final Score
-            </div>
-          </div>
-
+        <p className="score-eyebrow">MATCH FINISHED</p>
+        <h1>Preparing full scorecard</h1>
+        <p>Your detailed scorecard will open automatically.</p>
+        <div className="finished-redirect-progress" aria-hidden="true">
+          <span />
         </div>
-
-        {/* WINNING TEAM HIGHLIGHT */}
-        {!isTie && (
-          <div className="finished-winning-box">
-            <span>🏆 Winner</span>
-
-            <strong>
-              {winnerName}
-            </strong>
-
-            <small>
-              {resultText}
-            </small>
-          </div>
-        )}
-        {/* add the view scorecard button to view the full match scorecard here */}
-
-        <button
-          type="button"
-          className="score-primary-button finished-back-button"
-          onClick={() => navigate(`/matches/${matchId}/scorecard`)}
-        >
-          View Full Scorecard
-        </button>
-    
-        {/* GO TO ALL MATCHES */}
-        <button
-          type="button"
-          className="score-primary-button finished-back-button"
-          onClick={() => navigate("/matches")}
-        >
-          ← Go to All Matches
-        </button>
-          </div>
+      </div>
     </div>
   );
 }
@@ -5451,7 +6028,7 @@ if (screen === "finished") {
 
           <div className="live-badge">
             <span />
-            LIVE
+            {isTestMatch ? `TEST • DAY ${testDisplayDay}` : "LIVE"}
           </div>
 
         </header>
@@ -5482,9 +6059,9 @@ if (screen === "finished") {
           </div>
 
           <h2>
-            {inningsIndex === 0
-              ? "Start First Innings"
-              : "Start Second Innings"}
+            {isTestMatch
+              ? `Start Test Innings ${inningsIndex + 1}`
+              : inningsIndex === 0 ? "Start First Innings" : "Start Second Innings"}
           </h2>
 
           <p>
@@ -5492,7 +6069,7 @@ if (screen === "finished") {
             and the bowler.
           </p>
 
-          {inningsIndex === 1 && (
+          {inningsIndex === 1 && !isTestMatch && (
             <div className="target-box">
               Target:{" "}
               {Number(
@@ -5502,11 +6079,48 @@ if (screen === "finished") {
             </div>
           )}
 
+          {isTestMatch && inningsIndex === 2 && match.followOnAvailable && !followOnEnforced && (
+            <div className="test-follow-on-prompt">
+              <strong>{teams[firstBattingTeamId]?.name} can enforce the follow-on.</strong>
+              <p>
+                {teams[firstBattingTeamId]?.name} scored{" "}
+                {Number(match.testInnings?.[0]?.runs || 0)} and{" "}
+                {teams[firstBattingTeamId === "A" ? "B" : "A"]?.name} scored{" "}
+                {Number(match.testInnings?.[1]?.runs || 0)}.
+              </p>
+              <div className="test-follow-on-actions">
+                <button
+                  type="button"
+                  className="score-secondary-button test-action-follow-on"
+                  onClick={() => {
+                    if (window.confirm("Enforce the follow-on? The second team will bat again immediately.")) {
+                      enforceFollowOn();
+                    }
+                  }}
+                >
+                  Yes, enforce follow-on
+                </button>
+                <button
+                  type="button"
+                  className="score-secondary-button test-action-continue"
+                  onClick={() => {
+                    if (window.confirm("Do not enforce the follow-on and continue with the normal innings order?")) {
+                      declineFollowOn();
+                    }
+                  }}
+                >
+                  No, continue normally
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
             className="score-primary-button"
             onClick={
               startInnings
             }
+            disabled={isTestMatch && inningsIndex === 2 && match.followOnAvailable && !followOnEnforced}
           >
             Choose Openers & Bowler
           </button>
@@ -5924,6 +6538,36 @@ if (screen === "finished") {
     players: scorecardPlayersFor(bowlingSideId, {}),
   };
 
+  const liveTestScorecardInnings = isTestMatch
+    ? ((match.status === "finished" || match.status === "completed") &&
+      Array.isArray(match.testInnings) &&
+      match.testInnings.length &&
+      match.testInnings.some(
+        (item) => Number(item.inningsIndex) === Number(inningsIndex)
+      )
+        ? match.testInnings
+        : [
+            ...(Array.isArray(match.testInnings) ? match.testInnings : []).filter(
+              (item) => Number(item.inningsIndex) !== inningsIndex
+            ),
+            {
+              inningsIndex,
+              teamId: battingTeam.id,
+              teamName: battingTeam.name,
+              runs: inningsRuns,
+              wickets: inningsWickets,
+              balls: legalBalls,
+              battingStats,
+              bowlingStats,
+              extras,
+              fallOfWickets,
+              deliveries,
+              completedOvers,
+              declared: declaredInnings.includes(inningsIndex),
+            },
+          ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex)))
+    : [];
+
   return (
     <div className="scoring-page">
 
@@ -5955,7 +6599,7 @@ if (screen === "finished") {
 
         <div className="live-badge">
           <span />
-          LIVE
+        {isTestMatch ? `TEST • DAY ${testDisplayDay}` : "LIVE"}
         </div>
 
       </header>
@@ -5966,6 +6610,7 @@ if (screen === "finished") {
 
         <div className="innings-team-name">
           {battingTeam.name}
+          
         </div>
 
         <div className="big-score">
@@ -5974,18 +6619,71 @@ if (screen === "finished") {
             /
             {inningsWickets}
           </span>
+          {isTestMatch && (
+            <small className="test-innings-overs">
+              {formatOvers(legalBalls)}
+            </small>
+          )}
         </div>
 
         <div className="overs-text">
-          {formatOvers(
-            legalBalls
-          )}
-          {" / "}
-          {match.overs || 3}
-          {" overs"}
+          {!isTestMatch && formatOvers(legalBalls)}
+          {isTestMatch
+            ? `  ${
+                (() => {
+                  const oversPerDay = Number(
+                    match.oversPerDay || match.testOvers || 90
+                  );
+                  const maxDays = Number(
+                    match.maxDays || match.testDays || 5
+                  );
+                  const totalPlayed = (match.testInnings || [])
+                    .filter((item) => Number(item.inningsIndex) !== inningsIndex)
+                    .reduce(
+                      (total, item) => total + completedTestOvers(item.balls),
+                      0
+                    ) + completedTestOvers(legalBalls);
+                  const totalMatchOvers = oversPerDay * maxDays;
+                  const dayStartOvers = Math.max(
+                    0,
+                    Number(testDayStartOvers || 0)
+                  );
+                  const oversPlayedThisDay = Math.max(
+                    0,
+                    totalPlayed - dayStartOvers
+                  );
+                  const remainingForDay = Math.max(
+                    0,
+                    oversPerDay - Math.min(oversPerDay, oversPlayedThisDay)
+                  );
+
+                  return Math.min(
+                    Math.max(0, totalMatchOvers - totalPlayed),
+                    remainingForDay
+                  );
+                })()
+              } overs remaining for day`
+            : ` / ${match.overs || 3} overs`}
         </div>
 
-        {inningsIndex === 1 && (
+        {isTestMatch && (
+          <div className="test-live-summary">
+            <span>
+              Day {testDisplayDay} / {match.maxDays || match.testDays || 5}
+            </span>
+            <span>
+              Total match overs: {
+                (match.testInnings || [])
+                  .filter((item) => Number(item.inningsIndex) !== inningsIndex)
+                  .reduce((total, item) => total + completedTestOvers(item.balls), 0) +
+                completedTestOvers(legalBalls)
+              }
+            </span>
+            <span>Innings {inningsIndex + 1} of 4</span>
+          </div>
+        )}
+
+        {inningsIndex === 1 && !isTestMatch && (
           <div className="target-text">
             Target:{" "}
             {Number(
@@ -5994,9 +6692,16 @@ if (screen === "finished") {
             ) + 1}
           </div>
         )}
+        {isTestMatch && testSituation && (
+          <div className="target-text">
+            {testSituation.label}
+            {testSituation.target ? ` • Target: ${testSituation.target}` : ""}
+          </div>
+        )}
 
       </section>
 
+     
       <ScoringWinPredictionCard
         live={true}
         prediction={calculateWinPrediction({
@@ -6171,12 +6876,10 @@ if (screen === "finished") {
           </span>
 
           <small>
-            {
-              currentOverBalls.filter(
-                (ball) =>
-                  ball.validBall
-              ).length
-            }
+            {Math.min(
+              6,
+              currentOverBalls.filter((ball) => ball.validBall).length
+            )}
             /6 valid
           </small>
 
@@ -6208,7 +6911,7 @@ if (screen === "finished") {
           )}
         </div>
 
-        {freeHit && (
+        {!isTestMatch && freeHit && (
           <div className="free-hit-banner">
             🔥 FREE HIT
           </div>
@@ -6567,9 +7270,9 @@ if (screen === "finished") {
                 )}
               </div>
 
-              <div className="free-hit-preview">
-                🔥 FREE HIT
-              </div>
+              {!isTestMatch && <div className="free-hit-preview">
+                🔥 UpComing FREE HIT
+              </div>}
 
               <button
                 className="confirm-special-button"
@@ -6989,6 +7692,42 @@ if (screen === "finished") {
 
       </section>
 
+ {isTestMatch && (
+        <section className="score-actions test-score-actions">
+          <button type="button" className="score-secondary-button test-action-declare" onClick={() => {
+            if (window.confirm("Declare this innings?")) {
+              setDeclaredInnings((items) => items.includes(inningsIndex) ? items : [...items, inningsIndex]);
+              finishCurrentInnings(inningsRuns, inningsWickets, legalBalls, {
+                teamId: battingTeam.id,
+                teamName: battingTeam.name,
+                runs: inningsRuns,
+                wickets: inningsWickets,
+                balls: legalBalls,
+                battingStats,
+                bowlingStats,
+                extras,
+                deliveries,
+                fallOfWickets,
+                completedOvers,
+                declared: true,
+              });
+            }
+          }}>Declare innings</button>
+          <button type="button" className="score-secondary-button test-action-draw" onClick={declareDraw}>
+            Declare draw
+          </button>
+          <button
+            type="button"
+            className="score-secondary-button test-action-day"
+            onClick={endTestDay}
+            disabled={!canEndTestDay}
+            title={!canEndTestDay ? "Finish the current over before ending the day" : undefined}
+          >
+            End day
+          </button>
+        </section>
+      )}
+
 
 {/* end innings */}
 
@@ -7088,6 +7827,45 @@ if (screen === "finished") {
 
       <section className="scorecard-section">
 
+        {isTestMatch ? (
+          <>
+            <div className="test-scorecard-summary">
+              <strong>Test innings {testScorecardTab + 1} of 4</strong>
+              <span>Day {testDisplayDay} / {match.maxDays || match.testDays || 5} • Total overs {formatOvers(liveTestScorecardInnings.reduce((total, item) => total + Number(item.balls || 0), 0))}</span>
+            </div>
+            <div className="scorecard-tabs test-scorecard-tabs">
+              {liveTestScorecardInnings.map((innings, index) => (
+                <button
+                  key={`${innings.teamId}-${index}`}
+                  className={testScorecardTab === index ? "active" : ""}
+                  onClick={() => setTestScorecardTab(index)}
+                >
+                  {innings.teamName}
+                  {innings.declared ? " (d)" : ""}
+                  {match.followOnEnforced && index === 2 ? " (f/o)" : ""}
+                </button>
+              ))}
+            </div>
+            {liveTestScorecardInnings[testScorecardTab] ? (() => {
+              const selectedInnings = liveTestScorecardInnings[testScorecardTab];
+              const selectedTeam = teams[selectedInnings.teamId];
+              const selectedBowling = selectedInnings.teamId === "A" ? teams.B : teams.A;
+              return (
+                <Scorecard
+                  team={{ ...selectedTeam, players: scorecardPlayersFor(selectedInnings.teamId, selectedInnings.battingStats || {}) }}
+                  battingStats={selectedInnings.battingStats || {}}
+                  bowlingTeam={{ ...selectedBowling, players: scorecardPlayersFor(selectedBowling.id, selectedInnings.bowlingStats || {}) }}
+                  bowlingStats={selectedInnings.bowlingStats || {}}
+                  extras={selectedInnings.extras || emptyExtras()}
+                  fallOfWickets={selectedInnings.fallOfWickets || []}
+                />
+              );
+            })() : (
+              <p className="match-scorecard-note">This innings has not started yet.</p>
+            )}
+          </>
+        ) : (
+        <>
         <div className="scorecard-tabs">
 
           <button
@@ -7130,6 +7908,8 @@ if (screen === "finished") {
             fallOfWickets
           }
         />
+        </>
+        )}
 
       </section>
 
@@ -7171,7 +7951,7 @@ if (screen === "finished") {
 
             </div>
 
-            {freeHit && (
+            {!isTestMatch && freeHit && (
               <div className="free-hit-modal">
                 🔥 FREE HIT — only
                 Run Out or Boundary

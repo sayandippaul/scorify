@@ -15,6 +15,7 @@ import Players from "./pages/Players";
 import Teams from "./pages/Teams";
 import Matches from "./pages/Matches";
 import Scoring from "./pages/Scoring";
+import TestScoring from "./pages/TestScoring";
 import Profile from "./pages/Profile";
 import PageLoader from "./components/PageLoader";
 
@@ -428,6 +429,11 @@ function App() {
                   element={
                     <Scoring />
                   }
+                />
+
+                <Route
+                  path="/test-scoring/:matchId"
+                  element={<TestScoring />}
                 />
 
               </Routes>

@@ -38,6 +38,110 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.test-mini-scorecard {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.85rem 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.8rem;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--matches-muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+
+.test-mini-scorecard > span {
+  display: block;
+  line-height: 1.35;
+}
+
+.test-mini-innings {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+}
+
+.test-mini-innings span {
+  color: var(--matches-text);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  padding: 0.28rem 0.4rem;
+  border-radius: 0.4rem;
+  background: var(--matches-card-soft);
+}
+
+.test-teams-display,
+.test-scorecard-teams {
+  align-items: start;
+}
+
+.test-match-team,
+.test-scorecard-team {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.test-team-innings {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.test-team-innings span {
+  color: var(--matches-text);
+  font-size: 0.22rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  padding: 0.25rem 0.4rem;
+  /* border-left: 3px solid var(--matches-primary); */
+  background: var(--matches-card-soft);
+  border-radius: 0 0.35rem 0.35rem 0;
+}
+
+.test-match-team > strong,
+.test-scorecard-team > strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.test-scorecard-team > strong {
+  overflow-wrap: anywhere;
+}
+
+.test-scorecard-summary {
+  align-items: stretch;
+}
+
+.test-scorecard-summary > strong,
+.test-scorecard-summary > span {
+  flex: 1 1 180px;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.test-scorecard-tabs button {
+  min-height: 42px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.matches-page .scorecard-info-grid strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+@media (max-width: 520px) {
+  .matches-page .scorecard-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* =========================================================
    COMMON
 ========================================================= */
@@ -1343,7 +1447,95 @@
 }
 
 .match-toss-summary {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.win-prediction-history-probabilities .win-prediction-mini-track {
+  min-width: 0;
+}
+
+.win-prediction-history-probabilities .win-prediction-mini-track.draw span {
+  background: #94a3b8;
+}
+
+.match-analysis-legend .legend-draw {
+  background: #94a3b8;
+}
+
+.analysis-line.draw-line {
+  stroke: #94a3b8;
+  stroke-dasharray: 6 4;
+}
+
+.analysis-point.draw-point {
+  fill: #94a3b8;
+  stroke: #ffffff;
+}
+
+.test-scorecard-innings {
+  display: grid;
+  gap: 1rem;
+}
+
+.test-scorecard-innings-block {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.partnership-innings {
+  min-width: 0;
+}
+
+.partnership-innings + .partnership-innings {
+  margin-top: 1rem;
+}
+
+.partnership-innings-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+}
+
+.partnership-innings-header span {
+  overflow-wrap: anywhere;
+}
+
+.test-scorecard-tabs button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.test-prediction-history-probabilities {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.test-prediction-history-probabilities .prediction-history-outcome {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.test-prediction-history-probabilities .prediction-history-outcome:nth-child(2) {
+  text-align: center;
+}
+
+.test-prediction-history-probabilities .prediction-history-outcome:last-child {
+  text-align: right;
+}
+
+.test-prediction-history-probabilities .win-prediction-mini-track {
+  width: 100%;
+}
+
+/* Keep the existing track styling while allowing Test history to stack. */
+.win-prediction-history-probabilities {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   color: var(--matches-muted);
@@ -1694,7 +1886,7 @@
   }
 
   .match-team span {
-    font-size: 19px;
+    font-size: 12px;
   }
 
   .available-player {
@@ -1785,7 +1977,7 @@
   }
 
   .scorecard-teams span {
-    font-size: 18px;
+    font-size: 11px;
   }
 
   .scorecard-info-grid {
@@ -5117,5 +5309,61 @@
   body.scorecard-print-mode .scorecard-download-button,
   body.scorecard-print-mode .match-scorecard-tabs {
     display: none !important;
+  }
+}
+.match-format-badge,
+.test-match-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(30, 64, 175, 0.12);
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.test-scorecard-innings {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.test-scorecard-innings-block {
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+}
+.match-type-card{
+  margin-bottom : 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+.test-scorecard-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 12px;
+  background: rgba(96, 165, 250, 0.08);
+  color: var(--text-color, #e2e8f0);
+  font-size: 13px;
+}
+
+.test-scorecard-summary span {
+  color: var(--muted-text, #94a3b8);
+}
+
+.test-scorecard-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 700px) {
+  .test-scorecard-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
