@@ -1888,6 +1888,18 @@ export default function Scoring() {
       ),
       currentInnings,
     ];
+
+    // Build the aggregate Test score before finishing the match.
+    // The previous code referenced `totals` here without defining it,
+    // so clicking "Declare draw" threw a ReferenceError.
+    const totals = savedInnings.reduce(
+      (result, innings) => {
+        result[innings.teamId === "A" ? "A" : "B"] += Number(innings.runs || 0);
+        return result;
+      },
+      { A: 0, B: 0 }
+    );
+
     finishMatch("DRAW", "Match drawn", {
       scoreA: totals.A,
       scoreB: totals.B,
@@ -1895,6 +1907,7 @@ export default function Scoring() {
       prediction: { A: 0, B: 0, draw: 100 },
       testInnings: savedInnings,
       innings: savedInnings,
+      inningsOrder: testInningsOrder,
     });
   };
 

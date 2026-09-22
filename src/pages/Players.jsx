@@ -28,6 +28,7 @@ import {
   auth,
   db,
 } from "../firebase/firebase";
+import { calculateStrengthPoints } from "../services/playerStrength";
 
 
 import { ADMIN_UID } from "../config/security";
@@ -276,6 +277,28 @@ const idString = (value) =>
 /* Innings of a match, exactly like the match scorecard builds them */
 
 const getMatchInnings = (match) => {
+
+  const isTestMatch =
+    String(match?.matchType || "").toLowerCase() === "test";
+
+  /*
+   * Test matches persist each innings in testInnings. Unlike a
+   * limited-overs match, a player can have batting and bowling
+   * records in more than one innings, so all persisted innings
+   * must be included in the career totals.
+   */
+  if (isTestMatch) {
+    const persistedTestInnings =
+      Array.isArray(match?.testInnings)
+        ? match.testInnings
+        : Array.isArray(match?.innings)
+          ? match.innings
+          : [];
+
+    if (persistedTestInnings.length) {
+      return persistedTestInnings;
+    }
+  }
 
   const savedState =
     match?.scoringState || {};
@@ -1351,7 +1374,11 @@ function Players() {
       0
     );
     return matchesPlayed > 0
-      ? (runs + wickets * 20) / matchesPlayed
+      ? calculateStrengthPoints({
+          runs,
+          wickets,
+          matchesPlayed,
+        })
       : 0;
   };
 
@@ -3317,7 +3344,6 @@ const isAdmin =
                         formatBowlingOvers(statistics.totalBowls)
                       }
                     />
-
 
                     <StatCard
                       label="Maidens"

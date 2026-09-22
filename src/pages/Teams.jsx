@@ -16,6 +16,7 @@ import {
 
 import { db, auth } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
+import { calculateStrengthPoints } from "../services/playerStrength";
 import "./teams.css";
 /* =========================================================
    CONSTANTS
@@ -680,8 +681,11 @@ function Teams() {
       );
 
     return matchesPlayed > 0
-      ? (totalRuns + totalWickets * 20) /
-          matchesPlayed
+      ? calculateStrengthPoints({
+          runs: totalRuns,
+          wickets: totalWickets,
+          matchesPlayed,
+        })
       : 0;
   };
 

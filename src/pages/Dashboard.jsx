@@ -10,6 +10,7 @@ import {
   auth,
   db,
 } from "../firebase/firebase";
+import { calculateStrengthPoints } from "../services/playerStrength";
 
 function Dashboard() {
   // ==========================================
@@ -131,12 +132,15 @@ function Dashboard() {
 
       const battingMap = new Map();
 
-      battingStatsSnapshot.forEach((doc) => {
-        const stat = doc.data();
+      const addBattingStat = (stat, matchId) => {
+        if (!stat || typeof stat !== "object") {
+          return;
+        }
 
         const playerId =
           stat.playerId ||
-          stat.uid;
+          stat.uid ||
+          stat.id;
 
         if (!playerId) {
           return;
@@ -167,9 +171,9 @@ function Dashboard() {
 
         existing.sixes +=
           Number(stat.sixes) || 0;
-        if (stat.matchId || stat.matchID) {
+        if (matchId || stat.matchId || stat.matchID) {
           existing.matchIds.add(
-            String(stat.matchId || stat.matchID)
+            String(matchId || stat.matchId || stat.matchID)
           );
         }
 
@@ -177,7 +181,7 @@ function Dashboard() {
           playerId,
           existing
         );
-      });
+      };
 
       // ========================================
       // BOWLING STATISTICS
@@ -185,12 +189,15 @@ function Dashboard() {
 
       const bowlingMap = new Map();
 
-      bowlingStatsSnapshot.forEach((doc) => {
-        const stat = doc.data();
+      const addBowlingStat = (stat, matchId) => {
+        if (!stat || typeof stat !== "object") {
+          return;
+        }
 
         const playerId =
           stat.playerId ||
-          stat.uid;
+          stat.uid ||
+          stat.id;
 
         if (!playerId) {
           return;
@@ -229,9 +236,9 @@ function Dashboard() {
 
         existing.noBalls +=
           Number(stat.noBalls) || 0;
-        if (stat.matchId || stat.matchID) {
+        if (matchId || stat.matchId || stat.matchID) {
           existing.matchIds.add(
-            String(stat.matchId || stat.matchID)
+            String(matchId || stat.matchId || stat.matchID)
           );
         }
 
@@ -239,6 +246,81 @@ function Dashboard() {
           playerId,
           existing
         );
+      };
+
+      const getMatchInnings = (match) => {
+        const savedState = match?.scoringState || {};
+        const isTestMatch =
+          String(match?.matchType || "").toLowerCase() === "test";
+
+        if (isTestMatch) {
+          const testInnings =
+            Array.isArray(match?.testInnings)
+              ? match.testInnings
+              : Array.isArray(match?.innings)
+                ? match.innings
+                : [];
+
+          if (testInnings.length) {
+            return testInnings;
+          }
+        }
+
+        const liveInnings = savedState.battingStats
+          ? {
+              battingStats: savedState.battingStats,
+              bowlingStats: savedState.bowlingStats || {},
+            }
+          : null;
+
+        const first = match?.firstInningsData ||
+          (Number(savedState.inningsIndex) === 0 ? liveInnings : null);
+        const second = match?.secondInningsData ||
+          (Number(savedState.inningsIndex) === 1 ? liveInnings : null);
+
+        return [first, second].filter(Boolean);
+      };
+
+      const matchIdsWithScorecards = new Set();
+
+      matchesSnapshot.forEach((matchDoc) => {
+        const match = matchDoc.data() || {};
+        const matchId = String(match.matchId || matchDoc.id);
+        const innings = getMatchInnings(match);
+
+        if (!innings.length) {
+          return;
+        }
+
+        matchIdsWithScorecards.add(matchId);
+
+        innings.forEach((inning) => {
+          Object.values(inning?.battingStats || {}).forEach((stat) => {
+            addBattingStat(stat, matchId);
+          });
+
+          Object.values(inning?.bowlingStats || {}).forEach((stat) => {
+            addBowlingStat(stat, matchId);
+          });
+        });
+      });
+
+      battingStatsSnapshot.forEach((statDoc) => {
+        const stat = statDoc.data() || {};
+        const matchId = stat.matchId || stat.matchID;
+
+        if (!matchId || !matchIdsWithScorecards.has(String(matchId))) {
+          addBattingStat(stat, matchId);
+        }
+      });
+
+      bowlingStatsSnapshot.forEach((statDoc) => {
+        const stat = statDoc.data() || {};
+        const matchId = stat.matchId || stat.matchID;
+
+        if (!matchId || !matchIdsWithScorecards.has(String(matchId))) {
+          addBowlingStat(stat, matchId);
+        }
       });
 
       // ========================================
@@ -286,7 +368,7 @@ function Dashboard() {
       // ========================================
       // BOWLER RANKING
       //
-      // Points = Wickets × 20
+      // Points = Wickets × 5
       // ========================================
 
       const bowlers = Array.from(
@@ -319,7 +401,10 @@ function Dashboard() {
             economy,
 
             points:
-              player.wickets * 20,
+              calculateStrengthPoints({
+                wickets: player.wickets,
+                matchesPlayed: 1,
+              }),
           };
         })
         .sort((a, b) => {
@@ -353,7 +438,7 @@ function Dashboard() {
       // OVERALL RANKING
       //
       // Strength =
-      // Runs + (Wickets × 20)
+      // Runs + (Wickets × 5)
       // divided by matches played
       // ========================================
 
@@ -428,11 +513,11 @@ function Dashboard() {
 
             points:
               Number(
-                (
-                  (player.runs +
-                    player.wickets * 20) /
-                  (player.matchIds.size || 1)
-                ).toFixed(1)
+                calculateStrengthPoints({
+                  runs: player.runs,
+                  wickets: player.wickets,
+                  matchesPlayed: player.matchIds.size || 1,
+                }).toFixed(1)
               ),
           };
         })

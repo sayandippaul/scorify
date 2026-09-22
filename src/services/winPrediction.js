@@ -13,6 +13,8 @@
    - optional head-to-head fields when they already exist on match
    ========================================================= */
 
+import { calculateStrengthPoints } from "./playerStrength";
+
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -234,7 +236,11 @@ const historicalFormStrength = (player, battingStats, bowlingStats) => {
   );
 
   // Keep historical form as a modest adjustment, not the whole rating.
-  const formScore = (runs + wickets * 20) / matchesPlayed;
+  const formScore = calculateStrengthPoints({
+    runs,
+    wickets,
+    matchesPlayed,
+  });
   const formNormalised = clamp(50 + formScore * 0.85, 1, 100);
   const base = roleStrength(player);
 

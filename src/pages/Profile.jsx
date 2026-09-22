@@ -20,6 +20,7 @@ import {
   db,
   auth,
 } from "../firebase/firebase";
+import { calculateStrengthPoints } from "../services/playerStrength";
 
 import "./profile.css";
 
@@ -362,7 +363,7 @@ function Profile({
            PLAYER STRENGTH
 
            Same formula and source the team builder uses:
-           (career runs + wickets x 20) / matches played
+           (career runs + wickets x 5) / matches played
            ===================================================== */
 
         const strengthMatchIds =
@@ -451,9 +452,11 @@ function Profile({
         const playerStrength =
           strengthMatches > 0
             ? (
-                (strengthRuns +
-                  strengthWickets * 20) /
-                strengthMatches
+                calculateStrengthPoints({
+                  runs: strengthRuns,
+                  wickets: strengthWickets,
+                  matchesPlayed: strengthMatches,
+                })
               ).toFixed(1)
             : "0.0";
 
@@ -2417,6 +2420,28 @@ const idString = (value) =>
 /* Innings of a match, exactly like the match scorecard builds them */
 
 const getMatchInnings = (match) => {
+
+  const isTestMatch =
+    String(match?.matchType || "").toLowerCase() === "test";
+
+  /*
+   * Test matches persist each innings in testInnings. Unlike a
+   * limited-overs match, a player can have batting and bowling
+   * records in more than one innings, so all persisted innings
+   * must be included in the career totals.
+   */
+  if (isTestMatch) {
+    const persistedTestInnings =
+      Array.isArray(match?.testInnings)
+        ? match.testInnings
+        : Array.isArray(match?.innings)
+          ? match.innings
+          : [];
+
+    if (persistedTestInnings.length) {
+      return persistedTestInnings;
+    }
+  }
 
   const savedState =
     match?.scoringState || {};

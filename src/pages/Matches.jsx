@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import "./matches.css";
 import { calculateWinPrediction, getPredictionForDelivery } from "../services/winPrediction";
+import { calculateStrengthPoints } from "../services/playerStrength";
 import { db } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
 import {
@@ -3681,7 +3682,11 @@ function Matches() {
       0
     );
 
-    return (runs + wickets * 20) / matchesPlayed;
+    return calculateStrengthPoints({
+      runs,
+      wickets,
+      matchesPlayed,
+    });
   };
 
   const teamStrength = (team) => {
