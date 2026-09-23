@@ -28,6 +28,7 @@ import {
   auth,
   db,
 } from "../firebase/firebase";
+import LoadingOverlay from "../components/LoadingOverlay";
 import { calculateStrengthPoints } from "../services/playerStrength";
 import { getCareerMatchStats } from "../services/careerMatchStats";
 
@@ -298,6 +299,31 @@ const getMatchInnings = (match) => {
           : [];
 
     if (persistedTestInnings.length) {
+      const currentIndex = Number(match?.scoringState?.inningsIndex);
+      const liveState = match?.scoringState;
+      if (
+        liveState?.battingStats &&
+        Number.isInteger(currentIndex) &&
+        currentIndex >= 0
+      ) {
+        return [
+          ...persistedTestInnings.filter(
+            (inning) => Number(inning?.inningsIndex) !== currentIndex
+          ),
+          {
+            ...persistedTestInnings.find(
+              (inning) => Number(inning?.inningsIndex) === currentIndex
+            ),
+            inningsIndex: currentIndex,
+            battingStats: liveState.battingStats,
+            bowlingStats: liveState.bowlingStats || {},
+            deliveries: liveState.deliveries || [],
+          },
+        ].sort(
+          (left, right) =>
+            Number(left?.inningsIndex || 0) - Number(right?.inningsIndex || 0)
+        );
+      }
       return persistedTestInnings;
     }
   }
@@ -441,7 +467,8 @@ const computePlayerStatistics = ({
       !playerIds.has(
         idString(
           stat.playerId ||
-          stat.uid
+          stat.uid ||
+          stat.id
         )
       )
     ) {
@@ -478,7 +505,8 @@ const computePlayerStatistics = ({
       !playerIds.has(
         idString(
           stat.playerId ||
-          stat.uid
+          stat.uid ||
+          stat.id
         )
       )
     ) {
@@ -837,8 +865,8 @@ const computePlayerStatistics = ({
 
           const runs =
             Number(
-              stat.runsConceded ??
-              stat.runs
+              stat.runs ??
+              stat.runsConceded
             ) || 0;
 
           const wicketCount =
@@ -2171,22 +2199,7 @@ const isAdmin =
       ===================================== */}
 
       {loading ? (
-
-        <div className="empty-card">
-
-          <div className="empty-icon">
-            👤
-          </div>
-
-          <h3>
-            Loading players...
-          </h3>
-
-          <p>
-            Fetching player data from Firebase.
-          </p>
-
-        </div>
+        <LoadingOverlay message="Fetching player data..." inline />
 
       ) : players.length === 0 ? (
 

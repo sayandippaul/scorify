@@ -12,6 +12,7 @@ import {
 } from "../firebase/firebase";
 import { calculateStrengthPoints } from "../services/playerStrength";
 import AdminUndoDelete from "../components/AdminUndoDelete";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 function Dashboard() {
   // ==========================================
@@ -111,8 +112,8 @@ function Dashboard() {
           player.id ||
           doc.id;
 
-        playerMap.set(playerId, {
-          id: playerId,
+        playerMap.set(String(playerId), {
+          id: String(playerId),
           name: player.name || "Unknown Player",
           email: player.email || "",
         });
@@ -147,7 +148,7 @@ function Dashboard() {
           stat.uid ||
           stat.id;
 
-        if (!playerId) {
+        if (!playerId || !playerMap.has(String(playerId))) {
           return;
         }
 
@@ -156,7 +157,7 @@ function Dashboard() {
             playerId,
             name:
               stat.playerName ||
-              playerMap.get(playerId)?.name ||
+              playerMap.get(String(playerId))?.name ||
               "Unknown Player",
             runs: 0,
             balls: 0,
@@ -204,7 +205,7 @@ function Dashboard() {
           stat.uid ||
           stat.id;
 
-        if (!playerId) {
+        if (!playerId || !playerMap.has(String(playerId))) {
           return;
         }
 
@@ -213,7 +214,7 @@ function Dashboard() {
             playerId,
             name:
               stat.playerName ||
-              playerMap.get(playerId)?.name ||
+              playerMap.get(String(playerId))?.name ||
               "Unknown Player",
             wickets: 0,
             balls: 0,
@@ -228,10 +229,10 @@ function Dashboard() {
           Number(stat.wickets) || 0;
 
         existing.balls +=
-          Number(stat.balls) || 0;
+          Number(stat.legalBalls ?? stat.balls) || 0;
 
         existing.runsConceded +=
-          Number(stat.runsConceded) || 0;
+          Number(stat.runs ?? stat.runsConceded) || 0;
 
         existing.maidens +=
           Number(stat.maidens) || 0;
@@ -267,6 +268,31 @@ function Dashboard() {
                 : [];
 
           if (testInnings.length) {
+            const currentIndex = Number(savedState.inningsIndex);
+            if (
+              savedState.battingStats &&
+              Number.isInteger(currentIndex) &&
+              currentIndex >= 0
+            ) {
+              return [
+                ...testInnings.filter(
+                  (inning) => Number(inning?.inningsIndex) !== currentIndex
+                ),
+                {
+                  ...testInnings.find(
+                    (inning) => Number(inning?.inningsIndex) === currentIndex
+                  ),
+                  inningsIndex: currentIndex,
+                  battingStats: savedState.battingStats,
+                  bowlingStats: savedState.bowlingStats || {},
+                  deliveries: savedState.deliveries || [],
+                },
+              ].sort(
+                (left, right) =>
+                  Number(left?.inningsIndex || 0) -
+                  Number(right?.inningsIndex || 0)
+              );
+            }
             return testInnings;
           }
         }
@@ -590,27 +616,7 @@ function Dashboard() {
     return (
       <div className="page">
         <AdminUndoDelete />
-
-        <section className="welcome-section">
-          <div>
-            <p className="eyebrow">
-              WELCOME BACK 
-            </p>
-
-            <h2>
-              {playerName}
-            </h2>
-
-            <p className="subtitle">
-              Loading dashboard data...
-            </p>
-          </div>
-
-          <div className="cricket-ball">
-            🏏
-          </div>
-        </section>
-
+        <LoadingOverlay message="Loading dashboard data..." fullScreen />
       </div>
     );
   }

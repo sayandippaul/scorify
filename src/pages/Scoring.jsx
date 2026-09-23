@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./scoring.css";
+import LoadingOverlay from "../components/LoadingOverlay";
 import { calculateWinPrediction } from "../services/winPrediction";
 import {
   getCurrentUserId,
@@ -3027,6 +3028,21 @@ export default function Scoring() {
           String(bowlerId)
       );
 
+    if (maiden && bowlerId) {
+      setBowlingStats((previous) => {
+        const bowler = previous[bowlerId];
+        if (!bowler) return previous;
+
+        return {
+          ...previous,
+          [bowlerId]: {
+            ...bowler,
+            maidens: Number(bowler.maidens || 0) + 1,
+          },
+        };
+      });
+    }
+
     setCompletedOvers(
       (prev) => [
         ...prev,
@@ -5680,15 +5696,7 @@ export default function Scoring() {
   if (!match || !teams) {
     return (
       <div className="scoring-page">
-        <div className="loading-card">
-          <div className="loading-ball">
-            🏏
-          </div>
-
-          <h2>
-            Loading match...
-          </h2>
-        </div>
+        <LoadingOverlay message="Loading match..." fullScreen />
       </div>
     );
   }

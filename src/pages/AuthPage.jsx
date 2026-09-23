@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./authpage.css";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 import {
   registerPlayer,
@@ -409,6 +410,10 @@ function AuthPage({ onLogin }) {
   return (
 
     <main className="auth-page">
+
+      {loading && (
+        <LoadingOverlay message={isRegister ? "Creating your account..." : "Signing you in..."} fullScreen />
+      )}
 
       {/* ================================= */}
       {/* LEFT VISUAL SECTION */}

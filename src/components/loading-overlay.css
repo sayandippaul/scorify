@@ -1,0 +1,113 @@
+.loading-overlay {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  width: 100%;
+  color: var(--text-primary, #17313b);
+}
+
+.loading-overlay-full {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  min-height: 100dvh;
+  background: color-mix(in srgb, var(--page-background, #f5fbfa) 86%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.loading-overlay-inline {
+  min-height: 130px;
+}
+
+.loading-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 220px;
+  padding: 18px 22px;
+  border: 1px solid color-mix(in srgb, var(--accent-color, #0f766e) 22%, transparent);
+  border-radius: 18px;
+  background: var(--card-background, #ffffff);
+  box-shadow: 0 16px 40px rgba(15, 55, 65, 0.14);
+}
+
+.loading-overlay-orbit {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border: 2px solid color-mix(in srgb, var(--accent-color, #0f766e) 24%, transparent);
+  border-top-color: var(--accent-color, #0f766e);
+  border-radius: 50%;
+  animation: loading-overlay-spin 1s linear infinite;
+}
+
+.loading-overlay-ball {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8a80, #c92e42);
+  box-shadow: inset -4px -5px 7px rgba(87, 10, 24, 0.28);
+}
+
+.loading-overlay-seam {
+  position: absolute;
+  inset: 11px 15px;
+  border: 1px dashed rgba(255, 255, 255, 0.9);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  transform: rotate(-35deg);
+}
+
+.loading-overlay-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.loading-overlay-copy strong {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.loading-overlay-copy span {
+  color: var(--text-secondary, #647b82);
+  font-size: 12px;
+}
+
+[data-theme="dark"] .loading-overlay-full {
+  background: color-mix(in srgb, #071c25 88%, transparent);
+}
+
+[data-theme="dark"] .loading-overlay-card {
+  border-color: rgba(94, 234, 212, 0.22);
+  background: #102c35;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  color: #f1fffc;
+}
+
+[data-theme="dark"] .loading-overlay-copy span {
+  color: #a9c5c2;
+}
+
+@keyframes loading-overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 520px) {
+  .loading-overlay-card {
+    min-width: min(220px, calc(100vw - 40px));
+    padding: 15px 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-overlay-orbit {
+    animation-duration: 2.5s;
+  }
+}

@@ -22,6 +22,7 @@ import {
 } from "../firebase/firebase";
 import { getCareerMatchStats } from "../services/careerMatchStats";
 import { calculateStrengthPoints } from "../services/playerStrength";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 import "./profile.css";
 
@@ -407,7 +408,8 @@ function Profile({
               !playerIds.has(
                 idString(
                   stat.playerId ||
-                  stat.uid
+                  stat.uid ||
+                  stat.id
                 )
               )
             ) {
@@ -442,7 +444,8 @@ function Profile({
               !playerIds.has(
                 idString(
                   stat.playerId ||
-                  stat.uid
+                  stat.uid ||
+                  stat.id
                 )
               )
             ) {
@@ -1061,32 +1064,7 @@ function Profile({
      ========================================================= */
 
   if (loadingStats) {
-
-    return (
-
-      <div className="profile-page">
-
-        <section className="profile-loading-card">
-
-          <div className="profile-loading-icon">
-            👤
-          </div>
-
-          <h2>
-            Loading your profile...
-          </h2>
-
-          <p>
-            Fetching your profile and
-            career statistics.
-          </p>
-
-        </section>
-
-      </div>
-
-    );
-
+    return <LoadingOverlay message="Fetching your profile and career statistics..." fullScreen />;
   }
 
 
@@ -2482,6 +2460,31 @@ const getMatchInnings = (match) => {
           : [];
 
     if (persistedTestInnings.length) {
+      const currentIndex = Number(match?.scoringState?.inningsIndex);
+      const liveState = match?.scoringState;
+      if (
+        liveState?.battingStats &&
+        Number.isInteger(currentIndex) &&
+        currentIndex >= 0
+      ) {
+        return [
+          ...persistedTestInnings.filter(
+            (inning) => Number(inning?.inningsIndex) !== currentIndex
+          ),
+          {
+            ...persistedTestInnings.find(
+              (inning) => Number(inning?.inningsIndex) === currentIndex
+            ),
+            inningsIndex: currentIndex,
+            battingStats: liveState.battingStats,
+            bowlingStats: liveState.bowlingStats || {},
+            deliveries: liveState.deliveries || [],
+          },
+        ].sort(
+          (left, right) =>
+            Number(left?.inningsIndex || 0) - Number(right?.inningsIndex || 0)
+        );
+      }
       return persistedTestInnings;
     }
   }
@@ -3021,8 +3024,8 @@ const computePlayerStatistics = ({
 
           const runs =
             Number(
-              stat.runsConceded ??
-              stat.runs
+              stat.runs ??
+              stat.runsConceded
             ) || 0;
 
           const wicketCount =

@@ -114,11 +114,96 @@ const testInningsDisplayLabel = (innings, index, match) =>
 const testTeamInnings = (playedInnings, teamId) =>
   playedInnings.filter((innings) => innings.teamId === teamId);
 
+const scorecardTeam = (match, teamId) => {
+  const team = teamId === "B" ? match?.teamB : match?.teamA;
+  const fallbackPlayers =
+    teamId === "B" ? match?.teamBPlayers : match?.teamAPlayers;
+  const scoringStatePlayers = match?.scoringState?.rosters?.[teamId] || [];
+  const historyPlayers = match?.scoringState?.rosterHistory?.[teamId] || [];
+  const players = [
+    ...(Array.isArray(team?.players) ? team.players : []),
+    ...(Array.isArray(fallbackPlayers) ? fallbackPlayers : []),
+    ...(Array.isArray(scoringStatePlayers) ? scoringStatePlayers : []),
+    ...(Array.isArray(historyPlayers) ? historyPlayers : []),
+  ];
+  const uniquePlayers = new Map();
+
+  players.forEach((player) => {
+    const id = scorecardPlayerId(player);
+    if (id && !uniquePlayers.has(id)) uniquePlayers.set(id, player);
+  });
+
+  return {
+    ...(team || {
+      id: teamId,
+      name: teamId === "B" ? match?.teamBName : match?.teamAName,
+    }),
+    id: team?.id || teamId,
+    players: [...uniquePlayers.values()],
+  };
+};
+
 const scorecardStrikeRate = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 100).toFixed(2) : "0.00";
 
 const scorecardEconomy = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 6).toFixed(2) : "0.00";
+
+const scorecardMaidens = (innings, bowlerId, savedMaidens = 0) => {
+  const deliveries = Array.isArray(innings?.deliveries)
+    ? innings.deliveries
+    : [];
+  const completedOvers = Array.isArray(innings?.completedOvers)
+    ? innings.completedOvers
+    : [];
+  const normalizedBowlerId = String(bowlerId ?? "");
+
+  const recordedMaidens = completedOvers.filter(
+    (over) =>
+      over?.maiden === true &&
+      String(over?.bowlerId ?? "") === normalizedBowlerId
+  ).length;
+
+  const legalDelivery = (delivery) => {
+    if (delivery?.validBall === true) return true;
+    if (delivery?.validBall === false) return false;
+    return !["NB", "NO_BALL", "NO-BALL", "WD", "WIDE", "DEAD"].includes(
+      String(delivery?.type ?? delivery?.deliveryType ?? "").toUpperCase()
+    );
+  };
+
+  const overTotals = new Map();
+  deliveries.forEach((delivery) => {
+    if (!legalDelivery(delivery)) return;
+    const deliveryBowlerId = String(
+      delivery?.bowlerId ?? delivery?.bowlerPlayerId ?? ""
+    );
+    if (deliveryBowlerId !== normalizedBowlerId) return;
+
+    const overNumber = Number(delivery?.over ?? delivery?.overNumber);
+    if (!Number.isFinite(overNumber)) return;
+    const key = String(overNumber);
+    const current = overTotals.get(key) || { balls: 0, runs: 0 };
+    current.balls += 1;
+    current.runs += Number(
+      delivery?.bowlerRuns ??
+        delivery?.runsConceded ??
+        delivery?.runs ??
+        0
+    ) || 0;
+    overTotals.set(key, current);
+  });
+
+  const derivedMaidens = [...overTotals.values()].filter(
+    (over) => over.balls === 6 && over.runs === 0
+  ).length;
+
+  return Math.max(
+    Number(savedMaidens) || 0,
+    recordedMaidens,
+    derivedMaidens
+  );
+};
 
 const getTossWinnerTeamId = (match) => {
   const winner = match?.secondTossWinner;
@@ -256,16 +341,8 @@ const deliveryHistoryTotals = (deliveries = []) =>
 
 const scorecardHistoryInnings = ({ match, scoringState }) => {
   const teams = {
-    A: match?.teamA || {
-      id: "A",
-      name: match?.teamAName || "Team A",
-      players: match?.teamAPlayers || [],
-    },
-    B: match?.teamB || {
-      id: "B",
-      name: match?.teamBName || "Team B",
-      players: match?.teamBPlayers || [],
-    },
+    A: scorecardTeam(match, "A"),
+    B: scorecardTeam(match, "B"),
   };
 
   if (isTestMatchRecord(match)) {
@@ -647,6 +724,7 @@ const recordedPlayerPerformances = ({ match }) => {
         name: name || "Unknown Player",
         teamId: team?.id || null,
         teamName: team?.name || "Team",
+        teamIds: new Set(team?.id ? [String(team.id)] : []),
         runs: 0,
         balls: 0,
         fours: 0,
@@ -656,7 +734,9 @@ const recordedPlayerPerformances = ({ match }) => {
         runsConceded: 0,
       });
     }
-    return map.get(key);
+    const player = map.get(key);
+    if (team?.id) player.teamIds.add(String(team.id));
+    return player;
   };
 
   teams.forEach((team) => {
@@ -705,20 +785,22 @@ const recordedPlayerPerformances = ({ match }) => {
       : null;
 
     const battingImpact =
-      player.runs +
+      player.runs*2 +
       player.fours * 0.5 +
       player.sixes * 1.5 +
       (player.balls > 0 ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04)) : 0);
 
     const bowlingImpact =
-      player.wickets * 30 +
+      player.wickets * 5 +
       (economy == null ? 0 : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
 
     return {
       ...player,
       strikeRate,
       economy,
-      impact: battingImpact + bowlingImpact,
+      impact: (battingImpact + bowlingImpact) /
+        Math.max(1, player.teamIds.size),
+      teamIds: [...player.teamIds],
     };
   });
 };
@@ -772,6 +854,9 @@ const getPlayerOfTheMatch = (match) => {
   const allPerformances = recordedPlayerPerformances({ match });
   const performances = (winningTeam
     ? allPerformances.filter((player) =>
+        player.teamIds?.some((teamId) =>
+          String(teamId).toLowerCase() === String(winningTeam.id || "").toLowerCase()
+        ) ||
         String(player.teamId || "").toLowerCase() === String(winningTeam.id || "").toLowerCase() ||
         String(player.teamName || "").toLowerCase() === String(winningTeam.name || "").toLowerCase()
       )
@@ -781,6 +866,7 @@ const getPlayerOfTheMatch = (match) => {
 
   return performances[0] || allPerformances[0] || null;
 };
+
 
 const describeTurningPointDelivery = (delivery) => {
   const wicket = delivery?.wicket;
@@ -1007,8 +1093,8 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
         name: stats.name || scorecardPlayerName(player),
         legalBalls: Number(stats.legalBalls || 0),
         runs: Number(stats.runs || 0),
-        maidens: Number(stats.maidens || 0),
         wickets: Number(stats.wickets || 0),
+        maidens: scorecardMaidens(data, scorecardPlayerId(player), stats.maidens),
       };
     })
     .filter(
@@ -1154,19 +1240,8 @@ function FinishedMatchAnalysisGraphs({ match }) {
   if (!match) return null;
 
   const isTestMatch = isTestMatchRecord(match);
-  const teamA =
-    match.teamA || {
-      id: "A",
-      name: match.teamAName || "Team A",
-      players: match.teamAPlayers || [],
-    };
-
-  const teamB =
-    match.teamB || {
-      id: "B",
-      name: match.teamBName || "Team B",
-      players: match.teamBPlayers || [],
-    };
+  const teamA = scorecardTeam(match, "A");
+  const teamB = scorecardTeam(match, "B");
 
 
   /* =======================================================
@@ -2790,6 +2865,22 @@ function FinishedMatchAnalysisGraphs({ match }) {
         return "";
       };
 
+      const getDeliveryPlayerName = (delivery, fields) => {
+        for (const field of fields) {
+          const value = delivery?.[field];
+          const name = typeof value === "object"
+            ? getNameFromPlayer(value)
+            : "";
+          if (name) return name;
+        }
+        return "";
+      };
+
+      const hasDeliveryPlayerField = (delivery, fields) =>
+        fields.some((field) =>
+          Object.prototype.hasOwnProperty.call(delivery || {}, field)
+        );
+
       const getDeliveryRuns = (delivery) => {
         const runs = delivery?.runs;
 
@@ -2829,6 +2920,18 @@ function FinishedMatchAnalysisGraphs({ match }) {
       const isLegalDelivery = (delivery) => {
         if (delivery?.validBall === true) return true;
         if (delivery?.validBall === false) return false;
+        if (
+          delivery?.legalBall === true ||
+          delivery?.isLegal === true ||
+          delivery?.isLegalDelivery === true ||
+          delivery?.countsAsLegalBall === true
+        ) return true;
+        if (
+          delivery?.legalBall === false ||
+          delivery?.isLegal === false ||
+          delivery?.isLegalDelivery === false ||
+          delivery?.countsAsLegalBall === false
+        ) return false;
 
         const type = String(
           delivery?.type ??
@@ -2849,8 +2952,11 @@ function FinishedMatchAnalysisGraphs({ match }) {
       const isWicketDelivery = (delivery) =>
         Boolean(
           delivery?.wicket ||
+          delivery?.wicketInfo ||
           delivery?.isWicket ||
           delivery?.dismissal ||
+          delivery?.dismissalType ||
+          delivery?.wicketType ||
           Number(delivery?.wickets || 0) > 0
         );
 
@@ -2861,144 +2967,229 @@ function FinishedMatchAnalysisGraphs({ match }) {
           ? innings.deliveries
           : [];
 
-        if (!deliveries.length) {
-          const battingEntries = Object.entries(innings?.battingStats || {})
-            .sort(([, left], [, right]) => Number(right?.runs || 0) - Number(left?.runs || 0));
-          if (!battingEntries.length) return [];
+        const playedBatters = Object.entries(innings?.battingStats || {})
+          .filter(([, stats]) =>
+            stats?.status !== "yet" ||
+            Number(stats?.balls || 0) > 0 ||
+            Number(stats?.runs || 0) > 0
+          )
+          .sort(([, left], [, right]) =>
+            Number(left?.battingOrder || 0) - Number(right?.battingOrder || 0)
+          );
 
-          const first = battingEntries[0];
-          const second = battingEntries[1] || first;
-          const firstStats = first[1] || {};
-          const secondStats = second[1] || {};
-          return [{
-            innings: inningsNumber,
-            striker: first[0],
-            nonStriker: second[0],
-            strikerName: getPlayerName(innings, first[0]),
-            nonStrikerName: getPlayerName(innings, second[0]),
-            runs: Number(firstStats.runs || 0) + (second[0] === first[0] ? 0 : Number(secondStats.runs || 0)),
-            balls: Number(firstStats.balls || 0) + (second[0] === first[0] ? 0 : Number(secondStats.balls || 0)),
-          }];
-        }
+        const normalizeName = (value) =>
+          String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-        const partnerships = [];
-        let currentPair = null;
-        let currentRuns = 0;
-        let currentBalls = 0;
+        const batterIds = playedBatters.map(([id]) => id);
 
-        const savePartnership = () => {
-          if (!currentPair) return;
-          if (currentRuns <= 0 && currentBalls <= 0) return;
+        const batterName = (id) => getPlayerName(innings, id) || id || "";
 
-          const strikerName =
-            currentPair.strikerName ||
-            getPlayerName(innings, currentPair.striker) ||
-            "Batter";
-
-          const nonStrikerName =
-            currentPair.nonStrikerName ||
-            getPlayerName(innings, currentPair.nonStriker) ||
-            strikerName;
-
-          partnerships.push({
-            innings: inningsNumber,
-            striker: currentPair.striker,
-            nonStriker: currentPair.nonStriker,
-            strikerName,
-            nonStrikerName,
-            runs: currentRuns,
-            balls: currentBalls,
-          });
+        const countLegalBalls = (fromIndex, toIndex) => {
+          let balls = 0;
+          for (let index = fromIndex; index <= toIndex; index += 1) {
+            if (isLegalDelivery(deliveries[index])) balls += 1;
+          }
+          return balls;
         };
 
-        const resetPartnership = () => {
-          currentPair = null;
-          currentRuns = 0;
-          currentBalls = 0;
+        const findBatterIdByName = (rawName) => {
+          const target = normalizeName(rawName);
+          if (!target) return "";
+          const exact = batterIds.find(
+            (id) => normalizeName(batterName(id)) === target
+          );
+          if (exact) return exact;
+          return (
+            batterIds.find((id) =>
+              normalizeName(batterName(id)).includes(target)
+            ) ||
+            batterIds.find((id) =>
+              target.includes(normalizeName(batterName(id)))
+            ) ||
+            ""
+          );
         };
 
-        deliveries.forEach((delivery) => {
-          let striker = getDeliveryPlayerId(delivery, [
-            "strikerId",
-            "batterId",
-            "batsmanId",
-            "striker",
-            "batter",
-            "batsman",
-            "strikerPlayerId",
-          ]);
+        const fallOfWickets = (Array.isArray(innings?.fallOfWickets)
+          ? innings.fallOfWickets
+          : []
+        )
+          .slice()
+          .sort((a, b) => Number(a?.wicket || 0) - Number(b?.wicket || 0));
 
-          let nonStriker = getDeliveryPlayerId(delivery, [
-            "nonStrikerId",
-            "nonStrikerPlayerId",
-            "nonStrikerBatterId",
-            "nonStriker",
-            "nonStrikerBatter",
-          ]);
+        const totalInningsRuns = Number(innings?.runs || 0);
 
-          if (!striker && currentPair?.striker) {
-            striker = currentPair.striker;
-          }
-
-          if (!nonStriker && currentPair?.nonStriker) {
-            nonStriker = currentPair.nonStriker;
-          }
-
-          if (!striker && nonStriker) striker = nonStriker;
-          if (!nonStriker && striker) nonStriker = striker;
-
-          if (!striker && !nonStriker) return;
-
-          const pairKey = [
-            getId(striker),
-            getId(nonStriker),
-          ].sort().join("-");
-
-          const strikerName =
-            delivery?.strikerName ||
-            delivery?.batterName ||
-            delivery?.batsmanName ||
-            getPlayerName(innings, striker);
-
-          const nonStrikerName =
-            delivery?.nonStrikerName ||
-            delivery?.nonStrikerBatterName ||
-            getPlayerName(innings, nonStriker);
-
-          if (currentPair && currentPair.key !== pairKey) {
-            savePartnership();
-            resetPartnership();
-          }
-
-          if (!currentPair) {
-            currentPair = {
-              key: pairKey,
-              striker,
-              nonStriker,
-              strikerName,
-              nonStrikerName,
-            };
-          } else {
-            currentPair.strikerName =
-              currentPair.strikerName || strikerName;
-            currentPair.nonStrikerName =
-              currentPair.nonStrikerName || nonStrikerName;
-          }
-
-          currentRuns += getDeliveryRuns(delivery);
-
-          if (isLegalDelivery(delivery)) {
-            currentBalls += 1;
-          }
-
+        // Index of every delivery that ended in a wicket. This is only used
+        // to attach an approximate ball count to each partnership when full
+        // ball-by-ball data exists -- it is NOT used to work out who batted
+        // together, since per-ball striker/non-striker fields are not
+        // reliable enough for that.
+        const wicketDeliveryIndices = [];
+        deliveries.forEach((delivery, index) => {
           if (isWicketDelivery(delivery)) {
-            savePartnership();
-            resetPartnership();
+            wicketDeliveryIndices.push(index);
           }
         });
 
-        savePartnership();
-        return partnerships;
+        const ballsFromStats = (ids) =>
+          ids
+            .filter(Boolean)
+            .reduce((total, id) => {
+              const stats = playedBatters.find(([playerId]) =>
+                getId(playerId) === getId(id)
+              )?.[1];
+              return total + Number(stats?.balls || 0);
+            }, 0);
+
+        const ballsForSegment = (fromIndex, toIndex, ids) => {
+          if (deliveries.length && fromIndex >= 0 && fromIndex <= toIndex) {
+            return countLegalBalls(fromIndex, toIndex);
+          }
+          return ballsFromStats(ids);
+        };
+
+        const asBatter = (id) => (id ? { id, name: batterName(id) } : null);
+
+        const partnerships = [];
+
+        // ==================================================
+        // PRIMARY LOGIC — REBUILT FROM FALL OF WICKETS
+        // ==================================================
+        // Real world scorecard rule: every partnership is measured between
+        // two consecutive wickets (or from the start of the innings / the
+        // last wicket to the end of the innings). The fall-of-wickets list
+        // together with the batting order is the authoritative source for
+        // who was actually at the crease during each partnership.
+        //
+        // The innings always starts with the two openers (battingOrder 1
+        // and 2) at the crease. Every time a wicket falls: the dismissed
+        // batter (identified from the fall-of-wickets entry) is removed,
+        // the surviving batter carries straight over into the NEXT
+        // partnership, and the next player in the batting order walks in
+        // to join them. If there is no next player left, the surviving
+        // batter continues alone and that partnership is correctly shown
+        // as a single-batsman partnership (last man).
+        if (fallOfWickets.length && batterIds.length) {
+          let crease = [asBatter(batterIds[0]), asBatter(batterIds[1])].filter(
+            Boolean
+          );
+          let nextBatterIndex = 2;
+          let segmentStart = 0;
+          let previousScore = 0;
+
+          fallOfWickets.forEach((item, index) => {
+            const wicketNumber = Number(item?.wicket || index + 1);
+            const wicketScore = Number(item?.score || 0);
+            const partnershipRuns = Math.max(0, wicketScore - previousScore);
+
+            const wicketDeliveryIndex = wicketDeliveryIndices[index];
+            const segmentEnd = Number.isInteger(wicketDeliveryIndex)
+              ? wicketDeliveryIndex
+              : segmentStart - 1;
+
+            // Work out which of the two current crease batters is the one
+            // who actually got out this time, so the survivor can be
+            // carried forward correctly. Fall back to the first crease
+            // batter if the fall-of-wickets name can't be matched, so the
+            // pairing degrades gracefully instead of collapsing.
+            const outId = findBatterIdByName(item?.batter);
+            const outIndexInCrease = crease.findIndex(
+              (batter) => getId(batter?.id) === getId(outId)
+            );
+            const dismissedIndex = outIndexInCrease !== -1 ? outIndexInCrease : 0;
+            const survivor =
+              crease.find((_, idx) => idx !== dismissedIndex) || null;
+
+            const partnershipBatters = crease.filter(Boolean);
+            const first = partnershipBatters[0] || {};
+            const second = partnershipBatters[1] || null;
+
+            partnerships.push({
+              innings: inningsNumber,
+              wicket: wicketNumber,
+              striker: first.id || "",
+              nonStriker: second?.id || "",
+              strikerName: first.name || String(item?.batter || ""),
+              nonStrikerName: second?.name || "",
+              runs: partnershipRuns,
+              balls: ballsForSegment(
+                segmentStart,
+                segmentEnd,
+                partnershipBatters.map((batter) => batter.id)
+              ),
+            });
+
+            // New partnership begins: the survivor stays at the crease,
+            // the next batter in the batting order (if any) joins them.
+            const incoming =
+              nextBatterIndex < batterIds.length
+                ? asBatter(batterIds[nextBatterIndex])
+                : null;
+            if (incoming) nextBatterIndex += 1;
+
+            crease = [survivor, incoming].filter(Boolean);
+            previousScore = wicketScore;
+            segmentStart = Number.isInteger(wicketDeliveryIndex)
+              ? wicketDeliveryIndex + 1
+              : segmentStart;
+          });
+
+          // Final unbroken partnership after the last recorded wicket (the
+          // batter(s) who finished the innings not out).
+          const remainingRuns = Math.max(0, totalInningsRuns - previousScore);
+          const remainingBatters = crease.filter(Boolean);
+          const remainingBalls = ballsForSegment(
+            segmentStart,
+            deliveries.length - 1,
+            remainingBatters.map((batter) => batter.id)
+          );
+
+          if (
+            remainingBatters.length &&
+            (remainingRuns > 0 || remainingBalls > 0)
+          ) {
+            const first = remainingBatters[0] || {};
+            const second = remainingBatters[1] || null;
+            partnerships.push({
+              innings: inningsNumber,
+              wicket: partnerships.length + 1,
+              striker: first.id || "",
+              nonStriker: second?.id || "",
+              strikerName: first.name || "",
+              nonStrikerName: second?.name || "",
+              runs: remainingRuns,
+              balls: remainingBalls,
+            });
+          }
+
+          return partnerships.sort(
+            (left, right) => left.wicket - right.wicket
+          );
+        }
+
+        // ==================================================
+        // NO WICKETS FALLEN — SINGLE OPENING PARTNERSHIP
+        // ==================================================
+        if (batterIds.length) {
+          return [
+            {
+              innings: inningsNumber,
+              wicket: 1,
+              striker: batterIds[0],
+              nonStriker: batterIds[1] || "",
+              strikerName: batterName(batterIds[0]),
+              nonStrikerName: batterIds[1] ? batterName(batterIds[1]) : "",
+              runs: totalInningsRuns,
+              balls: deliveries.length
+                ? countLegalBalls(0, deliveries.length - 1)
+                : Number(
+                    playedBatters[0]?.[1]?.balls || 0
+                  ),
+            },
+          ];
+        }
+
+        return [];
       };
 
       const inningsPartnerships = partnershipInnings.map(
@@ -3007,7 +3198,9 @@ function FinishedMatchAnalysisGraphs({ match }) {
           team:
             innings?.teamName ||
             (innings?.teamId === "B" ? teamBName : teamAName),
-          items: buildPartnerships(innings, index + 1),
+          items: buildPartnerships(innings, index + 1).sort(
+            (left, right) => left.wicket - right.wicket
+          ),
         })
       );
 
@@ -3063,18 +3256,21 @@ function FinishedMatchAnalysisGraphs({ match }) {
                             <div className="partnership-player">
                               <span className="partnership-player-name">
                                 {partnership.strikerName}
+                                {!partnership.nonStrikerName && " (Single)"}
                               </span>
                             </div>
 
                             <div className="partnership-vs">
-                              +
+                              {partnership.nonStrikerName ? "+" : ""}
                             </div>
 
-                            <div className="partnership-player">
-                              <span className="partnership-player-name">
-                                {partnership.nonStrikerName}
-                              </span>
-                            </div>
+                            {partnership.nonStrikerName ? (
+                              <div className="partnership-player">
+                                <span className="partnership-player-name">
+                                  {partnership.nonStrikerName}
+                                </span>
+                              </div>
+                            ) : null}
 
                           </div>
 
@@ -3090,10 +3286,10 @@ function FinishedMatchAnalysisGraphs({ match }) {
 
                           </div>
 
-                          <div className="partnership-balls">
+                          {/* <div className="partnership-balls">
                             {partnership.balls}{" "}
                             balls
-                          </div>
+                          </div> */}
 
                         </div>
                       )
@@ -3134,8 +3330,8 @@ function MatchScorecard({ match }) {
         : "test-0";
     }
   );
-  const teamA = match.teamA || { id: "A", name: match.teamAName, players: match.teamAPlayers || [] };
-  const teamB = match.teamB || { id: "B", name: match.teamBName, players: match.teamBPlayers || [] };
+  const teamA = scorecardTeam(match, "A");
+  const teamB = scorecardTeam(match, "B");
   const savedState = match.scoringState || {};
   const liveTeamId = savedState.inningsIndex === 1
     ? (match.battingTeamId === "A" ? "B" : "A")
@@ -3803,6 +3999,7 @@ function Matches() {
     );
     setScreen("view-scorecard");
   }, [matches, scorecardMatchId]);
+
 
   // --------------------------------------------------
   // AUTO CHANGE LIVE -> UNFINISHED AFTER 7 days

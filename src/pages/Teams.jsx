@@ -19,6 +19,7 @@ import {
 import { db, auth } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
 import { calculateStrengthPoints } from "../services/playerStrength";
+import LoadingOverlay from "../components/LoadingOverlay";
 import { saveLastAdminDelete } from "../services/adminUndoService";
 import "./teams.css";
 /* =========================================================
@@ -2051,24 +2052,7 @@ function Teams() {
   if (loading) {
     return (
       <div className="page teams-page">
-
-        <div className="teams-loading-card">
-
-          <div className="loading-spinner">
-            ⏳
-          </div>
-
-          <h3>
-            Loading teams...
-          </h3>
-
-          <p>
-            Fetching teams and
-            player statistics.
-          </p>
-
-        </div>
-
+        <LoadingOverlay message="Fetching teams and player statistics..." fullScreen />
       </div>
     );
   }
