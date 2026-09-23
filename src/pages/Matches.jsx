@@ -67,6 +67,37 @@ const scorecardPlayerId = (player) =>
 const scorecardPlayerName = (player) =>
   player?.name || player?.playerName || "Unknown Player";
 
+const isScorecardSubstitute = (match, teamId, player) => {
+  const teamKey = ["A", "B"].includes(String(teamId))
+    ? String(teamId)
+    : String(match?.teamA?.id || match?.teamAId || "") === String(teamId)
+      ? "A"
+      : String(match?.teamB?.id || match?.teamBId || "") === String(teamId)
+        ? "B"
+        : String(teamId);
+  const basePlayers = match?.scoringState?.baseRosters?.[teamKey] || [];
+  const historyPlayers = match?.scoringState?.rosterHistory?.[teamKey] || [];
+  const playerId = scorecardPlayerId(player);
+  if (!playerId || !historyPlayers.length) return false;
+  const wasAddedDuringMatch = historyPlayers.some(
+    (historyPlayer) => scorecardPlayerId(historyPlayer) === playerId
+  );
+  const wasInStartingSquad = basePlayers.some(
+    (basePlayer) => scorecardPlayerId(basePlayer) === playerId
+  );
+  return wasAddedDuringMatch && !wasInStartingSquad;
+};
+
+const scorecardDisplayName = (match, teamId, player) =>
+  `${scorecardPlayerName(player)}${
+    isScorecardSubstitute(match, teamId, player) ? " (sub)" : ""
+  }`;
+
+const scorecardDisplayStatName = (match, teamId, player, name) =>
+  `${name || scorecardPlayerName(player)}${
+    isScorecardSubstitute(match, teamId, player) ? " (sub)" : ""
+  }`;
+
 const scorecardOvers = (balls = 0) =>
   `${Math.floor(Number(balls || 0) / 6)}.${Number(balls || 0) % 6}`;
 
@@ -1007,7 +1038,7 @@ function MatchMatchImpactSections({ match, scoringState }) {
 
         {player ? (
           <div className="match-impact-content">
-            <strong>{player.name}</strong>
+            <strong>{scorecardDisplayName(match, player.teamId, player)}</strong>
             <span>{player.teamName}</span>
             <div className="match-impact-stats">
               {player.runs > 0 && <small>{player.runs} runs</small>}
@@ -1044,7 +1075,7 @@ function MatchMatchImpactSections({ match, scoringState }) {
   );
 }
 
-function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
+function MatchInningsScorecard({ innings, battingTeam, bowlingTeam, match }) {
   if (!battingTeam) return null;
 
   const data = innings || {};
@@ -1060,7 +1091,12 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
 
     return {
       id: scorecardPlayerId(player),
-      name: stats.name || scorecardPlayerName(player),
+      name: scorecardDisplayStatName(
+        match,
+        battingTeam.id,
+        player,
+        stats.name
+      ),
       battingOrder: stats.battingOrder || index + 1,
       runs: Number(stats.runs || 0),
       balls: Number(stats.balls || 0),
@@ -1090,7 +1126,12 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam }) {
 
       return {
         id: scorecardPlayerId(player),
-        name: stats.name || scorecardPlayerName(player),
+        name: scorecardDisplayStatName(
+          match,
+          bowlingTeam.id,
+          player,
+          stats.name
+        ),
         legalBalls: Number(stats.legalBalls || 0),
         runs: Number(stats.runs || 0),
         wickets: Number(stats.wickets || 0),
@@ -3374,6 +3415,7 @@ function MatchScorecard({ match }) {
         innings={data}
         battingTeam={battingTeam}
         bowlingTeam={bowlingTeam}
+        match={match}
       />
     );
   };

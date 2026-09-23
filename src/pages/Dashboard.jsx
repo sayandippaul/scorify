@@ -120,16 +120,38 @@ function Dashboard() {
       });
 
       const signedInUser = auth.currentUser;
+      const normalizedUid = String(
+          signedInUser?.uid || ""
+      ).trim();
+      const normalizedEmail = String(
+          signedInUser?.email || ""
+      ).trim().toLowerCase();
       const signedInPlayer =
-        signedInUser &&
-        playerMap.get(
-          signedInUser.uid
-        );
+          [...playerMap.values()].find(
+            (player) =>
+              String(player.id).trim() === normalizedUid ||
+              String(player.email).trim().toLowerCase() === normalizedEmail
+          ) || null;
+
+      let savedUser = null;
+      try {
+          const savedSession =
+            localStorage.getItem("cricket_auth_session") ||
+            localStorage.getItem("cricket_remembered_auth") ||
+            sessionStorage.getItem("cricket_auth_session");
+          savedUser = savedSession
+            ? JSON.parse(savedSession)
+            : null;
+      } catch (storageError) {
+          console.warn("Unable to read saved player session:", storageError);
+      }
 
       setPlayerName(
-        signedInPlayer?.name?.trim() ||
+          signedInPlayer?.name?.trim() ||
           signedInUser?.displayName?.trim() ||
-          "Player"
+            savedUser?.name?.trim() ||
+            savedUser?.displayName?.trim() ||
+            "Player"
       );
 
       // ========================================

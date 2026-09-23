@@ -262,9 +262,13 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
         );
     })) {
       result.manOfMatch += 1;
-    } else if (winner && participantSides.has(winner) && performances.length) {
-      const winnerPlayers = performances.filter((player) => player.side === winner);
-      const best = [...winnerPlayers].sort((a, b) => b.impact - a.impact)[0];
+    } else if (performances.length) {
+      // Winning matches consider performers from the winning side. Drawn
+      // matches have no winning side, so use the best performer overall.
+      const candidates = winner
+        ? performances.filter((player) => player.side === winner)
+        : performances;
+      const best = [...candidates].sort((a, b) => b.impact - a.impact)[0];
       if (best && ids.has(best.id)) result.manOfMatch += 1;
     }
   });
