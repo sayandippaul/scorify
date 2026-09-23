@@ -791,7 +791,7 @@ const recordedPlayerPerformances = ({ match }) => {
       (player.balls > 0 ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04)) : 0);
 
     const bowlingImpact =
-      player.wickets * 5 +
+      player.wickets * 7 +
       (economy == null ? 0 : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
 
     return {

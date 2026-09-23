@@ -63,6 +63,43 @@ const inningsFor = (match) => {
   return [match?.firstInningsData, match?.secondInningsData].filter(Boolean);
 };
 
+export const getMaidenCount = (innings, bowlerId, savedMaidens = 0) => {
+  const normalizedBowlerId = idOf(bowlerId);
+  const completedOvers = Array.isArray(innings?.completedOvers)
+    ? innings.completedOvers
+    : [];
+  const recorded = completedOvers.filter(
+    (over) =>
+      over?.maiden === true &&
+      idOf(over?.bowlerId) === normalizedBowlerId
+  ).length;
+
+  const deliveries = Array.isArray(innings?.deliveries)
+    ? innings.deliveries
+    : [];
+  const legal = (delivery) => {
+    if (delivery?.validBall !== undefined) return delivery.validBall === true;
+    if (delivery?.legalBall !== undefined) return delivery.legalBall === true;
+    return !["NB", "NO_BALL", "NO-BALL", "WD", "WIDE", "DEAD"].includes(
+      String(delivery?.type ?? delivery?.deliveryType ?? "").toUpperCase()
+    );
+  };
+  const overs = new Map();
+  deliveries.forEach((delivery) => {
+    if (!legal(delivery) || idOf(delivery?.bowlerId ?? delivery?.bowlerPlayerId) !== normalizedBowlerId) return;
+    const overNumber = Number(delivery?.over ?? delivery?.overNumber);
+    if (!Number.isFinite(overNumber)) return;
+    const current = overs.get(overNumber) || { balls: 0, runs: 0 };
+    current.balls += 1;
+    current.runs += Number(
+      delivery?.bowlerRuns ?? delivery?.runsConceded ?? delivery?.runs ?? 0
+    ) || 0;
+    overs.set(overNumber, current);
+  });
+  const derived = [...overs.values()].filter((over) => over.balls === 6 && over.runs === 0).length;
+  return Math.max(Number(savedMaidens) || 0, recorded, derived);
+};
+
 const performanceForMatch = (match) => {
   const map = new Map();
   const teams = { A: teamOfMatch(match, "A"), B: teamOfMatch(match, "B") };
@@ -72,6 +109,7 @@ const performanceForMatch = (match) => {
     if (!key) return;
     const current = map.get(key) || {
       id: key,
+      name: String(stats?.name ?? stats?.playerName ?? id ?? "").trim().toLowerCase(),
       side,
       runs: 0,
       balls: 0,
@@ -80,11 +118,15 @@ const performanceForMatch = (match) => {
       wickets: 0,
       legalBalls: 0,
       conceded: 0,
+      maidens: 0,
+      teamIds: new Set(),
     };
+    current.teamIds.add(String(teams[side]?.id || side));
     if (bowling) {
       current.wickets += Number(stats?.wickets || 0);
       current.legalBalls += Number(stats?.legalBalls ?? stats?.balls ?? 0);
       current.conceded += Number(stats?.runs ?? stats?.runsConceded ?? 0);
+      current.maidens += Number(stats?.maidens ?? 0);
     } else {
       current.runs += Number(stats?.runs || 0);
       current.balls += Number(stats?.balls || 0);
@@ -99,18 +141,39 @@ const performanceForMatch = (match) => {
     const bowlingSide = battingSide === "A" ? "B" : "A";
     Object.entries(innings?.battingStats || {}).forEach(([id, stats]) => add(id, stats, battingSide));
     Object.entries(innings?.bowlingStats || {}).forEach(([id, stats]) => add(id, stats, bowlingSide, true));
+    Object.entries(innings?.bowlingStats || {}).forEach(([id, stats]) => {
+      const player = map.get(idOf(id));
+      if (player) player.maidens = Math.max(
+        player.maidens,
+        getMaidenCount(innings, id, stats?.maidens)
+      );
+    });
   });
 
   return [...map.values()].map((player) => ({
     ...player,
-    impact:
-      player.runs +
-      player.fours * 0.5 +
-      player.sixes * 1.5 +
-      player.wickets * 30 +
-      (player.legalBalls
-        ? Math.max(-8, Math.min(8, (6.5 - (player.conceded / player.legalBalls) * 6) * 2))
-        : 0),
+    impact: (() => {
+      const strikeRate = player.balls > 0
+        ? (player.runs / player.balls) * 100
+        : 0;
+      const economy = player.legalBalls > 0
+        ? (player.conceded / player.legalBalls) * 6
+        : null;
+      const battingImpact =
+        player.runs * 2 +
+        player.fours * 0.5 +
+        player.sixes * 1.5 +
+        (player.balls > 0
+          ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04))
+          : 0);
+      const bowlingImpact =
+        player.wickets * 7 +
+        (economy == null
+          ? 0
+          : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
+      return (battingImpact + bowlingImpact) /
+        Math.max(1, new Set(player.teamIds || [player.side]).size);
+    })(),
   }));
 };
 
@@ -172,7 +235,34 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
       tournamentParticipation.set(tournamentId, entry);
     }
 
-    if (winner && participantSides.has(winner) && performances.length) {
+    const explicitAward = [
+      match?.playerOfMatch,
+      match?.playerOfTheMatch,
+      match?.manOfMatch,
+      match?.manOfTheMatch,
+      match?.playerOfMatchId,
+      match?.playerOfTheMatchId,
+      match?.manOfMatchId,
+      match?.manOfTheMatchId,
+      match?.playerOfMatchName,
+      match?.playerOfTheMatchName,
+      match?.manOfMatchName,
+      match?.manOfTheMatchName,
+      match?.result?.playerOfMatch,
+      match?.result?.playerOfTheMatch,
+      match?.result?.manOfMatch,
+    ].flatMap((value) => (Array.isArray(value) ? value : [value])).filter(Boolean);
+    if (explicitAward.some((award) => {
+      const awardId = idOf(award);
+      const awardName = nameOf(award);
+      return ids.has(awardId) ||
+        performances.some((player) =>
+          (awardId && player.id === awardId) ||
+          (awardName && player.name === awardName)
+        );
+    })) {
+      result.manOfMatch += 1;
+    } else if (winner && participantSides.has(winner) && performances.length) {
       const winnerPlayers = performances.filter((player) => player.side === winner);
       const best = [...winnerPlayers].sort((a, b) => b.impact - a.impact)[0];
       if (best && ids.has(best.id)) result.manOfMatch += 1;

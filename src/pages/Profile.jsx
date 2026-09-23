@@ -20,7 +20,10 @@ import {
   db,
   auth,
 } from "../firebase/firebase";
-import { getCareerMatchStats } from "../services/careerMatchStats";
+import {
+  getCareerMatchStats,
+  getMaidenCount,
+} from "../services/careerMatchStats";
 import { calculateStrengthPoints } from "../services/playerStrength";
 import LoadingOverlay from "../components/LoadingOverlay";
 
@@ -2106,79 +2109,6 @@ function Profile({
           </div>
 
 
-          <div className="profile-result-grid">
-
-
-            <div className="profile-result-card">
-
-              <span className="result-icon">
-                🏆
-              </span>
-
-
-              <div>
-
-                <span>
-                  Wins
-                </span>
-
-
-                <strong>
-                  {statistics.wins}
-                </strong>
-
-              </div>
-
-            </div>
-
-
-            <div className="profile-result-card">
-
-              <span className="result-icon">
-                ❌
-              </span>
-
-
-              <div>
-
-                <span>
-                  Losses
-                </span>
-
-
-                <strong>
-                  {statistics.losses}
-                </strong>
-
-              </div>
-
-            </div>
-
-
-            <div className="profile-result-card">
-
-              <span className="result-icon">
-                📊
-              </span>
-
-
-              <div>
-
-                <span>
-                  Win Rate
-                </span>
-
-
-                <strong>
-                  {statistics.winPercentage}%
-                </strong>
-
-              </div>
-
-            </div>
-
-          </div>
-
         </div>
 
       </section>
@@ -2957,8 +2887,11 @@ const computePlayerStatistics = ({
               legalBalls,
               runs,
               wicketCount,
-              maidenCount:
-                Number(bowl.maidens) || 0,
+              maidenCount: getMaidenCount(
+                inning,
+                bowl.id || bowl.playerId || bowl.uid || [...playerIds][0],
+                bowl.maidens
+              ),
               match,
             });
 

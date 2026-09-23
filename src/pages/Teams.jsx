@@ -342,7 +342,15 @@ function Teams() {
     loadData();
   }, [tournamentId]);
 
-  const visibleTeams = tournamentId ? tournamentTeams : teams;
+  const visibleTeams = (tournamentId ? tournamentTeams : teams)
+    .slice()
+    .sort((a, b) =>
+      String(a.name || a.teamName || "Unnamed Team").localeCompare(
+        String(b.name || b.teamName || "Unnamed Team"),
+        undefined,
+        { sensitivity: "base" }
+      )
+    );
 
   // =========================================================
   // PLAYER LOOKUP
@@ -1484,11 +1492,9 @@ function Teams() {
           .trim()
           .toLowerCase();
 
-      if (!text) {
-        return players;
-      }
-
-      return players.filter(
+      const matchingPlayers = !text
+        ? players
+        : players.filter(
         (player) =>
           String(
             player.name || ""
@@ -1505,6 +1511,14 @@ function Teams() {
           )
             .toLowerCase()
             .includes(text)
+        );
+
+      return matchingPlayers.slice().sort((a, b) =>
+        String(a.name || "").localeCompare(
+          String(b.name || ""),
+          undefined,
+          { sensitivity: "base" }
+        )
       );
     }, [
       players,
@@ -2569,18 +2583,12 @@ function Teams() {
                   comparisonData
                     .playersA
                     .slice()
-                    .sort(
-                      (a, b) =>
-                        calculatePlayerStrength(
-                          b,
-                          teamA.id ||
-                            teamA.teamId
-                        ) -
-                        calculatePlayerStrength(
-                          a,
-                          teamA.id ||
-                            teamA.teamId
-                        )
+                    .sort((a, b) =>
+                      String(a.name || "").localeCompare(
+                        String(b.name || ""),
+                        undefined,
+                        { sensitivity: "base" }
+                      )
                     )
                     .map(
                       (
@@ -2647,18 +2655,12 @@ function Teams() {
                   comparisonData
                     .playersB
                     .slice()
-                    .sort(
-                      (a, b) =>
-                        calculatePlayerStrength(
-                          b,
-                          teamB.id ||
-                            teamB.teamId
-                        ) -
-                        calculatePlayerStrength(
-                          a,
-                          teamB.id ||
-                            teamB.teamId
-                        )
+                    .sort((a, b) =>
+                      String(a.name || "").localeCompare(
+                        String(b.name || ""),
+                        undefined,
+                        { sensitivity: "base" }
+                      )
                     )
                     .map(
                       (
@@ -3650,19 +3652,13 @@ function Teams() {
                       selectedTeam
                     )
                       .slice()
-                      .sort(
-                        (a, b) =>
-                          calculatePlayerStrength(
-                            b,
-                            selectedTeam.id ||
-                              selectedTeam.teamId
-                          ) -
-                          calculatePlayerStrength(
-                            a,
-                            selectedTeam.id ||
-                              selectedTeam.teamId
-                          )
+                    .sort((a, b) =>
+                      String(a.name || "").localeCompare(
+                        String(b.name || ""),
+                        undefined,
+                        { sensitivity: "base" }
                       )
+                    )
                       .map(
                         (
                           player

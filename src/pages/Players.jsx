@@ -30,7 +30,10 @@ import {
 } from "../firebase/firebase";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { calculateStrengthPoints } from "../services/playerStrength";
-import { getCareerMatchStats } from "../services/careerMatchStats";
+import {
+  getCareerMatchStats,
+  getMaidenCount,
+} from "../services/careerMatchStats";
 
 
 import { ADMIN_UID } from "../config/security";
@@ -798,8 +801,11 @@ const computePlayerStatistics = ({
               legalBalls,
               runs,
               wicketCount,
-              maidenCount:
-                Number(bowl.maidens) || 0,
+              maidenCount: getMaidenCount(
+                inning,
+                bowl.id || bowl.playerId || bowl.uid || [...playerIds][0],
+                bowl.maidens
+              ),
               match,
             });
 
@@ -888,8 +894,7 @@ const computePlayerStatistics = ({
             legalBalls,
             runs,
             wicketCount,
-            maidenCount:
-              Number(stat.maidens) || 0,
+            maidenCount: Number(stat.maidens) || 0,
             match,
           });
 
@@ -2054,7 +2059,8 @@ const isAdmin =
   ========================================= */
 
   const filteredPlayers =
-    visiblePlayers.filter(
+    visiblePlayers
+      .filter(
 
       (player) =>
         player.name
@@ -2063,7 +2069,14 @@ const isAdmin =
             search.toLowerCase()
           )
 
-    );
+      )
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(
+          String(b.name || ""),
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
 
 
   /* =========================================
@@ -3505,79 +3518,6 @@ const isAdmin =
 
                   </div>
 
-
-                  <div className="profile-result-grid">
-
-
-                    <div className="profile-result-card">
-
-                      <span className="result-icon">
-                        🏆
-                      </span>
-
-
-                      <div>
-
-                        <span>
-                          Wins
-                        </span>
-
-
-                        <strong>
-                          {statistics.wins}
-                        </strong>
-
-                      </div>
-
-                    </div>
-
-
-                    <div className="profile-result-card">
-
-                      <span className="result-icon">
-                        ❌
-                      </span>
-
-
-                      <div>
-
-                        <span>
-                          Losses
-                        </span>
-
-
-                        <strong>
-                          {statistics.losses}
-                        </strong>
-
-                      </div>
-
-                    </div>
-
-
-                    <div className="profile-result-card">
-
-                      <span className="result-icon">
-                        📊
-                      </span>
-
-
-                      <div>
-
-                        <span>
-                          Win Rate
-                        </span>
-
-
-                        <strong>
-                          {statistics.winPercentage}%
-                        </strong>
-
-                      </div>
-
-                    </div>
-
-                  </div>
 
                 </div>
 
