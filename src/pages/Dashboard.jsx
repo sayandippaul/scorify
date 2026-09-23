@@ -11,6 +11,7 @@ import {
   db,
 } from "../firebase/firebase";
 import { calculateStrengthPoints } from "../services/playerStrength";
+import AdminUndoDelete from "../components/AdminUndoDelete";
 
 function Dashboard() {
   // ==========================================
@@ -21,6 +22,7 @@ function Dashboard() {
   const [teamCount, setTeamCount] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
   const [inningsCount, setInningsCount] = useState(0);
+  const [tournamentCount, setTournamentCount] = useState(0);
   const [playerName, setPlayerName] = useState(
     auth.currentUser?.displayName?.trim() ||
       "Player"
@@ -72,6 +74,7 @@ function Dashboard() {
         teamsSnapshot,
         matchesSnapshot,
         inningsSnapshot,
+        tournamentsSnapshot,
         battingStatsSnapshot,
         bowlingStatsSnapshot,
       ] = await Promise.all([
@@ -79,6 +82,7 @@ function Dashboard() {
         getDocs(collection(db, "teams")),
         getDocs(collection(db, "matches")),
         getDocs(collection(db, "innings")),
+        getDocs(collection(db, "tournaments")),
         getDocs(collection(db, "battingStats")),
         getDocs(collection(db, "bowlingStats")),
       ]);
@@ -91,6 +95,7 @@ function Dashboard() {
       setTeamCount(teamsSnapshot.size);
       setMatchCount(matchesSnapshot.size);
       setInningsCount(inningsSnapshot.size);
+      setTournamentCount(tournamentsSnapshot.size);
 
       // ========================================
       // CREATE PLAYER MAP
@@ -584,6 +589,7 @@ function Dashboard() {
   if (loading) {
     return (
       <div className="page">
+        <AdminUndoDelete />
 
         <section className="welcome-section">
           <div>
@@ -615,6 +621,7 @@ function Dashboard() {
 
   return (
     <div className="page">
+      <AdminUndoDelete />
 
       {/* ======================================
           WELCOME
@@ -758,10 +765,9 @@ function Dashboard() {
               Tournaments 
             </p>
 
-            <small>
-              {/* {inningsCount} */}
-              coming soon
-            </small>
+            <h3>
+              {tournamentCount}
+            </h3>
 
           </div>
 

@@ -162,6 +162,9 @@ const formatOvers = (balls = 0) => {
 const completedTestOvers = (balls = 0) =>
   Math.ceil(Math.max(0, Number(balls) || 0) / 6);
 
+const completedTestDayOvers = (balls = 0) =>
+  Math.floor(Math.max(0, Number(balls) || 0) / 6);
+
 const strikeRate = (runs, balls) => {
   if (!balls) return "0.00";
   return ((runs / balls) * 100).toFixed(2);
@@ -1184,18 +1187,12 @@ export default function Scoring() {
     ? (match?.testInnings || [])
         .filter((item) => Number(item.inningsIndex) !== inningsIndex)
         .reduce((total, item) => total + completedTestOvers(item.balls), 0) +
-      completedTestOvers(legalBalls)
+      completedTestDayOvers(legalBalls)
     : 0;
   const testDisplayDay = isTestMatch
     ? Math.min(
         Number(match?.maxDays || match?.testDays || 5),
-        Math.max(
-          Number(currentDay) || 1,
-          Math.floor(
-            testTotalCompletedOvers /
-              Number(match?.oversPerDay || match?.testOvers || 90)
-          ) + 1
-        )
+        Math.max(1, Number(currentDay) || 1)
       )
     : currentDay;
   const canEndTestDay =
@@ -2229,12 +2226,28 @@ export default function Scoring() {
         const nextOrder = followOnEnforced
           ? [firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId]
           : [firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A", firstBattingTeamId, firstBattingTeamId === "A" ? "B" : "A"];
+        const oversPerDay = Number(match?.oversPerDay || match?.testOvers || 90);
+        const maxDays = Number(match?.maxDays || match?.testDays || 5);
+        const dayStartOvers = Math.max(0, Number(testDayStartOvers || 0));
+        const inningsConsumedOvers = savedInnings.reduce(
+          (total, item) => total + completedTestOvers(item.balls),
+          0
+        );
+        const dayIsConsumed = inningsConsumedOvers >= dayStartOvers + oversPerDay;
+        const nextDay = dayIsConsumed
+          ? Math.min(maxDays, currentDay + 1)
+          : currentDay;
+        const nextDayStartOvers = dayIsConsumed
+          ? inningsConsumedOvers
+          : dayStartOvers;
+
         persistMatch({
           testInnings: savedInnings,
           innings: savedInnings,
           inningsOrder: nextOrder,
           currentInnings: inningsIndex + 1,
-          currentDay,
+          currentDay: nextDay,
+          testDayStartOvers: nextDayStartOvers,
           followOnEnforced,
           followOnAvailable:
             inningsIndex === 1 &&
@@ -2245,7 +2258,9 @@ export default function Scoring() {
         setInningsRuns(0);
         setInningsWickets(0);
         setLegalBalls(0);
-        setCurrentOver(Math.max(0, completedTestOvers(finalBalls) - 1));
+        setCurrentOver(0);
+        setCurrentDay(nextDay);
+        setTestDayStartOvers(nextDayStartOvers);
         setStrikerId("");
         setNonStrikerId("");
         setCurrentBowlerId("");
@@ -3084,13 +3099,17 @@ export default function Scoring() {
       const maxDays = Number(match?.maxDays || match?.testDays || 5);
       const dayStartOvers = Math.max(0, Number(testDayStartOvers || 0));
       const dayLimit = dayStartOvers + oversPerDay;
+      const previousInningsOvers = (match?.testInnings || [])
+        .filter((item) => Number(item.inningsIndex) !== Number(inningsIndex))
+        .reduce((total, item) => total + completedTestOvers(item.balls), 0);
+      const totalCompletedMatchOvers = previousInningsOvers + nextOver;
 
-      if (nextOver >= dayLimit) {
+      if (totalCompletedMatchOvers >= dayLimit) {
         if (currentDay >= maxDays) {
           finishTestAtLimit();
         } else {
           const nextDay = currentDay + 1;
-          const nextDayStartOvers = nextOver;
+          const nextDayStartOvers = totalCompletedMatchOvers;
 
           setCurrentDay(nextDay);
           setTestDayStartOvers(nextDayStartOvers);
@@ -6655,7 +6674,7 @@ if (screen === "finished") {
                     .reduce(
                       (total, item) => total + completedTestOvers(item.balls),
                       0
-                    ) + completedTestOvers(legalBalls);
+                    ) + completedTestDayOvers(legalBalls);
                   const totalMatchOvers = oversPerDay * maxDays;
                   const dayStartOvers = Math.max(
                     0,
@@ -6689,7 +6708,7 @@ if (screen === "finished") {
                 (match.testInnings || [])
                   .filter((item) => Number(item.inningsIndex) !== inningsIndex)
                   .reduce((total, item) => total + completedTestOvers(item.balls), 0) +
-                completedTestOvers(legalBalls)
+                completedTestDayOvers(legalBalls)
               }
             </span>
             <span>Innings {inningsIndex + 1} of 4</span>
@@ -7742,14 +7761,14 @@ if (screen === "finished") {
       )}
 
 
-{/* end innings */}
-
-      <button
-  className="end-innings-btn"
-  onClick={handleEndInnings}
->
-  End Innings
-</button>
+      {!isTestMatch && (
+        <button
+          className="end-innings-btn"
+          onClick={handleEndInnings}
+        >
+          End Innings
+        </button>
+      )}
       {/* AI */}
 
       <section className="ai-suggestion-card">

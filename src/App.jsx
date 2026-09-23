@@ -17,6 +17,7 @@ import Matches from "./pages/Matches";
 import Scoring from "./pages/Scoring";
 import TestScoring from "./pages/TestScoring";
 import Profile from "./pages/Profile";
+import Tournament from "./pages/Tournament";
 import PageLoader from "./components/PageLoader";
 
 
@@ -416,6 +417,13 @@ function App() {
                   path="/matches"
                   element={
                     <Matches />
+                  }
+                />
+
+                <Route
+                  path="/tournaments"
+                  element={
+                    <Tournament />
                   }
                 />
 

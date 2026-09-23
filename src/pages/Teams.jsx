@@ -3,11 +3,13 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   serverTimestamp,
   updateDoc,
@@ -17,6 +19,7 @@ import {
 import { db, auth } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
 import { calculateStrengthPoints } from "../services/playerStrength";
+import { saveLastAdminDelete } from "../services/adminUndoService";
 import "./teams.css";
 /* =========================================================
    CONSTANTS
@@ -90,6 +93,8 @@ const getSafeName = (
 ========================================================= */
 
 function Teams() {
+  const [searchParams] = useSearchParams();
+  const tournamentId = searchParams.get("tournamentId");
   // =========================================================
   // USER / ADMIN
   // =========================================================
@@ -121,6 +126,8 @@ function Teams() {
     useState([]);
 
   const [matches, setMatches] =
+    useState([]);
+  const [tournamentTeams, setTournamentTeams] =
     useState([]);
 
   const [loading, setLoading] =
@@ -297,6 +304,24 @@ function Teams() {
       setMatches(
         loadedMatches
       );
+
+      if (tournamentId) {
+        const tournamentSnapshot = await getDoc(
+          doc(db, "tournaments", tournamentId)
+        );
+        const tournamentTeamsData = tournamentSnapshot.exists()
+          ? (tournamentSnapshot.data().teams || []).map((team) => ({
+              ...team,
+              teamId: team.id,
+              players: (team.players || []).map((player) =>
+                loadedPlayers.find((item) => String(item.id) === String(player.id || player.uid)) || player
+              ),
+            }))
+          : [];
+        setTournamentTeams(tournamentTeamsData);
+      } else {
+        setTournamentTeams([]);
+      }
     } catch (error) {
       console.error(
         "Error loading teams data:",
@@ -314,7 +339,9 @@ function Teams() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [tournamentId]);
+
+  const visibleTeams = tournamentId ? tournamentTeams : teams;
 
   // =========================================================
   // PLAYER LOOKUP
@@ -1176,6 +1203,22 @@ function Teams() {
       }
 
       try {
+        await saveLastAdminDelete({
+          type: "team",
+          documents: [
+            {
+              collection: "teams",
+              id: deleteTeam.id || deleteTeam.teamId,
+              data: deleteTeam,
+            },
+            ...memberships.map((membership) => ({
+              collection: "teamPlayers",
+              id: membership.id || membership.teamPlayerId,
+              data: membership,
+            })),
+          ],
+        });
+
         const batch =
           writeBatch(db);
 
@@ -2705,7 +2748,7 @@ function Teams() {
           TEAM LIST
       ===================================================== */}
 
-      {teams.length ===
+      {visibleTeams.length ===
       0 ? (
         <div className="empty-card">
 
@@ -2746,8 +2789,8 @@ function Teams() {
               </h3>
 
               <span>
-                {teams.length}{" "}
-                {teams.length ===
+                {visibleTeams.length}{" "}
+                {visibleTeams.length ===
                 1
                   ? "team"
                   : "teams"}
@@ -2759,7 +2802,7 @@ function Teams() {
 
           <div className="teams-list">
 
-            {teams.map(
+            {visibleTeams.map(
               (team) => {
                 const teamMembers =
                   getTeamPlayers(
@@ -2952,7 +2995,7 @@ function Teams() {
           COMPARE TEAMS
       ===================================================== */}
 
-      {teams.length >=
+      {visibleTeams.length >=
         2 && (
         <section className="comparison-section">
 
@@ -3000,7 +3043,7 @@ function Teams() {
                   Select Team A
                 </option>
 
-                {teams.map(
+                {visibleTeams.map(
                   (team) => (
                     <option
                       key={
@@ -3056,7 +3099,7 @@ function Teams() {
                   Select Team B
                 </option>
 
-                {teams.map(
+                {visibleTeams.map(
                   (team) => (
                     <option
                       key={

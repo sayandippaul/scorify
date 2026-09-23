@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -11,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
+import { saveLastAdminDelete } from "./adminUndoService";
 
 const MATCHES = "matches";
 const INNINGS = "innings";
@@ -109,8 +111,24 @@ const playerFields = (player) => ({
   bowlingStyle: player?.bowlingStyle || null,
 });
 
+const removePersistedDeliveryArrays = (value) => {
+  if (Array.isArray(value)) return value.map(removePersistedDeliveryArrays);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => ![
+        "deliveries",
+        "deliveryHistory",
+        "allDeliveries",
+        "ballByBall",
+      ].includes(key))
+      .map(([key, item]) => [key, removePersistedDeliveryArrays(item)])
+  );
+};
+
 const matchFields = (match, ownerId = currentUserId()) => clean({
-  ...match,
+  ...removePersistedDeliveryArrays(match),
   matchId: String(match.id),
   id: undefined,
   createdBy: match.createdBy || ownerId || null,
@@ -388,8 +406,14 @@ if (typeof window !== "undefined") {
 export const deleteMatchCascade = async (matchId, ownerId = currentUserId()) => {
   const id = String(matchId);
   const matchRef = doc(db, MATCHES, id);
+  const directMatchSnapshot = await withTimeout(
+    getDoc(matchRef),
+    "Firestore match lookup"
+  );
   const matchSnapshot = await withTimeout(getDocs(query(collection(db, MATCHES), where("matchId", "==", id))), "Firestore match lookup");
-  const matchData = matchSnapshot.docs[0]?.data();
+  const matchData = directMatchSnapshot.exists()
+    ? directMatchSnapshot.data()
+    : matchSnapshot.docs[0]?.data();
 
   // FIX: this used an undefined variable (ADMIN_ID). The imported constant is ADMIN_UID.
   const isAdminUser =
@@ -411,6 +435,10 @@ export const deleteMatchCascade = async (matchId, ownerId = currentUserId()) => 
     BATTING_STATS,
     BOWLING_STATS,
   ];
+  const undoDocuments = matchData
+    ? [{ collection: MATCHES, id, data: matchData }]
+    : [];
+
   const deletions = [deleteDoc(matchRef)];
 
   for (const name of relatedCollections) {
@@ -419,14 +447,95 @@ export const deleteMatchCascade = async (matchId, ownerId = currentUserId()) => 
       `Firestore ${name} lookup`
     );
     snapshot.docs.forEach((item) => deletions.push(deleteDoc(item.ref)));
+    snapshot.docs.forEach((item) =>
+      undoDocuments.push({
+        collection: name,
+        id: item.id,
+        data: item.data(),
+      })
+    );
   }
 
+  if (isAdminUser && undoDocuments.length) {
+    await saveLastAdminDelete({ type: "match", documents: undoDocuments });
+  }
   await withTimeout(Promise.all(deletions), "Firestore match deletion");
 
   // FIX: also drop the deleted match from the offline queue. Otherwise
   // subscribeToMatches keeps showing it and syncOfflineMatches re-uploads it.
   writeOfflineQueue(
     readOfflineQueue().filter((item) => String(item.id) !== id)
+  );
+};
+
+export const deleteTournamentCascade = async (tournamentId, adminId = currentUserId()) => {
+  if (!ADMIN_UID || String(adminId || "") !== String(ADMIN_UID)) {
+    throw new Error("Only the admin can delete tournaments.");
+  }
+
+  const tournamentKey = String(tournamentId);
+  const tournamentSnapshot = await withTimeout(
+    getDoc(doc(db, "tournaments", tournamentKey)),
+    "Firestore tournament lookup"
+  );
+  if (!tournamentSnapshot.exists()) return;
+
+  const matchSnapshot = await withTimeout(
+    getDocs(query(collection(db, MATCHES), where("tournamentId", "==", tournamentKey))),
+    "Firestore tournament match lookup"
+  );
+  const matchIds = matchSnapshot.docs.map((item) => String(item.id));
+  const collections = [
+    MATCHES,
+    "matchPlayers",
+    INNINGS,
+    DELIVERIES,
+    BATTING_STATS,
+    BOWLING_STATS,
+    "teams",
+    "teamPlayers",
+  ];
+  const deletions = [
+    deleteDoc(doc(db, "tournaments", tournamentKey)),
+    ...matchSnapshot.docs.map((item) => deleteDoc(item.ref)),
+  ];
+  const undoDocuments = [
+    { collection: "tournaments", id: tournamentKey, data: tournamentSnapshot.data() },
+    ...matchSnapshot.docs.map((item) => ({
+      collection: MATCHES,
+      id: item.id,
+      data: item.data(),
+    })),
+  ];
+
+  for (const collectionName of collections.slice(1)) {
+    const snapshot = await withTimeout(
+      getDocs(collection(db, collectionName)),
+      `Firestore tournament ${collectionName} lookup`
+    );
+    snapshot.docs
+      .filter((item) => {
+        const data = item.data() || {};
+        return matchIds.includes(String(data.matchId)) ||
+          String(data.tournamentId || "") === tournamentKey;
+      })
+      .forEach((item) => {
+        deletions.push(deleteDoc(item.ref));
+        undoDocuments.push({
+          collection: collectionName,
+          id: item.id,
+          data: item.data(),
+        });
+      });
+  }
+
+  await saveLastAdminDelete({ type: "tournament", documents: undoDocuments });
+  await withTimeout(Promise.all(deletions), "Firestore tournament deletion");
+  writeOfflineQueue(
+    readOfflineQueue().filter((item) =>
+      String(item.tournamentId || "") !== tournamentKey &&
+      !matchIds.includes(String(item.id))
+    )
   );
 };
 

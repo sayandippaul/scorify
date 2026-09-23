@@ -50,6 +50,16 @@ function Sidebar() {
   </span>
 </NavLink>
 
+      <NavLink
+        to="/tournaments"
+        className={({ isActive }) =>
+          isActive ? "nav-item active" : "nav-item"
+        }
+      >
+        <span className="nav-icon">🏆</span>
+        <span>Tournaments</span>
+      </NavLink>
+
     </nav>
   );
 }

@@ -20,6 +20,7 @@ import {
   db,
   auth,
 } from "../firebase/firebase";
+import { getCareerMatchStats } from "../services/careerMatchStats";
 import { calculateStrengthPoints } from "../services/playerStrength";
 
 import "./profile.css";
@@ -120,6 +121,18 @@ function Profile({
       losses: 0,
       winPercentage: "0.00",
       losePercentage: "0.00",
+      testPlayed: 0,
+      testWon: 0,
+      testLost: 0,
+      testDraw: 0,
+      limitedPlayed: 0,
+      limitedWon: 0,
+      limitedLost: 0,
+      limitedDraw: 0,
+      tournamentPlayed: 0,
+      tournamentWon: 0,
+      tournamentLost: 0,
+      manOfMatch: 0,
     });
 
 
@@ -208,6 +221,7 @@ function Profile({
           matchesSnapshot,
           battingStatsSnapshot,
           bowlingStatsSnapshot,
+          tournamentsSnapshot,
         ] = await Promise.all([
 
           getDocs(
@@ -230,6 +244,8 @@ function Profile({
               "bowlingStats"
             )
           ),
+
+          getDocs(collection(db, "tournaments")),
 
         ]);
 
@@ -335,6 +351,11 @@ function Profile({
               bowlingDoc.data()
           );
 
+        const tournamentDocs = tournamentsSnapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }));
+
 
         const playerIds =
           new Set(
@@ -356,6 +377,11 @@ function Profile({
             bowlingStats:
               bowlingDocs,
             matches,
+            matchCategoryStats: getCareerMatchStats({
+              playerIds,
+              matches,
+              tournaments: tournamentDocs,
+            }),
           });
 
 
@@ -1107,6 +1133,7 @@ function Profile({
           </p>
 
         </div>
+
 
       </section>
 
@@ -2064,7 +2091,7 @@ function Profile({
 
           <div className="profile-stat-title">
 
-            <span className="profile-stat-title-icon">
+            {/* <span className="profile-stat-title-icon">
               🏆
             </span>
 
@@ -2080,6 +2107,22 @@ function Profile({
                 Your recorded match results
               </p>
 
+            </div> */}
+
+            <div className="profile-stat-section career-format-section">
+              <div className="profile-stat-title">
+                <span className="profile-stat-title-icon">📈</span>
+                <div>
+                  <h3>Match & Tournament Record</h3>
+                  <p>Results across your recorded career</p>
+                </div>
+              </div>
+              <div className="career-format-grid">
+                <div className="career-format-card"><span>🏏 Test Matches</span><strong>{statistics.testPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.testWon} won</b><b className="career-result-loss">{statistics.testLost} lost</b><b className="career-result-draw">{statistics.testDraw} drawn</b></small></div>
+                <div className="career-format-card"><span>⚡ Limited Overs</span><strong>{statistics.limitedPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.limitedWon} won</b><b className="career-result-loss">{statistics.limitedLost} lost</b><b className="career-result-draw">{statistics.limitedDraw} drawn</b></small></div>
+                <div className="career-format-card"><span>🏆 Tournaments</span><strong>{statistics.tournamentPlayed}</strong><small>{statistics.tournamentWon} won • {statistics.tournamentLost} lost</small></div>
+              </div>
+              <div className="career-award-card"><span>🌟</span><div><strong>{statistics.manOfMatch}</strong><small>Man of the Match awards</small></div></div>
             </div>
 
           </div>
@@ -2567,6 +2610,7 @@ const computePlayerStatistics = ({
   battingStats = [],
   bowlingStats = [],
   matches = [],
+  matchCategoryStats = {},
   playerStrength = "0.0",
 }) => {
 
@@ -3256,6 +3300,8 @@ const computePlayerStatistics = ({
     winPercentage,
 
     losePercentage,
+
+    ...matchCategoryStats,
 
   };
 

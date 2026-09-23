@@ -29,9 +29,11 @@ import {
   db,
 } from "../firebase/firebase";
 import { calculateStrengthPoints } from "../services/playerStrength";
+import { getCareerMatchStats } from "../services/careerMatchStats";
 
 
 import { ADMIN_UID } from "../config/security";
+import { saveLastAdminDelete } from "../services/adminUndoService";
 const DEFAULT_PASSWORD = "cricket";
 
 const formatBowlingOvers = (balls) => {
@@ -424,6 +426,7 @@ const computePlayerStatistics = ({
   battingStats = [],
   bowlingStats = [],
   matches = [],
+  tournaments = [],
   playerStrength = "0.0",
 }) => {
 
@@ -1114,6 +1117,12 @@ const computePlayerStatistics = ({
 
     losePercentage,
 
+    ...getCareerMatchStats({
+      playerIds,
+      matches,
+      tournaments,
+    }),
+
   };
 
 };
@@ -1137,6 +1146,9 @@ function Players() {
   ========================================= */
 
   const [matchesData, setMatchesData] =
+    useState([]);
+
+  const [tournamentsData, setTournamentsData] =
     useState([]);
 
   const [matchDataLoaded, setMatchDataLoaded] =
@@ -1314,7 +1326,7 @@ function Players() {
         }))
       );
 
-      setMatchDataLoaded(true);
+      return getDocs(collection(db, "tournaments"));
 
     }).catch((error) => {
 
@@ -1327,6 +1339,16 @@ function Players() {
         "Unable to load match statistics from Firebase."
       );
 
+    }).then((tournamentsSnapshot) => {
+      if (tournamentsSnapshot) {
+        setTournamentsData(
+          tournamentsSnapshot.docs.map((item) => ({
+            ...item.data(),
+            id: item.id,
+          }))
+        );
+      }
+      setMatchDataLoaded(true);
     }).finally(() => {
 
       setLoadingMatchData(false);
@@ -1870,6 +1892,14 @@ function Players() {
 
 
     try {
+      await saveLastAdminDelete({
+        type: "player",
+        documents: [{
+          collection: "players",
+          id: deletePlayer.uid || deletePlayer.id,
+          data: deletePlayer,
+        }],
+      });
 
       /* ---------------------------------------
          DELETE FIRESTORE PROFILE
@@ -2030,6 +2060,7 @@ const isAdmin =
           bowlingStats,
           matches:
             matchesData,
+          tournaments: tournamentsData,
           playerStrength:
             formatStrength(
               getPlayerStrength(
@@ -3425,12 +3456,12 @@ const isAdmin =
 
                   <div className="profile-stat-title">
 
-                    <span className="profile-stat-title-icon">
+                    {/* <span className="profile-stat-title-icon">
                       🏆
-                    </span>
+                    </span> */}
 
 
-                    <div>
+                    {/* <div>
 
                       <h3>
                         Match Results
@@ -3441,6 +3472,22 @@ const isAdmin =
                         Recorded match results
                       </p>
 
+                    </div> */}
+
+                    <div className="profile-stat-section career-format-section">
+                      <div className="profile-stat-title">
+                        <span className="profile-stat-title-icon">📈</span>
+                        <div>
+                          <h3>Match & Tournament Record</h3>
+                          <p>Results across the player&apos;s recorded career</p>
+                        </div>
+                      </div>
+                      <div className="career-format-grid">
+                        <div className="career-format-card"><span>🏏 Test Matches</span><strong>{statistics.testPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.testWon} won</b><b className="career-result-loss">{statistics.testLost} lost</b><b className="career-result-draw">{statistics.testDraw} drawn</b></small></div>
+                        <div className="career-format-card"><span>⚡ Limited Overs</span><strong>{statistics.limitedPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.limitedWon} won</b><b className="career-result-loss">{statistics.limitedLost} lost</b><b className="career-result-draw">{statistics.limitedDraw} drawn</b></small></div>
+                        <div className="career-format-card"><span>🏆 Tournaments</span><strong>{statistics.tournamentPlayed}</strong><small>{statistics.tournamentWon} won • {statistics.tournamentLost} lost</small></div>
+                      </div>
+                      <div className="career-award-card"><span>🌟</span><div><strong>{statistics.manOfMatch}</strong><small>Man of the Match awards</small></div></div>
                     </div>
 
                   </div>

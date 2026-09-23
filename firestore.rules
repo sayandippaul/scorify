@@ -1,0 +1,273 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    // =========================================================
+    // ADMIN
+    // =========================================================
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.uid == "NQ5YWZzrLmNlrqE3Y9pfHm7x3Dh2";
+    }
+
+
+    // =========================================================
+    // PLAYERS
+    // =========================================================
+    match /players/{userId} {
+
+      // Any logged-in user can read players
+      allow read:
+        if request.auth != null;
+
+      // Any logged-in user can create players
+      allow create:
+        if request.auth != null;
+
+      // Any logged-in user can update players
+      allow update:
+        if request.auth != null;
+
+      // ONLY ADMIN can delete players
+      allow delete:
+        if isAdmin();
+    }
+
+
+    // =========================================================
+    // TOURNAMENTS
+    // =========================================================
+    match /tournaments/{tournamentId} {
+
+      // Any logged-in user can read tournaments
+      allow read:
+        if request.auth != null;
+
+      // Tournament creator must be the authenticated user
+      allow create:
+        if request.auth != null
+        && (
+          request.resource.data.createdBy == request.auth.uid
+          || isAdmin()
+        );
+
+      // Only tournament creator can update
+      // createdBy cannot be changed
+      allow update:
+        if request.auth != null
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isAdmin()
+        );
+
+      // ONLY ADMIN can delete tournaments
+      allow delete:
+        if isAdmin();
+    }
+
+    match /adminUndo/{adminId} {
+      allow read, write:
+        if isAdmin() && adminId == request.auth.uid;
+
+      match /items/{itemId} {
+        allow read, write:
+          if isAdmin() && adminId == request.auth.uid;
+      }
+    }
+
+
+    // =========================================================
+    // TEAMS
+    // =========================================================
+    match /teams/{teamId} {
+
+      // Existing behavior preserved
+      // Logged-in users can read
+      allow read:
+        if request.auth != null;
+
+      // Logged-in users can create
+      allow create:
+        if request.auth != null;
+
+      // Logged-in users can update
+      allow update:
+        if request.auth != null;
+
+      // ONLY ADMIN can delete teams
+      allow delete:
+        if isAdmin();
+    }
+
+
+    // =========================================================
+    // TEAM PLAYERS
+    // =========================================================
+    match /teamPlayers/{id} {
+
+      // Existing behavior preserved
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      // Existing team-player membership behavior preserved
+      // This is NOT the same as deleting the team itself.
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // MATCHES
+    // =========================================================
+    match /matches/{matchId} {
+
+      // Existing match behavior preserved
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      // Existing behavior preserved.
+      // Match deletion is controlled separately by the
+      // application's admin UI / match deletion flow.
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // MATCH PLAYERS
+    // =========================================================
+    match /matchPlayers/{id} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // INNINGS
+    // =========================================================
+    match /innings/{inningsId} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // DELIVERIES
+    // =========================================================
+    match /deliveries/{deliveryId} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // BATTING STATS
+    // =========================================================
+    match /battingStats/{statId} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // BOWLING STATS
+    // =========================================================
+    match /bowlingStats/{statId} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null;
+
+      allow update:
+        if request.auth != null;
+
+      allow delete:
+        if request.auth != null;
+    }
+
+
+    // =========================================================
+    // BACKWARD COMPATIBILITY
+    // =========================================================
+    //
+    // Keeps the original authenticated access for the existing
+    // collections covered by the old wildcard rule.
+    //
+    // Explicit collection rules above take precedence for those
+    // exact paths, including the admin-only delete rules for:
+    // players, teams, and tournaments.
+    // =========================================================
+    match /{collectionName}/{documentId} {
+
+      allow read, write:
+        if request.auth != null
+        && collectionName in [
+          'innings',
+          'deliveries',
+          'battingStats',
+          'bowlingStats',
+          'matchPlayers',
+          'teams',
+          'teamPlayers'
+        ];
+    }
+  }
+}

@@ -1058,6 +1058,166 @@
     var(--text-primary, #111827);
 }
 
+.career-format-section {
+  animation: career-stats-enter 420ms ease both;
+}
+
+.career-format-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.career-format-card,
+.career-award-card {
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.1), var(--card-bg, #fff));
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.career-format-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 16px;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.career-format-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.13);
+}
+
+.career-format-card span,
+.career-format-card small,
+.career-award-card small {
+  color: var(--text-secondary, #64748b);
+}
+
+.career-format-card span {
+  font-weight: 800;
+}
+
+.career-format-card strong {
+  color: var(--text-primary, #111827);
+  font-size: 1.8rem;
+}
+
+.career-format-card small {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.career-result-counts {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 6px;
+}
+
+.career-result-counts b {
+ padding: 4px 7px;
+ border-radius: 999px;
+ font-size: 0.7rem;
+ line-height: 1.1;
+ font-weight: 800;
+ white-space: nowrap;
+}
+
+.career-result-win {
+ color: #047857;
+ background: #d1fae5;
+}
+
+.career-result-loss {
+ color: #b91c1c;
+ background: #fee2e2;
+}
+
+.career-result-draw {
+ color: #92400e;
+ background: #fef3c7;
+}
+
+.career-award-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  margin-top: 14px;
+  padding: 11px 15px;
+}
+
+.career-award-card > span {
+  font-size: 1.5rem;
+}
+
+.career-award-card strong,
+.career-award-card small {
+  display: block;
+}
+
+.career-award-card strong {
+  color: var(--text-primary, #111827);
+  font-size: 1.3rem;
+}
+
+@keyframes career-stats-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+[data-theme="dark"] .career-format-card,
+[data-theme="dark"] .career-award-card {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.18), #1f2937);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .career-format-card span,
+[data-theme="dark"] .career-format-card small,
+[data-theme="dark"] .career-award-card small {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .career-format-card strong,
+[data-theme="dark"] .career-award-card strong {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .career-result-win {
+ color: #a7f3d0;
+ background: rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="dark"] .career-result-loss {
+ color: #fecaca;
+ background: rgba(239, 68, 68, 0.2);
+}
+
+[data-theme="dark"] .career-result-draw {
+ color: #fde68a;
+ background: rgba(245, 158, 11, 0.2);
+}
+
+@media (max-width: 700px) {
+  .career-format-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .career-award-card {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .career-format-section,
+  .career-format-card {
+    animation: none;
+    transition: none;
+  }
+}
+
 
 /* =========================================================
    LOGOUT SECTION
@@ -2055,4 +2215,3 @@
 
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
-
