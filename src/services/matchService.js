@@ -17,6 +17,7 @@ import { saveLastAdminDelete } from "./adminUndoService";
 const MATCHES = "matches";
 const INNINGS = "innings";
 const DELIVERIES = "deliveries";
+const COMMENTARY = "commentary";
 const BATTING_STATS = "battingStats";
 const BOWLING_STATS = "bowlingStats";
 const FIRESTORE_TIMEOUT_MS = 10000;
@@ -203,6 +204,48 @@ const writeInnings = async (match, inningsData, inningsNumber) => {
   })), "Firestore innings update");
 };
 
+const commentaryBallData = (matchId, delivery, inningsNumber, sequence) => clean({
+  matchId: String(matchId),
+  inningsNumber,
+  overNumber: Number(delivery.over || 0),
+  ballNumber: Number(delivery.ball || 0),
+  sequence,
+  strikerId: delivery.strikerId || null,
+  strikerName: delivery.strikerName || null,
+  nonStrikerId: delivery.nonStrikerId || null,
+  nonStrikerName: delivery.nonStrikerName || null,
+  bowlerId: delivery.bowlerId || null,
+  bowlerName: delivery.bowlerName || null,
+  runs: Number(delivery.runs || 0),
+  batterRuns: Number(delivery.batterRuns || 0),
+  bowlerRuns: Number(delivery.bowlerRuns || 0),
+  extras: Number(delivery.extras || 0),
+  extraType: delivery.type || null,
+  validBall: delivery.validBall === true,
+  shotPosition: delivery.shotPosition ?? null,
+  shotRegion: delivery.shotRegion || null,
+  wicketType: delivery.wicket?.type || delivery.wicketType || null,
+  dismissedPlayerId: delivery.wicket?.batterId || null,
+  dismissedPlayerName: delivery.wicket?.batterName || null,
+  fielderName: delivery.wicket?.fielder || null,
+  createdAt: delivery.createdAt || new Date().toISOString(),
+});
+
+const commentaryBallPath = (matchId, delivery, inningsNumber) =>
+  doc(
+    db,
+    COMMENTARY,
+    String(matchId),
+    "innings",
+    `innings_${inningsNumber}`,
+    "overs",
+    `over_${Number(delivery.over || 0)}`,
+    "balls",
+    String(delivery.id)
+  );
+
+const commentaryDeliveryKey = (delivery) => String(delivery?.id || "");
+
 const writeCollections = async (match, { full = false } = {}) => {
   const state = match.scoringState || {};
   const inningsNumber = Number(state.inningsIndex || 0) + 1;
@@ -219,7 +262,7 @@ const writeCollections = async (match, { full = false } = {}) => {
     fallOfWickets: state.fallOfWickets,
   };
 
-  await writeInnings(match, match.firstInningsData, 1);
+    await writeInnings(match, match.firstInningsData, 1);
   await writeInnings(match, currentInnings, inningsNumber);
 
   const rosterWrites = full ? [
@@ -254,11 +297,14 @@ const writeCollections = async (match, { full = false } = {}) => {
     );
   const deliveryWrites = deliveries.map((delivery, index) => {
     const deliveryId = String(delivery.id || `${match.id}_${inningsNumber}_${index + 1}`);
+    const deliveryInningsNumber =
+      Number(delivery.inningsNumber || delivery.innings || inningsNumber);
     return setDoc(doc(db, DELIVERIES, deliveryId), clean({
       ...delivery,
       deliveryId,
       matchId: String(match.id),
-      inningsId: `${match.id}_innings_${inningsNumber}`,
+      inningsNumber: deliveryInningsNumber,
+      inningsId: `${match.id}_innings_${deliveryInningsNumber}`,
       overNumber: delivery.over || 0,
       ballNumber: delivery.ball || 0,
       legalBall: Boolean(delivery.validBall),
@@ -334,6 +380,50 @@ const writeCollections = async (match, { full = false } = {}) => {
     ...battingWrites,
     ...bowlingWrites,
   ]), "Firestore over flush");
+};
+
+export const syncStructuredCommentary = async (
+  matchId,
+  deliveries = [],
+  previousDeliveries = []
+) => {
+  if (!matchId) return;
+
+  const nextDeliveries = (Array.isArray(deliveries) ? deliveries : [])
+    .filter((delivery) => String(delivery?.type || "").toUpperCase() !== "DEAD");
+  const previous = (Array.isArray(previousDeliveries) ? previousDeliveries : [])
+    .filter((delivery) => String(delivery?.type || "").toUpperCase() !== "DEAD");
+  const nextKeys = new Set(nextDeliveries.map(commentaryDeliveryKey));
+
+  const writes = nextDeliveries
+    .filter((delivery) => commentaryDeliveryKey(delivery))
+    .map((delivery, sequence) => {
+      const inningsNumber = Number(
+        delivery.inningsNumber || delivery.innings || 1
+      );
+      return setDoc(
+        commentaryBallPath(matchId, delivery, inningsNumber),
+        commentaryBallData(matchId, delivery, inningsNumber, sequence),
+        { merge: true }
+      );
+    });
+
+  const deletions = previous
+    .filter((delivery) => {
+      const key = commentaryDeliveryKey(delivery);
+      return key && !nextKeys.has(key);
+    })
+    .map((delivery) => {
+      const inningsNumber = Number(
+        delivery.inningsNumber || delivery.innings || 1
+      );
+      return deleteDoc(commentaryBallPath(matchId, delivery, inningsNumber));
+    });
+
+  await withTimeout(
+    Promise.all([...writes, ...deletions]),
+    "Firestore structured commentary update"
+  );
 };
 
 export const saveMatch = async (match, ownerId = currentUserId()) => {

@@ -24,10 +24,24 @@ import {
   getCareerMatchStats,
   getMaidenCount,
 } from "../services/careerMatchStats";
+import { getPlayerDismissalStats } from "../services/dismissalStats";
 import { calculateStrengthPoints } from "../services/playerStrength";
 import LoadingOverlay from "../components/LoadingOverlay";
+import CareerPerformanceSummary from "../components/CareerPerformanceSummary";
 
 import "./profile.css";
+
+const SHOT_REGIONS = {
+  1: "Behind Keeper",
+  2: "Third Man",
+  3: "Square Off",
+  4: "Cover",
+  5: "Long Off",
+  6: "Long On",
+  7: "Midwicket",
+  8: "Square Leg",
+  9: "Fine Leg",
+};
 
 const formatBowlingOvers = (balls) => {
   const totalBalls = Math.max(0, Math.floor(Number(balls) || 0));
@@ -137,6 +151,7 @@ function Profile({
       tournamentWon: 0,
       tournamentLost: 0,
       manOfMatch: 0,
+      productiveShotRegions: [],
     });
 
 
@@ -225,6 +240,7 @@ function Profile({
           matchesSnapshot,
           battingStatsSnapshot,
           bowlingStatsSnapshot,
+          deliveriesSnapshot,
           tournamentsSnapshot,
         ] = await Promise.all([
 
@@ -246,6 +262,13 @@ function Profile({
             collection(
               db,
               "bowlingStats"
+            )
+          ),
+
+          getDocs(
+            collection(
+              db,
+              "deliveries"
             )
           ),
 
@@ -355,6 +378,11 @@ function Profile({
               bowlingDoc.data()
           );
 
+        const deliveryDocs =
+          deliveriesSnapshot.docs.map(
+            (deliveryDoc) => deliveryDoc.data()
+          );
+
         const tournamentDocs = tournamentsSnapshot.docs.map((item) => ({
           id: item.id,
           ...item.data(),
@@ -380,6 +408,7 @@ function Profile({
               battingDocs,
             bowlingStats:
               bowlingDocs,
+            deliveries: deliveryDocs,
             matches,
             matchCategoryStats: getCareerMatchStats({
               playerIds,
@@ -1920,6 +1949,11 @@ function Profile({
               }
             />
 
+            <StatCard
+              label="Most Dismissed By"
+              value={statistics.mostCommonBattingDismissal}
+            />
+
           </div>
 
 
@@ -1950,6 +1984,28 @@ function Profile({
 
           </div>
 
+        </div>
+
+        <div className="profile-stat-section productive-shot-section">
+          <div className="profile-stat-title">
+            <span className="profile-stat-title-icon">🗺️</span>
+            <div>
+              <h3>MOST PRODUCTIVE SHOT REGIONS</h3>
+              <p>Ranked by batter runs scored from recorded deliveries</p>
+            </div>
+          </div>
+          {statistics.productiveShotRegions?.length ? (
+            <ol className="productive-shot-list">
+              {statistics.productiveShotRegions.map((item) => (
+                <li key={item.position}>
+                  <span>{item.region}</span>
+                  <strong>{item.runs} {item.runs === 1 ? "run" : "runs"}</strong>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="productive-shot-empty">No record</p>
+          )}
         </div>
 
 
@@ -2023,6 +2079,11 @@ function Profile({
               }
             />
 
+            <StatCard
+              label="Most Wickets By"
+              value={statistics.mostCommonBowlingDismissal}
+            />
+
           </div>
 
 
@@ -2068,48 +2129,10 @@ function Profile({
             MATCH RESULTS
             =================================================== */}
 
-        <div className="profile-stat-section">
-
-          <div className="profile-stat-title">
-
-            {/* <span className="profile-stat-title-icon">
-              🏆
-            </span>
-
-
-            <div>
-
-              <h3>
-                Match Results
-              </h3>
-
-
-              <p>
-                Your recorded match results
-              </p>
-
-            </div> */}
-
-            <div className="profile-stat-section career-format-section">
-              <div className="profile-stat-title">
-                <span className="profile-stat-title-icon">📈</span>
-                <div>
-                  <h3>Match & Tournament Record</h3>
-                  <p>Results across your recorded career</p>
-                </div>
-              </div>
-              <div className="career-format-grid">
-                <div className="career-format-card"><span>🏏 Test Matches</span><strong>{statistics.testPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.testWon} won</b><b className="career-result-loss">{statistics.testLost} lost</b><b className="career-result-draw">{statistics.testDraw} drawn</b></small></div>
-                <div className="career-format-card"><span>⚡ Limited Overs</span><strong>{statistics.limitedPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.limitedWon} won</b><b className="career-result-loss">{statistics.limitedLost} lost</b><b className="career-result-draw">{statistics.limitedDraw} drawn</b></small></div>
-                <div className="career-format-card"><span>🏆 Tournaments</span><strong>{statistics.tournamentPlayed}</strong><small>{statistics.tournamentWon} won • {statistics.tournamentLost} lost</small></div>
-              </div>
-              <div className="career-award-card"><span>🌟</span><div><strong>{statistics.manOfMatch}</strong><small>Man of the Match awards</small></div></div>
-            </div>
-
-          </div>
-
-
-        </div>
+        <CareerPerformanceSummary
+          statistics={statistics}
+          description="Results across your recorded career"
+        />
 
       </section>
 
@@ -2542,6 +2565,7 @@ const computePlayerStatistics = ({
   playerIds,
   battingStats = [],
   bowlingStats = [],
+  deliveries = [],
   matches = [],
   matchCategoryStats = {},
   playerStrength = "0.0",
@@ -2656,6 +2680,24 @@ const computePlayerStatistics = ({
   let bestBowlingMatch =
     "—";
 
+  const productiveShotRuns = new Map();
+  const dismissalStats = getPlayerDismissalStats(deliveries, playerIds);
+
+  deliveries.forEach((delivery) => {
+    if (
+      playerIds.has(idString(delivery?.strikerId)) &&
+      Number(delivery?.batterRuns ?? delivery?.batsmanRuns) > 0 &&
+      Number.isInteger(Number(delivery?.shotPosition)) &&
+      SHOT_REGIONS[Number(delivery.shotPosition)]
+    ) {
+      const position = Number(delivery.shotPosition);
+      productiveShotRuns.set(
+        position,
+        (productiveShotRuns.get(position) || 0) +
+          Number(delivery.batterRuns ?? delivery.batsmanRuns)
+      );
+    }
+  });
 
   let totalMatches = 0;
 
@@ -2800,7 +2842,6 @@ const computePlayerStatistics = ({
     if (innings.length) {
 
       innings.forEach((inning) => {
-
         /* ----- batting ----- */
 
         const bat =
@@ -3238,6 +3279,17 @@ const computePlayerStatistics = ({
     losePercentage,
 
     ...matchCategoryStats,
+
+    productiveShotRegions: [...productiveShotRuns.entries()]
+      .map(([position, runs]) => ({
+        position,
+        region: SHOT_REGIONS[position],
+        runs,
+      }))
+      .sort((left, right) => right.runs - left.runs)
+      .slice(0, 2),
+
+    ...dismissalStats,
 
   };
 

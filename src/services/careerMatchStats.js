@@ -63,6 +63,39 @@ const inningsFor = (match) => {
   return [match?.firstInningsData, match?.secondInningsData].filter(Boolean);
 };
 
+const completedMatch = (match) =>
+  ["finished", "completed"].includes(String(match?.status || "").toLowerCase());
+
+const scoreForSide = (match, side) => {
+  const directScore = side === "A" ? match?.scoreA : match?.scoreB;
+  if (
+    directScore !== null &&
+    directScore !== undefined &&
+    directScore !== "" &&
+    Number.isFinite(Number(directScore))
+  ) {
+    return Number(directScore);
+  }
+
+  return inningsFor(match)
+    .filter((innings) =>
+      (String(innings?.teamId || "A").toUpperCase() === side)
+    )
+    .reduce((total, innings) => total + (Number(innings?.runs) || 0), 0);
+};
+
+const outcomeFor = (match) => {
+  const winner = winnerSide(match);
+  if (winner) return winner;
+  if (isDrawnMatch(match)) return "draw";
+  if (!completedMatch(match)) return null;
+
+  const scoreA = scoreForSide(match, "A");
+  const scoreB = scoreForSide(match, "B");
+  if (scoreA === scoreB) return "draw";
+  return scoreA > scoreB ? "A" : "B";
+};
+
 export const getMaidenCount = (innings, bowlerId, savedMaidens = 0) => {
   const normalizedBowlerId = idOf(bowlerId);
   const completedOvers = Array.isArray(innings?.completedOvers)
@@ -208,23 +241,23 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     });
     if (!participantSides.size) return;
 
+    const outcome = outcomeFor(match);
+    if (!outcome || participantSides.size !== 1) return;
+
     const isTest = String(match?.matchType || "").toLowerCase() === "test";
     if (isTest) result.testPlayed += 1;
     else result.limitedPlayed += 1;
 
-    const winner = winnerSide(match);
-    const drawn = isDrawnMatch(match);
-    if (participantSides.size === 1 && (winner || drawn)) {
-      if (participantSides.has(winner)) {
-        if (isTest) result.testWon += 1;
-        else result.limitedWon += 1;
-      } else if (drawn) {
-        if (isTest) result.testDraw += 1;
-        else result.limitedDraw += 1;
-      } else {
-        if (isTest) result.testLost += 1;
-        else result.limitedLost += 1;
-      }
+    const winner = outcome === "A" || outcome === "B" ? outcome : null;
+    if (winner && participantSides.has(winner)) {
+      if (isTest) result.testWon += 1;
+      else result.limitedWon += 1;
+    } else if (outcome === "draw") {
+      if (isTest) result.testDraw += 1;
+      else result.limitedDraw += 1;
+    } else {
+      if (isTest) result.testLost += 1;
+      else result.limitedLost += 1;
     }
 
     const tournamentId = String(match?.tournamentId || "").trim();

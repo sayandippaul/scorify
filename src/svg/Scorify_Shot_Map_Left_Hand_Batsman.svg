@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="Left hand batsman cricket shot map">
+  <title>Left Hand Batsman — Cricket Shot Position Map</title>
+  <desc>Cricket ground divided into nine shot regions. Behind Keeper is an exact 60 degree sector centered on the wicketkeeper line. The other eight regions are 37.5 degrees each.</desc>
+  <defs>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .field { fill:#f7fbf4; stroke:#17251b; stroke-width:4; }
+      .sector { fill:#ffffff; fill-opacity:.20; stroke:#26352b; stroke-width:3; cursor:pointer; }
+      .sector:hover { fill-opacity:.42; }
+      .boundary { fill:none; stroke:#17251b; stroke-width:5; }
+      .inner { fill:none; stroke:#627066; stroke-width:2; stroke-dasharray:7 8; }
+      .pitch { fill:#d9c6a1; stroke:#17251b; stroke-width:3; }
+      .crease { stroke:#ffffff; stroke-width:5; }
+      .label { font-family:Arial,Helvetica,sans-serif; font-size:22px; font-weight:700; fill:#182019; text-anchor:middle; dominant-baseline:middle; pointer-events:none; }
+      .small { font-family:Arial,Helvetica,sans-serif; font-size:17px; font-weight:600; fill:#3a473e; text-anchor:middle; }
+      .title { font-family:Arial,Helvetica,sans-serif; font-size:28px; font-weight:800; fill:#182019; text-anchor:middle; }
+      .angle { font-family:Arial,Helvetica,sans-serif; font-size:16px; font-weight:700; fill:#5a675e; text-anchor:middle; }
+    </style>
+  </defs>
+
+  <rect width="800" height="800" fill="#ffffff"/>
+  <text x="400" y="42" class="title">Left Hand Batsman</text>
+  <text x="400" y="70" class="small">Behind Keeper = 60° • All other regions = 37.5°</text>
+
+  <g filter="url(#shadow)">
+    <circle cx="400" cy="410" r="305" class="field"/>
+    <circle cx="400" cy="410" r="265" class="inner"/>
+    <path id="shot-1" data-shot-position="1" data-shot-region="Behind Keeper" d="M 400.00,410.00 L 247.50,145.86 A 305.00,305.00 0 0,1 552.50,145.86 Z" class="sector"><title>1: Behind Keeper</title></path>
+    <path id="shot-2" data-shot-position="2" data-shot-region="Third Man" d="M 400.00,410.00 L 552.50,145.86 A 305.00,305.00 0 0,1 681.78,293.28 Z" class="sector"><title>2: Third Man</title></path>
+    <path id="shot-3" data-shot-position="3" data-shot-region="Square Off" d="M 400.00,410.00 L 681.78,293.28 A 305.00,305.00 0 0,1 694.61,488.94 Z" class="sector"><title>3: Square Off</title></path>
+    <path id="shot-4" data-shot-position="4" data-shot-region="Cover" d="M 400.00,410.00 L 694.61,488.94 A 305.00,305.00 0 0,1 585.67,651.97 Z" class="sector"><title>4: Cover</title></path>
+    <path id="shot-5" data-shot-position="5" data-shot-region="Long Off" d="M 400.00,410.00 L 585.67,651.97 A 305.00,305.00 0 0,1 400.00,715.00 Z" class="sector"><title>5: Long Off</title></path>
+    <path id="shot-6" data-shot-position="6" data-shot-region="Long On" d="M 400.00,410.00 L 400.00,715.00 A 305.00,305.00 0 0,1 214.33,651.97 Z" class="sector"><title>6: Long On</title></path>
+    <path id="shot-7" data-shot-position="7" data-shot-region="Midwicket" d="M 400.00,410.00 L 214.33,651.97 A 305.00,305.00 0 0,1 105.39,488.94 Z" class="sector"><title>7: Midwicket</title></path>
+    <path id="shot-8" data-shot-position="8" data-shot-region="Square Leg" d="M 400.00,410.00 L 105.39,488.94 A 305.00,305.00 0 0,1 118.22,293.28 Z" class="sector"><title>8: Square Leg</title></path>
+    <path id="shot-9" data-shot-position="9" data-shot-region="Fine Leg" d="M 400.00,410.00 L 118.22,293.28 A 305.00,305.00 0 0,1 247.50,145.86 Z" class="sector"><title>9: Fine Leg</title></path>
+
+    <circle cx="400" cy="410" r="305" class="boundary"/>
+    <!-- Pitch -->
+    <rect x="365" y="325" width="70" height="170" rx="3" class="pitch"/>
+    <line x1="350" y1="355" x2="450" y2="355" class="crease"/>
+    <line x1="350" y1="465" x2="450" y2="465" class="crease"/>
+    <!-- Keeper line / wicket line -->
+    <rect x="387" y="343" width="26" height="8" fill="#17251b"/>
+    <!-- Batter / striker marker -->
+    <circle cx="400" cy="480" r="9" fill="#17251b"/>
+    <text x="400" y="515" class="small">BATTER</text>
+    <text x="400" y="305" class="small">WICKETKEEPER</text>
+    <text x="400.0" y="174.0" class="label" style="font-size:18px">Behind</text>
+    <text x="400.0" y="198.0" class="label" style="font-size:18px">Keeper</text>
+    <text x="576.7" y="255.1" class="label" style="font-size:22px">Third Man</text>
+    <text x="634.5" y="394.6" class="label" style="font-size:22px">Square Off</text>
+    <text x="595.4" y="540.6" class="label" style="font-size:22px">Cover</text>
+    <text x="475.5" y="632.5" class="label" style="font-size:22px">Long Off</text>
+    <text x="324.5" y="632.5" class="label" style="font-size:22px">Long On</text>
+    <text x="204.6" y="540.6" class="label" style="font-size:22px">Midwicket</text>
+    <text x="165.5" y="394.6" class="label" style="font-size:22px">Square Leg</text>
+    <text x="223.3" y="255.1" class="label" style="font-size:22px">Fine Leg</text>
+
+    <path d="M 317.5,267.1 A 165,165 0 0,1 482.5,267.1" fill="none" stroke="#b04a3a" stroke-width="4"/>
+    <text x="400" y="145" class="angle" fill="#b04a3a">60° BEHIND KEEPER</text>
+  </g>
+
+  <g>
+    <rect x="180" y="745" width="440" height="32" rx="16" fill="#f1f4f1" stroke="#d2d9d3"/>
+    <text x="400" y="766" class="small">Tap/click a sector to select the shot position</text>
+  </g>
+</svg>

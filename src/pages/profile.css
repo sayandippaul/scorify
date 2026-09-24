@@ -188,6 +188,38 @@
     0 8px 30px rgba(0, 0, 0, 0.05);
 }
 
+.productive-shot-section {
+  margin-top: 20px;
+}
+
+.productive-shot-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 28px;
+}
+
+.productive-shot-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  color: var(--text-primary, #111827);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.productive-shot-list strong {
+  color: var(--primary-color, #2563eb);
+}
+
+.productive-shot-empty {
+  margin: 0;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 700;
+}
+
 
 /* =========================================================
    SECTION HEADER
@@ -793,7 +825,7 @@
 .profile-stat-card-content strong {
   display: block;
 
-  font-size: 21px;
+  font-size: 15px;
 
   line-height: 1.1;
 
@@ -1059,7 +1091,23 @@
 }
 
 .career-format-section {
+  width: 100%;
+  padding: 24px;
+  margin: 0 0 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 20px;
+  background: var(--card-bg, #ffffff);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
   animation: career-stats-enter 420ms ease both;
+}
+
+.career-format-section .profile-stat-title {
+  align-items: flex-start;
+}
+
+.career-format-section .profile-stat-title > div {
+  min-width: 0;
 }
 
 .career-format-grid {
@@ -1201,12 +1249,64 @@
 }
 
 @media (max-width: 700px) {
+  .career-format-section {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
   .career-format-grid {
     grid-template-columns: 1fr;
   }
 
   .career-award-card {
     width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .profile-stat-card {
+    min-height: 80px;
+    padding: 12px;
+    gap: 9px;
+  }
+
+  .profile-stat-card-content span {
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
+@media (max-width: 480px) {
+  .career-format-section {
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .career-format-grid {
+    gap: 10px;
+  }
+
+  .career-format-card {
+    padding: 13px;
+    border-radius: 13px;
+  }
+
+  .career-format-card strong {
+    font-size: 1.5rem;
+  }
+
+  .profile-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-stat-card {
+    min-height: 70px;
   }
 }
 
@@ -2214,4 +2314,158 @@
   --border: #2d3740;
 
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* =========================================================
+   SHARED PROFILE/PLAYERS RESPONSIVE OVERRIDES
+   ========================================================= */
+
+.career-format-section {
+  overflow: hidden;
+}
+
+.career-format-section .profile-stat-title h3,
+.career-format-section .profile-stat-title p {
+  overflow-wrap: anywhere;
+}
+
+.career-format-card,
+.career-award-card {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.career-format-card span,
+.career-format-card small,
+.career-award-card small {
+  overflow-wrap: anywhere;
+}
+
+.career-award-card {
+  max-width: 100%;
+}
+
+/* The Players detail dialog is narrower than the full Profile page. */
+.players-page .modal .profile-section {
+  padding: 22px;
+  background: var(--surface, var(--card-bg, #ffffff));
+  border-color: var(--border, var(--border-color, #e5e7eb));
+}
+
+.players-page .modal .profile-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.players-page .modal .profile-stat-card {
+  align-items: flex-start;
+  padding: 13px;
+  gap: 10px;
+}
+
+.players-page .modal .profile-stat-card-content span {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.players-page .modal .career-format-section {
+  padding: 20px;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  background: var(--surface, var(--card-bg, #ffffff));
+  border-color: var(--border, var(--border-color, #e5e7eb));
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.players-page .modal .career-format-grid {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.players-page .modal .career-format-card {
+  padding: 14px;
+  border-radius: 13px;
+}
+
+.players-page .modal .career-award-card {
+  width: 100%;
+  margin-top: 10px;
+}
+
+[data-theme="dark"] .career-format-section,
+[data-theme="dark"] .players-page .modal .profile-section {
+  background: #111a23;
+  border-color: #30404d;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+}
+
+[data-theme="dark"] .career-format-card,
+[data-theme="dark"] .career-award-card,
+[data-theme="dark"] .players-page .modal .profile-stat-card {
+  background: #1b2732;
+  border-color: #3a5061;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .career-format-card:hover {
+  background: #223241;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme="dark"] .career-format-card span,
+[data-theme="dark"] .career-format-card small,
+[data-theme="dark"] .career-award-card small,
+[data-theme="dark"] .players-page .modal .profile-stat-card-content span {
+  color: #c8d4df;
+}
+
+[data-theme="dark"] .career-format-card strong,
+[data-theme="dark"] .career-award-card strong,
+[data-theme="dark"] .players-page .modal .profile-stat-card-content strong {
+  color: #f8fafc;
+}
+
+@media (max-width: 700px) {
+  .career-format-section {
+    padding: 17px;
+    border-radius: 16px;
+  }
+
+  .career-format-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .career-format-card {
+    padding: 14px;
+  }
+
+  .career-format-card strong {
+    font-size: 1.55rem;
+  }
+
+  .career-result-counts {
+    gap: 5px;
+  }
+
+  .career-result-counts b {
+    font-size: 0.66rem;
+  }
+
+  .players-page .modal .profile-section {
+    padding: 16px 13px;
+  }
+
+  .players-page .modal .profile-stat-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .players-page .modal .profile-stat-card {
+    min-height: 70px;
+  }
+
+  .players-page .modal .career-format-section {
+    padding: 15px;
+  }
 }

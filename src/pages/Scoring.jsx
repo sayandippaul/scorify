@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./scoring.css";
+import leftHandShotMap from "../svg/Scorify_Shot_Map_Left_Hand_Batsman.svg?raw";
+import rightHandShotMap from "../svg/Scorify_Shot_Map_Right_Hand_Batsman.svg?raw";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { calculateWinPrediction } from "../services/winPrediction";
 import {
@@ -15,6 +17,7 @@ import {
   getPlayersOnce,
   getMatchesOnce,
   getCareerStatsOnce,
+  syncStructuredCommentary,
 } from "../services/matchService";
 
 /* =========================================================
@@ -62,7 +65,6 @@ function ScoringWinPredictionCard({ prediction, live = true }) {
   );
 }
 
-
 const PLAYER_ID = (player) =>
   String(
     player?.id ??
@@ -76,6 +78,141 @@ const PLAYER_NAME = (player) =>
   player?.name ||
   player?.playerName ||
   "Unknown Player";
+
+const SHOT_REGIONS = {
+  1: "Behind Keeper",
+  2: "Third Man",
+  3: "Square Off",
+  4: "Cover",
+  5: "Long Off",
+  6: "Long On",
+  7: "Midwicket",
+  8: "Square Leg",
+  9: "Fine Leg",
+};
+
+const normalizeBattingHand = (value) => {
+  const hand = String(value || "").trim().toLowerCase();
+  return hand.startsWith("left") ? "left" : "right";
+};
+
+const safeValue = (value, fallback) =>
+  value !== undefined && value !== null && String(value).trim()
+    ? String(value)
+    : fallback;
+
+const commentaryTemplates = {
+  1: "{label} Good running from {batter}, taking a single towards {region} off {bowler}.",
+  2: "{label} {batter} finds the gap at {region} and comes back for two off {bowler}.",
+  3: "{label} Excellent placement from {batter}! They race back for three through {region} off {bowler}.",
+  4: "{label} FANTASTIC SHOT! {batter} cracks {bowler} through {region} and finds the boundary.",
+  5: "{label} INCREDIBLE! {batter} launches {bowler} into {region} and comes back for FIVE!",
+  6: "{label} SIX! ABSOLUTELY MASSIVE! {batter} launches {bowler} over {region} and clears the boundary!",
+};
+
+const makeCommentary = (ball, shotRegion = null) => {
+  const overNumber = Math.max(1, Number(ball.over) || 1);
+  const label = `${overNumber-1}.${Number(ball.commentaryBallNumber ?? ball.ball ?? 0)}`;
+  const batter = safeValue(ball.strikerName, "The batter");
+  const bowler = safeValue(ball.bowlerName, "the bowler");
+  const runs = Number(ball.batterRuns || 0);
+  const region = safeValue(shotRegion || ball.shotRegion, "the field");
+  const wicketType = ball.wicket?.type;
+  const fielder = safeValue(ball.wicket?.fielder, "");
+  const fielderText = fielder ? ` by ${fielder}` : "";
+
+  if (wicketType) {
+    const first = {
+      Bowled: `${label} BOWLED! ${batter} is beaten completely by ${bowler} and the stumps are shattered!`,
+      Caught: `${label} CAUGHT! ${batter} gets an edge${fielder ? ` and ${fielder} takes a sharp catch` : " and the catch is taken"} off ${bowler}.`,
+      "Caught & Bowled": `${label} CAUGHT AND BOWLED! ${batter} hits it straight back to ${bowler}, who takes the catch.`,
+      "Run out": `${label} RUN OUT! ${batter} is caught short while attempting the run.`,
+      Stumped: `${label} STUMPED! ${batter} is beaten by ${bowler} and the keeper is lightning quick.`,
+      LBW: `${label} LBW! ${batter} is trapped in front by ${bowler}.`,
+      "Hit Wicket": `${label} HIT WICKET! ${batter} accidentally dislodges the stumps while playing the shot.`,
+      "Hit the Ball Twice": `${label} DISMISSED! ${batter} has hit the ball twice, resulting in a rare dismissal.`,
+      "Obstructing the Field": `${label} OUT! ${batter} is dismissed for obstructing the field.`,
+      "Timed out": `${label} TIMED OUT! ${batter} has not arrived at the crease within the permitted time.`,
+      "Boundary Wicket": `${label} WICKET! ${batter} is dismissed at the boundary while attempting the shot.`,
+      "Retired out": `${label} RETIRED OUT! ${batter} leaves the innings without being dismissed by the fielding side.`,
+    }[wicketType] || `${label} WICKET! ${batter} is dismissed by ${bowler}.`;
+    const second = {
+      Bowled: `${label} ${batter} walks back after being clean bowled by ${bowler}.`,
+      Caught: `${label} ${batter} has to depart${fielder ? `, with ${fielder} completing the catch` : ", with the catch completed"} off ${bowler}.`,
+      "Caught & Bowled": `${label} ${bowler} reacts brilliantly to dismiss ${batter} off their own bowling.`,
+      "Run out": `${label} Brilliant fielding completes the run out of ${batter}${fielderText}.`,
+      Stumped: `${label} ${batter} is stranded outside the crease as the wicketkeeper completes the dismissal.`,
+      LBW: `${label} The umpire's finger goes up and ${batter} has to walk back.`,
+      "Hit Wicket": `${label} A rare dismissal as ${batter} loses their wicket to hit wicket.`,
+      "Hit the Ball Twice": `${label} ${batter} is out for hitting the ball twice.`,
+      "Obstructing the Field": `${label} The fielding side appeals successfully and ${batter} has to depart.`,
+      "Timed out": `${label} ${batter} is dismissed without facing a delivery.`,
+      "Boundary Wicket": `${label} The fielding side completes the dismissal and ${batter} has to walk back.`,
+      "Retired out": `${label} ${batter} retires out and the batting side loses a wicket.`,
+    }[wicketType] || `${label} ${batter} has to depart after the wicket.`;
+    return { commentaryType: "wicket", commentaryLines: [first, second], commentary: first };
+  }
+
+  if (ball.type === "NB") {
+    const lines = runs > 0
+      ? [`${label} NO BALL! ${batter} attacks ${bowler} through ${region} and collects ${runs}.`]
+      : [`${label} NO BALL! ${bowler} oversteps, giving ${batter} a free hit.`, `${label} An extra run is added to the batting side as ${bowler} delivers a no-ball.`];
+    return { commentaryType: "no-ball", commentaryLines: lines, commentary: lines[0] };
+  }
+  if (ball.type === "WD") {
+    const extra = Math.max(1, Number(ball.runs || 1));
+    const lines = [`${label} WIDE! ${bowler} misses the line and the batting side collects ${extra} extras.`];
+    return { commentaryType: "wide", commentaryLines: lines, commentary: lines[0] };
+  }
+  if (ball.type === "BYE") {
+    const lines = [`${label} BYE! The ball beats the batter and they run through for ${Number(ball.runs || 0)}.`];
+    return { commentaryType: "bye", commentaryLines: lines, commentary: lines[0] };
+  }
+  if (ball.type === "LB") {
+    const lines = [`${label} LEG BYE! The ball comes off the batter's body and they run ${Number(ball.runs || 0)}.`];
+    return { commentaryType: "leg-bye", commentaryLines: lines, commentary: lines[0] };
+  }
+  if (ball.type === "DEAD") {
+    const lines = [`${label} DEAD BALL! The delivery is called dead and no scoring play is recorded.`];
+    return { commentaryType: "dead-ball", commentaryLines: lines, commentary: lines[0] };
+  }
+  if (!runs) {
+    const lines = [`${label} Dot ball! ${bowler} keeps ${batter} quiet.`];
+    return { commentaryType: "dot", commentaryLines: lines, commentary: lines[0] };
+  }
+  const template = commentaryTemplates[runs] || commentaryTemplates[6];
+  const text = template.replace("{label}", label).replace("{batter}", batter).replace("{bowler}", bowler).replace("{region}", region);
+  return { commentaryType: ["single", "two", "three", "four", "five", "six"][runs - 1] || "runs", commentaryLines: [text], commentary: text };
+};
+
+function ShotPositionMap({ onSelect, battingHand, selectedPosition }) {
+  const mapMarkup = normalizeBattingHand(battingHand) === "left"
+    ? leftHandShotMap
+    : rightHandShotMap;
+
+  const handleMapClick = (event) => {
+    const sector = event.target.closest?.("[data-shot-position]");
+    const position = Number(sector?.getAttribute("data-shot-position"));
+    if (Number.isInteger(position) && SHOT_REGIONS[position]) {
+      onSelect(position);
+    }
+  };
+
+  return (
+    <div
+      className="shot-map-wrap shot-map-asset"
+      onClick={handleMapClick}
+      dangerouslySetInnerHTML={{
+        __html: selectedPosition
+          ? mapMarkup.replace(
+              "<svg ",
+              `<svg data-selected-position="${selectedPosition}" `
+            )
+          : mapMarkup,
+      }}
+    />
+  );
+}
 
 /* =========================================================
    CAREER STATS
@@ -208,6 +345,54 @@ const emptyExtras = () => ({
 
 const clone = (value) =>
   JSON.parse(JSON.stringify(value));
+
+/*
+ * Commentary is a match-wide history. Older saved matches may not contain
+ * scoringState.commentaryDeliveries, so rebuild it from all saved innings.
+ */
+const buildSavedCommentaryHistory = (savedMatch) => {
+  const deliveries = [];
+  const seenInnings = new Set();
+
+  const addInnings = (innings) => {
+    if (!innings || seenInnings.has(innings)) return;
+    seenInnings.add(innings);
+    if (Array.isArray(innings.deliveries)) {
+      deliveries.push(...innings.deliveries);
+    }
+  };
+
+  if (Array.isArray(savedMatch?.testInnings)) {
+    [...savedMatch.testInnings]
+      .sort((a, b) => Number(a?.inningsIndex ?? 0) - Number(b?.inningsIndex ?? 0))
+      .forEach(addInnings);
+  }
+
+  if (Array.isArray(savedMatch?.innings)) {
+    [...savedMatch.innings]
+      .sort((a, b) => Number(a?.inningsIndex ?? 0) - Number(b?.inningsIndex ?? 0))
+      .forEach(addInnings);
+  }
+
+  addInnings(savedMatch?.firstInningsData);
+  addInnings(savedMatch?.secondInningsData);
+
+  if (Array.isArray(savedMatch?.scoringState?.deliveries)) {
+    deliveries.push(...savedMatch.scoringState.deliveries);
+  }
+
+  const unique = new Map();
+  deliveries.forEach((delivery) => {
+    if (!delivery) return;
+    const id = String(
+      delivery.id ??
+      `${delivery.inningsNumber ?? delivery.innings ?? 0}-${delivery.over ?? 0}-${delivery.ball ?? 0}`
+    );
+    if (!unique.has(id)) unique.set(id, delivery);
+  });
+
+  return [...unique.values()];
+};
 
 const isBowlerWicket = (type) =>
   [
@@ -717,6 +902,10 @@ export default function Scoring() {
 
   const [pendingReplacement, setPendingReplacement] =
     useState(null);
+  const [rotateStrikeAfterBowler, setRotateStrikeAfterBowler] =
+    useState(false);
+  const [lastDismissedBatter, setLastDismissedBatter] =
+    useState(null);
 
   /* -------------------------------------------------------
      EXTRA PANEL
@@ -775,6 +964,27 @@ export default function Scoring() {
 
   const [deliveries, setDeliveries] =
     useState([]);
+  const deliveriesRef = useRef([]);
+  const [commentaryDeliveries, setCommentaryDeliveries] = useState([]);
+  const commentaryDeliveriesRef = useRef([]);
+  const commentarySyncRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    deliveriesRef.current = deliveries;
+  }, [deliveries]);
+
+  const commentaryListRef = useRef(null);
+
+  const [pendingShotDelivery, setPendingShotDelivery] =
+    useState(null);
+  const pendingShotDeliveryRef = useRef(null);
+  const deferredFinishRef = useRef(null);
+
+  useEffect(() => {
+    const commentaryList = commentaryListRef.current;
+    if (!commentaryList) return;
+    commentaryList.scrollTop = commentaryList.scrollHeight;
+  }, [commentaryDeliveries]);
 
   const [battingStats, setBattingStats] =
     useState({});
@@ -926,7 +1136,16 @@ export default function Scoring() {
         setCurrentBowlerId(savedState.currentBowlerId ?? "");
 
         setCurrentOverBalls(savedState.currentOverBalls ?? []);
-        setDeliveries(savedState.deliveries ?? []);
+        const restoredDeliveries = Array.isArray(savedState.deliveries)
+          ? savedState.deliveries
+          : [];
+        deliveriesRef.current = restoredDeliveries;
+        setDeliveries(restoredDeliveries);
+        const restoredCommentaryDeliveries = Array.isArray(savedState.commentaryDeliveries)
+          ? savedState.commentaryDeliveries
+          : buildSavedCommentaryHistory(restored);
+        commentaryDeliveriesRef.current = restoredCommentaryDeliveries;
+        setCommentaryDeliveries(restoredCommentaryDeliveries);
         setBattingStats(savedState.battingStats ?? {});
         setBowlingStats(savedState.bowlingStats ?? {});
         setExtras(savedState.extras ?? emptyExtras());
@@ -1228,6 +1447,42 @@ export default function Scoring() {
     nonStrikerId,
   ]);
 
+  const runOutDismissedBatter = useMemo(() => {
+    if (wicketType !== "Run out") return null;
+    return (battingTeam?.players || []).find(
+      (player) => String(PLAYER_ID(player)) === String(wicketBatterId)
+    ) || null;
+  }, [
+    wicketType,
+    wicketBatterId,
+    strikerId,
+    striker,
+    nonStriker,
+    battingTeam,
+  ]);
+
+  const runOutNotOutBatter = useMemo(() => {
+    if (wicketType !== "Run out") return null;
+    const dismissedId = String(wicketBatterId || "");
+    const otherId =
+      dismissedId === String(strikerId)
+        ? nonStrikerId
+        : dismissedId === String(nonStrikerId)
+          ? strikerId
+          : "";
+    return (battingTeam?.players || []).find(
+      (player) => String(PLAYER_ID(player)) === String(otherId)
+    ) || null;
+  }, [
+    wicketType,
+    wicketBatterId,
+    strikerId,
+    striker,
+    nonStriker,
+    nonStrikerId,
+    battingTeam,
+  ]);
+
   const currentBowler = useMemo(() => {
     if (!bowlingTeam) return null;
 
@@ -1280,6 +1535,19 @@ export default function Scoring() {
     const updated = {
       ...match,
       ...extra,
+      scoringState: {
+        ...(match.scoringState || {}),
+        ...(extra.scoringState || {}),
+        inningsIndex:
+          extra.scoringState?.inningsIndex ?? inningsIndex,
+        deliveries:
+          extra.scoringState?.deliveries ?? deliveriesRef.current,
+        commentaryDeliveries:
+          extra.scoringState?.commentaryDeliveries ??
+          commentaryDeliveriesRef.current,
+        currentOverBalls:
+          extra.scoringState?.currentOverBalls ?? currentOverBalls,
+      },
       updatedAt:
         new Date().toISOString(),
     };
@@ -1437,21 +1705,26 @@ export default function Scoring() {
 
     setBattingStats(nextStats);
 
-    if (battingMode === 1 || pendingReplacement.slot === "striker") {
+    const replacementSlot = pendingReplacement.slot;
+
+    if (battingMode === 1 || replacementSlot === "striker") {
       setStrikerId(id);
     }
 
     if (battingMode === 1) {
       setNonStrikerId("");
-    } else if (pendingReplacement.slot === "nonStriker") {
+    } else if (replacementSlot === "nonStriker") {
       setNonStrikerId(id);
     }
 
     const overEnded =
       pendingReplacement.overEnded;
+    const shouldRotateAfterBowler =
+      Boolean(pendingReplacement.runOut && overEnded && battingMode === 2);
 
     setPendingReplacement(null);
     setShowBatterModal(false);
+    setRotateStrikeAfterBowler(shouldRotateAfterBowler);
 
     /*
      * If wicket was on ball 6,
@@ -1461,7 +1734,8 @@ export default function Scoring() {
 
     if (
       overEnded &&
-      battingMode === 2
+      battingMode === 2 &&
+      !pendingReplacement.runOut
     ) {
       setTimeout(() => {
         setStrikerId((currentStriker) => {
@@ -1567,6 +1841,14 @@ export default function Scoring() {
       String(id)
     );
 
+    if (rotateStrikeAfterBowler && battingMode === 2 && nonStrikerId) {
+      const nextStriker = nonStrikerId;
+      const nextNonStriker = strikerId;
+      setStrikerId(nextStriker);
+      setNonStrikerId(nextNonStriker);
+      setRotateStrikeAfterBowler(false);
+    }
+
     setShowBowlerModal(false);
   };
 
@@ -1608,6 +1890,7 @@ export default function Scoring() {
   ========================================================= */
 
   const makeSnapshot = () => ({
+    inningsIndex,
     inningsRuns,
     inningsWickets,
     legalBalls,
@@ -1624,6 +1907,8 @@ export default function Scoring() {
       clone(currentOverBalls),
     deliveries:
       clone(deliveries),
+    commentaryDeliveries:
+      clone(commentaryDeliveriesRef.current),
     battingStats:
       clone(battingStats),
     bowlingStats:
@@ -1649,6 +1934,21 @@ export default function Scoring() {
   ========================================================= */
 
   const restoreSnapshot = (snapshot) => {
+    const previousDeliveries = deliveriesRef.current;
+    const restoredDeliveries = Array.isArray(snapshot.deliveries)
+      ? snapshot.deliveries
+      : [];
+    const restoredOverBalls = Array.isArray(snapshot.currentOverBalls)
+      ? snapshot.currentOverBalls
+      : [];
+    const restoredCommentaryDeliveries = Array.isArray(snapshot.commentaryDeliveries)
+      ? snapshot.commentaryDeliveries
+      : restoredDeliveries;
+
+    const restoredInningsIndex = Number.isFinite(Number(snapshot.inningsIndex))
+      ? Number(snapshot.inningsIndex)
+      : inningsIndex;
+    setInningsIndex(restoredInningsIndex);
     setInningsRuns(
       snapshot.inningsRuns
     );
@@ -1687,13 +1987,21 @@ export default function Scoring() {
       snapshot.battingMode
     );
 
-    setCurrentOverBalls(
-      snapshot.currentOverBalls
-    );
+    setCurrentOverBalls(restoredOverBalls);
 
-    setDeliveries(
-      snapshot.deliveries
+    setDeliveries(restoredDeliveries);
+    deliveriesRef.current = restoredDeliveries;
+    const removedCommentaryIds = new Set(
+      previousDeliveries
+        .filter((delivery) => !restoredDeliveries.some((item) => item.id === delivery.id))
+        .map((delivery) => delivery.id)
     );
+    const undoCommentaryDeliveries = commentaryDeliveriesRef.current.filter(
+      (delivery) => !removedCommentaryIds.has(delivery.id)
+    );
+    setCommentaryDeliveries(undoCommentaryDeliveries);
+    commentaryDeliveriesRef.current = undoCommentaryDeliveries;
+    queueStructuredCommentarySync(restoredDeliveries, previousDeliveries);
 
     setBattingStats(
       snapshot.battingStats
@@ -1715,12 +2023,52 @@ export default function Scoring() {
       snapshot.completedOvers
     );
 
+    // Undo can restore the state immediately before a completed over. The
+    // next legal ball must be allowed to complete that over again, even
+    // though it will reuse the same innings/over/legal-ball key.
+    overCompletionRef.current = "";
+
     setFreeHit(isTestMatch ? false : snapshot.freeHit);
 
+    setPendingShotDelivery(null);
+    pendingShotDeliveryRef.current = null;
     setPendingReplacement(null);
+    setRotateStrikeAfterBowler(false);
     setExtraPanel(null);
     setShowWicketModal(false);
     setShowBatterModal(false);
+
+    persistMatch({
+      scoringState: {
+        ...(match.scoringState || {}),
+        inningsIndex: restoredInningsIndex,
+        inningsRuns: snapshot.inningsRuns,
+        inningsWickets: snapshot.inningsWickets,
+        legalBalls: snapshot.legalBalls,
+        currentOver: snapshot.currentOver,
+        currentDay: snapshot.currentDay,
+        testDayStartOvers: snapshot.testDayStartOvers,
+        followOnEnforced: snapshot.followOnEnforced,
+        declaredInnings: snapshot.declaredInnings,
+        strikerId: snapshot.strikerId,
+        nonStrikerId: snapshot.nonStrikerId,
+        currentBowlerId: snapshot.currentBowlerId,
+        battingMode: snapshot.battingMode,
+        currentOverBalls: restoredOverBalls,
+        deliveries: restoredDeliveries,
+        commentaryDeliveries: undoCommentaryDeliveries,
+        battingStats: snapshot.battingStats,
+        bowlingStats: snapshot.bowlingStats,
+        extras: snapshot.extras,
+        fallOfWickets: snapshot.fallOfWickets,
+        completedOvers: snapshot.completedOvers,
+        freeHit: snapshot.freeHit,
+      },
+    });
+    lastFlushedBallRef.current = Math.min(
+      lastFlushedBallRef.current,
+      Number(snapshot.legalBalls || 0)
+    );
   };
 
   /* =========================================================
@@ -1831,7 +2179,7 @@ export default function Scoring() {
       battingStats,
       bowlingStats,
       extras,
-      deliveries,
+      deliveries: deliveriesRef.current,
       fallOfWickets,
       completedOvers,
       inningsIndex,
@@ -1874,7 +2222,7 @@ export default function Scoring() {
       battingStats,
       bowlingStats,
       extras,
-      deliveries,
+      deliveries: deliveriesRef.current,
       fallOfWickets,
       completedOvers,
       inningsIndex,
@@ -1970,6 +2318,19 @@ export default function Scoring() {
     finalValues = {},
     finalInningsData = null
   ) => {
+    const effectiveFinalInningsData = finalInningsData || {
+      teamId: battingTeam?.id,
+      teamName: battingTeam?.name,
+      runs: inningsRuns,
+      wickets: inningsWickets,
+      balls: legalBalls,
+      battingStats,
+      bowlingStats,
+      extras,
+      deliveries: deliveriesRef.current,
+      fallOfWickets,
+      completedOvers,
+    };
     const finalTestInnings = Array.isArray(finalValues.testInnings)
       ? finalValues.testInnings.find(
           (item) => Number(item.inningsIndex) === Number(inningsIndex)
@@ -1985,7 +2346,7 @@ export default function Scoring() {
           battingStats,
           bowlingStats,
           extras,
-          deliveries,
+          deliveries: deliveriesRef.current,
           fallOfWickets,
           completedOvers,
           declared: Boolean(
@@ -2063,21 +2424,9 @@ export default function Scoring() {
 
     const finalInningsSnapshot = isTestMatch
       ? (finalInningsData || currentTestInnings)
-      : null;
+      : effectiveFinalInningsData;
 
-    const secondInningsData = finalInningsData || {
-      teamId: battingTeam?.id,
-      teamName: battingTeam?.name,
-      runs: inningsRuns,
-      wickets: inningsWickets,
-      balls: legalBalls,
-      battingStats,
-      bowlingStats,
-      extras,
-      deliveries,
-      fallOfWickets,
-      completedOvers,
-    };
+    const secondInningsData = effectiveFinalInningsData;
 
     setResult(finalResult);
 
@@ -2120,10 +2469,29 @@ export default function Scoring() {
                 : deliveries,
               fallOfWickets: finalInningsSnapshot?.fallOfWickets || fallOfWickets,
               completedOvers: finalInningsSnapshot?.completedOvers || completedOvers,
+              commentaryDeliveries: commentaryDeliveriesRef.current,
               result: finalResult,
             },
           }
-        : {}),
+        : {
+            scoringState: {
+              ...(match?.scoringState || {}),
+              inningsIndex,
+              inningsRuns: Number(effectiveFinalInningsData.runs ?? inningsRuns),
+              inningsWickets: Number(effectiveFinalInningsData.wickets ?? inningsWickets),
+              legalBalls: Number(effectiveFinalInningsData.balls ?? legalBalls),
+              battingStats: effectiveFinalInningsData.battingStats || battingStats,
+              bowlingStats: effectiveFinalInningsData.bowlingStats || bowlingStats,
+              extras: effectiveFinalInningsData.extras ?? extras,
+              deliveries: Array.isArray(effectiveFinalInningsData.deliveries)
+                ? effectiveFinalInningsData.deliveries
+                : deliveriesRef.current,
+              fallOfWickets: effectiveFinalInningsData.fallOfWickets || fallOfWickets,
+              completedOvers: effectiveFinalInningsData.completedOvers || completedOvers,
+              commentaryDeliveries: commentaryDeliveriesRef.current,
+              result: finalResult,
+            },
+          }),
       ...(!isTestMatch && finalValues.innings ? { innings: finalValues.innings } : {}),
       ...(finalValues.inningsOrder ? { inningsOrder: finalValues.inningsOrder } : {}),
       ...(finalRosters
@@ -2167,7 +2535,9 @@ export default function Scoring() {
     finalInningsData = null
   ) => {
     if (isTestMatch) {
-      const inningsData = finalInningsData || {
+      const currentInningsData = finalInningsData
+        ? { ...finalInningsData, deliveries: deliveriesRef.current }
+        : {
         teamId: battingTeam.id,
         teamName: battingTeam.name,
         runs: finalRuns,
@@ -2176,7 +2546,7 @@ export default function Scoring() {
         battingStats,
         bowlingStats,
         extras,
-        deliveries,
+        deliveries: deliveriesRef.current,
         fallOfWickets,
         completedOvers,
         declared: declaredInnings.includes(inningsIndex),
@@ -2186,10 +2556,10 @@ export default function Scoring() {
           (item) => Number(item.inningsIndex) !== inningsIndex
         ),
         {
-          ...inningsData,
+          ...currentInningsData,
           inningsIndex,
           day: currentDay,
-          completedOversCount: completedTestOvers(inningsData.balls),
+          completedOversCount: completedTestOvers(finalBalls),
         },
       ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex));
 
@@ -2268,7 +2638,9 @@ export default function Scoring() {
         setBattingStats({});
         setBowlingStats({});
         setCurrentOverBalls([]);
+        deliveriesRef.current = [];
         setDeliveries([]);
+        setPendingShotDelivery(null);
         setExtras(emptyExtras());
         setFallOfWickets([]);
         setCompletedOvers([]);
@@ -2323,8 +2695,9 @@ export default function Scoring() {
       return;
     }
 
-    if (inningsIndex === 0) {
-      const inningsData = finalInningsData || {
+    const inningsData = finalInningsData
+      ? { ...finalInningsData, deliveries: deliveriesRef.current }
+      : {
         teamId: battingTeam.id,
         teamName: battingTeam.name,
         runs: finalRuns,
@@ -2333,11 +2706,12 @@ export default function Scoring() {
         battingStats,
         bowlingStats,
         extras,
-        deliveries,
+        deliveries: deliveriesRef.current,
         fallOfWickets,
         completedOvers,
       };
 
+    if (inningsIndex === 0) {
       /*
        * Save first innings.
        */
@@ -2389,7 +2763,9 @@ export default function Scoring() {
       setBowlingStats({});
 
       setCurrentOverBalls([]);
+      deliveriesRef.current = [];
       setDeliveries([]);
+      setPendingShotDelivery(null);
 
       setExtras(
         emptyExtras()
@@ -2435,7 +2811,8 @@ export default function Scoring() {
           scoreB: battingTeam.id === "B" ? finalRuns : match.scoreB || 0,
           wicketsA: battingTeam.id === "A" ? finalWickets : match.wicketsA || 0,
           wicketsB: battingTeam.id === "B" ? finalWickets : match.wicketsB || 0,
-        }
+        },
+        inningsData
       );
       return;
     }
@@ -2449,7 +2826,8 @@ export default function Scoring() {
           scoreB: battingTeam.id === "B" ? finalRuns : match.scoreB || 0,
           wicketsA: battingTeam.id === "A" ? finalWickets : match.wicketsA || 0,
           wicketsB: battingTeam.id === "B" ? finalWickets : match.wicketsB || 0,
-        }
+        },
+        inningsData
       );
       return;
     }
@@ -2471,7 +2849,8 @@ export default function Scoring() {
         scoreB: battingTeam.id === "B" ? finalRuns : match.scoreB || 0,
         wicketsA: battingTeam.id === "A" ? finalWickets : match.wicketsA || 0,
         wicketsB: battingTeam.id === "B" ? finalWickets : match.wicketsB || 0,
-      }
+      },
+      inningsData
     );
   };
 
@@ -2485,9 +2864,23 @@ export default function Scoring() {
     balls,
     finalInningsData = null
   ) => {
+    const deferFinish = (finish) => {
+      if (!pendingShotDeliveryRef.current) {
+        finish();
+        return true;
+      }
+      deferredFinishRef.current = finish;
+      return true;
+    };
+    const inningsData = finalInningsData
+      ? {
+          ...finalInningsData,
+          deliveries: deliveriesRef.current,
+        }
+      : null;
     if (isTestMatch) {
       if (inningsIndex === 3) {
-        const currentInnings = finalInningsData || {
+        const currentInnings = inningsData || {
           teamId: battingTeam.id,
           teamName: battingTeam.name,
           runs,
@@ -2524,15 +2917,14 @@ export default function Scoring() {
 
         if (balls > 0 && chaseTarget > 0 && runs >= chaseTarget) {
           const remaining = wicketsInHand(battingTeam.players.length, wickets);
-          finishMatch(battingTeam.name, `${battingTeam.name} won by ${remaining} wicket${remaining === 1 ? "" : "s"}`, {
+          return deferFinish(() => finishMatch(battingTeam.name, `${battingTeam.name} won by ${remaining} wicket${remaining === 1 ? "" : "s"}`, {
             scoreA: totals.A,
             scoreB: totals.B,
             testInnings: savedInnings,
             innings: savedInnings,
             inningsOrder: testInningsOrder,
             drawState: "decided",
-          }, currentInnings);
-          return true;
+          }, currentInnings));
         }
       }
 
@@ -2545,8 +2937,7 @@ export default function Scoring() {
             (player) => (finalInningsData.battingStats?.[PLAYER_ID(player)]?.status || "yet") === "out"
           ))
       ) {
-        finishCurrentInnings(runs, wickets, balls, finalInningsData);
-        return true;
+        return deferFinish(() => finishCurrentInnings(runs, wickets, balls, inningsData));
       }
       return false;
     }
@@ -2576,7 +2967,7 @@ export default function Scoring() {
             wickets
           );
 
-        finishMatch(
+        return deferFinish(() => finishMatch(
           battingTeam.name,
           `${battingTeam.name} won by ${wicketsRemaining} wicket${
             wicketsRemaining === 1 ? "" : "s"
@@ -2588,13 +2979,11 @@ export default function Scoring() {
             wicketsB: battingTeam.id === "B" ? wickets : match.wicketsB || 0,
           },
           finalInningsData
-        );
-
-        return true;
+        ));
       }
 
       if (runs === target && (wicketsExhausted || oversExhausted)) {
-        finishMatch(
+        return deferFinish(() => finishMatch(
           null,
           "Match drawn",
           {
@@ -2604,9 +2993,7 @@ export default function Scoring() {
             wicketsB: battingTeam.id === "B" ? wickets : match.wicketsB || 0,
           },
           finalInningsData
-        );
-
-        return true;
+        ));
       }
     }
 
@@ -2632,8 +3019,7 @@ export default function Scoring() {
       totalBatters > 0 &&
       wickets >= totalBatters
     ) {
-      finishCurrentInnings(runs, wickets, balls, finalInningsData);
-      return true;
+      return deferFinish(() => finishCurrentInnings(runs, wickets, balls, finalInningsData));
     }
 
     /*
@@ -2661,8 +3047,7 @@ export default function Scoring() {
       rosterForCheck.length >= 0 &&
       availableCount === 0
     ) {
-      finishCurrentInnings(runs, wickets, balls, finalInningsData);
-      return true;
+      return deferFinish(() => finishCurrentInnings(runs, wickets, balls, finalInningsData));
     }
 
     /*
@@ -2673,8 +3058,7 @@ export default function Scoring() {
       balls >=
       Number(match.overs || 3) * 6
     ) {
-      finishCurrentInnings(runs, wickets, balls, finalInningsData);
-      return true;
+      return deferFinish(() => finishCurrentInnings(runs, wickets, balls, finalInningsData));
     }
 
     return false;
@@ -2994,7 +3378,11 @@ export default function Scoring() {
     completedBalls = currentOverBalls,
     { swapStrikeAtOverEnd = true } = {}
   ) => {
-    const overBalls = completedBalls;
+    const overBalls = completedBalls.map((ball) =>
+      deliveriesRef.current.find(
+        (delivery) => String(delivery.id) === String(ball.id)
+      ) || ball
+    );
     const validCount = overBalls.filter((ball) => ball.validBall).length;
     const completionKey = `${inningsIndex}:${currentOver}:${legalBalls}`;
     if (validCount < 6 || overCompletionRef.current === completionKey) {
@@ -3151,6 +3539,146 @@ export default function Scoring() {
     return true;
   };
 
+  const queueStructuredCommentarySync = (nextDeliveries, previousDeliveries = []) => {
+    if (!match?.id) return;
+
+    commentarySyncRef.current = commentarySyncRef.current
+      .catch(() => undefined)
+      .then(() =>
+        syncStructuredCommentary(
+          match.id,
+          nextDeliveries,
+          previousDeliveries
+        )
+      )
+      .catch((error) => {
+        console.error("Unable to persist structured commentary:", error);
+      });
+  };
+
+  const appendDelivery = (ball) => {
+    const previousDeliveries = deliveriesRef.current;
+    const batterRuns = Number(ball.batterRuns || 0);
+    const recordedStriker = battingTeam?.players?.find(
+      (player) => PLAYER_ID(player) === String(ball.strikerId || "")
+    );
+    const legalBallsInOver = deliveriesRef.current.filter(
+      (delivery) =>
+        Number(delivery.over) === Number(ball.over) &&
+        delivery.validBall === true
+    ).length;
+    const annotatedBall = {
+      ...ball,
+      inningsNumber: inningsIndex + 1,
+      strikerBattingHand:
+        ball.strikerBattingHand ||
+        recordedStriker?.battingHand ||
+        "Right hand",
+      commentaryBallNumber: ball.validBall
+        ? legalBallsInOver + 1
+        : legalBallsInOver,
+    };
+    const annotated = batterRuns > 0
+      ? annotatedBall
+      : { ...annotatedBall, ...makeCommentary(annotatedBall) };
+
+    const nextDeliveries = [...deliveriesRef.current, annotated];
+    deliveriesRef.current = nextDeliveries;
+    setDeliveries(nextDeliveries);
+    const nextCommentaryDeliveries = [
+      ...commentaryDeliveriesRef.current,
+      annotated,
+    ];
+    commentaryDeliveriesRef.current = nextCommentaryDeliveries;
+    setCommentaryDeliveries(nextCommentaryDeliveries);
+    queueStructuredCommentarySync(nextDeliveries, previousDeliveries);
+    if (batterRuns > 0) {
+      pendingShotDeliveryRef.current = annotated;
+      setPendingShotDelivery(annotated);
+    }
+    return annotated;
+  };
+
+  const selectShotPosition = (position) => {
+    if (!pendingShotDelivery || !SHOT_REGIONS[position]) return;
+    const updated = {
+      ...pendingShotDelivery,
+      shotPosition: position,
+      shotRegion: SHOT_REGIONS[position],
+      ...makeCommentary(pendingShotDelivery, SHOT_REGIONS[position]),
+    };
+    pendingShotDeliveryRef.current = updated;
+    setPendingShotDelivery(updated);
+  };
+
+  const persistDeliveryCommentary = (nextDeliveries) => {
+    if (!match?.id) return;
+
+    const updated = {
+      ...match,
+      deliveries: nextDeliveries,
+      scoringState: {
+        ...(match.scoringState || {}),
+        deliveries: nextDeliveries,
+        commentaryDeliveries: commentaryDeliveriesRef.current,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveMatchEverywhere(updated, matchId);
+    flushMatchData(updated, { full: true }).catch((error) => {
+      console.error("Unable to persist delivery commentary:", error);
+    });
+  };
+
+  const commitDeliveryAnnotation = (updatedDelivery) => {
+    const previousDeliveries = deliveriesRef.current;
+    const nextDeliveries = deliveriesRef.current.map((delivery) =>
+      delivery.id === updatedDelivery.id ? updatedDelivery : delivery
+    );
+    deliveriesRef.current = nextDeliveries;
+    setDeliveries(nextDeliveries);
+    const nextCommentaryDeliveries = commentaryDeliveriesRef.current.map((delivery) =>
+      delivery.id === updatedDelivery.id ? updatedDelivery : delivery
+    );
+    commentaryDeliveriesRef.current = nextCommentaryDeliveries;
+    setCommentaryDeliveries(nextCommentaryDeliveries);
+    queueStructuredCommentarySync(nextDeliveries, previousDeliveries);
+    persistDeliveryCommentary(nextDeliveries);
+  };
+
+  const confirmShotPosition = () => {
+    if (!pendingShotDelivery?.shotPosition) return;
+    commitDeliveryAnnotation(pendingShotDelivery);
+    setPendingShotDelivery(null);
+    pendingShotDeliveryRef.current = null;
+    const deferredFinish = deferredFinishRef.current;
+    deferredFinishRef.current = null;
+    if (deferredFinish) {
+      commentarySyncRef.current.then(deferredFinish).catch((error) => {
+        console.error("Unable to finish match after commentary persistence:", error);
+      });
+    }
+  };
+
+  const discardPendingShotDelivery = () => {
+    window.alert("This ball was not recorded because a shot position was not selected.");
+    const previousSnapshot = history[history.length - 1];
+    if (previousSnapshot) {
+      restoreSnapshot(previousSnapshot);
+      setHistory((previousHistory) => previousHistory.slice(0, -1));
+    } else {
+      setPendingShotDelivery(null);
+      pendingShotDeliveryRef.current = null;
+      deferredFinishRef.current = null;
+    }
+  };
+
+  const closeShotMap = () => {
+    if (!pendingShotDelivery) return;
+    discardPendingShotDelivery();
+  };
+
   const recordNormalRun = (
     runs
   ) => {
@@ -3274,12 +3802,7 @@ export default function Scoring() {
       newBalls
     );
 
-    setDeliveries(
-      (prev) => [
-        ...prev,
-        ball,
-      ]
-    );
+    appendDelivery(ball);
 
     setCurrentOverBalls(
       (prev) => [
@@ -3392,12 +3915,7 @@ export default function Scoring() {
       wicket: null,
     };
 
-    setDeliveries(
-      (prev) => [
-        ...prev,
-        ball,
-      ]
-    );
+    appendDelivery(ball);
 
     setCurrentOverBalls(
       (prev) => [
@@ -3559,7 +4077,7 @@ export default function Scoring() {
     setExtras(newExtras);
     setInningsRuns(newRuns);
     setInningsWickets(newWickets);
-    setDeliveries(prev => [...prev, ball]);
+    appendDelivery(ball);
     setCurrentOverBalls(prev => [...prev, ball]);
 
     const chaseEnded = checkInningsEnd(
@@ -3723,7 +4241,7 @@ export default function Scoring() {
     setExtras(newExtras);
     setInningsRuns(newRuns);
     setInningsWickets(newWickets);
-    setDeliveries(prev => [...prev, ball]);
+    appendDelivery(ball);
     setCurrentOverBalls(prev => [...prev, ball]);
 
     const chaseEnded = checkInningsEnd(
@@ -3902,12 +4420,7 @@ export default function Scoring() {
       newBalls
     );
 
-    setDeliveries(
-      (prev) => [
-        ...prev,
-        ball,
-      ]
-    );
+    appendDelivery(ball);
 
     setCurrentOverBalls(
       (prev) => [
@@ -4063,12 +4576,7 @@ export default function Scoring() {
       newBalls
     );
 
-    setDeliveries(
-      (prev) => [
-        ...prev,
-        ball,
-      ]
-    );
+    appendDelivery(ball);
 
     setCurrentOverBalls(
       (prev) => [
@@ -4283,6 +4791,11 @@ export default function Scoring() {
     if (!dismissedPlayer) {
       return;
     }
+
+    setLastDismissedBatter({
+      id: PLAYER_ID(dismissedPlayer),
+      name: PLAYER_NAME(dismissedPlayer),
+    });
 
     const dismissedId =
       PLAYER_ID(
@@ -4635,12 +5148,7 @@ export default function Scoring() {
       newFow
     );
 
-    setDeliveries(
-      (prev) => [
-        ...prev,
-        ball,
-      ]
-    );
+    appendDelivery(ball);
 
     setCurrentOverBalls(
       (prev) => [
@@ -4717,9 +5225,38 @@ export default function Scoring() {
     setFreeHit(false);
 
     /*
-     * Check innings end.
+     * If this was ball 6,
+     * mark over ended.
      */
 
+    const overEnded =
+      newBalls % 6 === 0;
+
+    /*
+     * Complete the over before presenting any replacement-batter or
+     * next-bowler selection. This is especially important when the
+     * sixth legal delivery is also a wicket.
+     */
+    if (validBall && overEnded) {
+      completeOver(
+        bowlerKey,
+        [...currentOverBalls, ball],
+        { swapStrikeAtOverEnd: false }
+      );
+      /*
+       * Do not let the replacement-batter flow render with the completed
+       * over still attached. Run outs must follow the same reset ordering
+       * as other valid-ball wickets; no-ball and wide wickets never enter
+       * this branch because they are not valid balls.
+       */
+      setCurrentOverBalls([]);
+      setCurrentBowlerId("");
+    }
+
+    /*
+     * Check innings end after the completed delivery/over snapshot has
+     * been finalized.
+     */
     const ended =
       checkInningsEnd(
         newRuns,
@@ -4734,7 +5271,7 @@ export default function Scoring() {
           battingStats: newBatting,
           bowlingStats: newBowling,
           extras,
-          deliveries: [...deliveries, ball],
+          deliveries: deliveriesRef.current,
           fallOfWickets: newFow,
           completedOvers,
         }
@@ -4742,22 +5279,6 @@ export default function Scoring() {
 
     if (ended) {
       return;
-    }
-
-    /*
-     * If this was ball 6,
-     * mark over ended.
-     */
-
-    const overEnded =
-      newBalls % 6 === 0;
-
-    if (isTestMatch && overEnded) {
-      completeOver(
-        bowlerKey,
-        [...currentOverBalls, ball],
-        { swapStrikeAtOverEnd: false }
-      );
     }
 
     /*
@@ -4861,6 +5382,8 @@ export default function Scoring() {
           ? "striker"
           : dismissedFinalSlot,
       overEnded,
+      validBall,
+      runOut: wicketType === "Run out",
     });
 
     /*
@@ -5581,6 +6104,7 @@ export default function Scoring() {
       extras,
       fallOfWickets,
       completedOvers,
+      commentaryDeliveries: commentaryDeliveriesRef.current,
       freeHit: isTestMatch ? false : freeHit,
       testDayStartOvers,
       history,
@@ -5677,6 +6201,7 @@ export default function Scoring() {
     extras,
     fallOfWickets,
     completedOvers,
+    commentaryDeliveries,
     currentDay,
     testDayStartOvers,
     freeHit,
@@ -5753,6 +6278,14 @@ export default function Scoring() {
               </div>
             ))}
           </div>
+        </section>
+        <section className="commentary-card">
+          <div className="section-title"><span>COMMENTARY</span></div>
+          {(savedState.deliveries || []).slice().reverse().filter((ball) => ball.commentary || ball.commentaryLines?.length).map((ball) => (
+            <article className="commentary-item" key={ball.id}>
+              {(ball.commentaryLines || [ball.commentary]).map((line, index) => <p key={`${ball.id}-${index}`}>{line}</p>)}
+            </article>
+          ))}
         </section>
 
         <button type="button" className="score-primary-button" onClick={() => navigate("/matches")}>← Back to Matches</button>
@@ -6608,6 +7141,13 @@ if (screen === "finished") {
           ].sort((a, b) => Number(a.inningsIndex) - Number(b.inningsIndex)))
     : [];
 
+  const commentaryByInnings = commentaryDeliveries.reduce((groups, ball) => {
+    const inningsNumber = Number(ball.inningsNumber || ball.innings || 1);
+    if (!groups[inningsNumber]) groups[inningsNumber] = [];
+    groups[inningsNumber].push(ball);
+    return groups;
+  }, {});
+
   return (
     <div className="scoring-page">
 
@@ -6849,6 +7389,80 @@ if (screen === "finished") {
 
       </section>
 
+      <section className="commentary-card">
+        <div className="section-title"><span>COMMENTARY</span><small>{commentaryDeliveries.filter((ball) => ball.commentary || ball.commentaryLines?.length).length} recorded</small></div>
+        <div className="commentary-list" ref={commentaryListRef}>
+          {Object.entries(commentaryByInnings).map(([inningsNumber, inningsDeliveries]) => {
+            const commentaryBalls = inningsDeliveries.filter(
+              (ball) => ball.commentary || ball.commentaryLines?.length
+            );
+            const commentaryByOver = commentaryBalls.reduce((groups, ball) => {
+              const overNumber = Number(ball.over || 0);
+              if (!groups[overNumber]) groups[overNumber] = [];
+              groups[overNumber].push(ball);
+              return groups;
+            }, {});
+            return (
+              <div key={`commentary-innings-${inningsNumber}`}>
+                <h3 className="commentary-innings-title">Innings {inningsNumber}</h3>
+                {Object.entries(commentaryByOver).map(([overNumber, overDeliveries], overIndex) => (
+                  <div
+                    className={overIndex > 0 ? "commentary-over commentary-over-break" : "commentary-over"}
+                    key={`commentary-innings-${inningsNumber}-over-${overNumber}`}
+                  >
+                    <h4 className="commentary-over-title">Over {overNumber}</h4>
+                    {overDeliveries.map((ball) => (
+                      <article
+                        className={`commentary-item${ball.id === commentaryBalls[commentaryBalls.length - 1]?.id ? " commentary-item-newest" : ""}`}
+                        key={ball.id}
+                      >
+                        {(ball.commentaryLines || [ball.commentary]).map((line, lineIndex) => <p key={`${ball.id}-${lineIndex}`}>{line}</p>)}
+                      </article>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          {!commentaryDeliveries.some((ball) => ball.commentary || ball.commentaryLines?.length) && <p className="empty-text">No commentary recorded yet.</p>}
+        </div>
+      </section>
+
+      {pendingShotDelivery && (
+        <div className="score-modal-backdrop">
+          <div className="score-modal shot-map-modal" role="dialog" aria-modal="true" aria-labelledby="shot-map-title">
+            <div className="modal-header">
+              <div>
+                <span className="score-eyebrow">DELIVERY {pendingShotDelivery.over}.{pendingShotDelivery.ball}</span>
+                <h2 id="shot-map-title">Select Shot Position</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close shot-map-close"
+                aria-label="Close shot position map"
+                onClick={closeShotMap}
+              >
+                ×
+              </button>
+            </div>
+            <p className="shot-map-help">Choose where the batter played the ball. This only adds commentary metadata.</p>
+            <ShotPositionMap
+              onSelect={selectShotPosition}
+              battingHand={pendingShotDelivery.strikerBattingHand}
+              selectedPosition={pendingShotDelivery.shotPosition}
+            />
+            <button
+              type="button"
+              className="score-primary-button shot-map-confirm"
+              onClick={confirmShotPosition}
+              disabled={!pendingShotDelivery.shotPosition}
+            >
+              Select Position
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* NEW BATSMAN REQUIRED */}
 
       {pendingReplacement && availableBatters.length > 0 && (
@@ -6860,8 +7474,8 @@ if (screen === "finished") {
             </strong>
 
             <small>
-              The previous batsman is out. Choose the
-              new batsman.
+              {lastDismissedBatter?.name || "The previous batsman"} is out.
+              Choose the new batsman.
             </small>
           </div>
 
@@ -7777,6 +8391,7 @@ if (screen === "finished") {
           End Innings
         </button>
       )}
+
       {/* AI */}
 
       <section className="ai-suggestion-card">
@@ -8093,8 +8708,16 @@ if (screen === "finished") {
                         }
 
                         if (type === "Run out") {
+                          const selectedId =
+                            wicketBatterId ||
+                            strikerId ||
+                            nonStrikerId ||
+                            "";
+                          if (!wicketBatterId && selectedId) {
+                            setWicketBatterId(selectedId);
+                          }
                           const selectedIsStriker =
-                            String(wicketBatterId) ===
+                            String(selectedId) ===
                             String(strikerId);
 
                           setRunOutDismissedPosition(
@@ -8214,6 +8837,13 @@ if (screen === "finished") {
               battingMode === 2 && (
                 <div className="modal-section">
                   <label>Final position of out batsman</label>
+                  <div className="selected-player-display">
+                    <strong>
+                      {runOutDismissedBatter
+                        ? PLAYER_NAME(runOutDismissedBatter)
+                        : "Select the batsman out"}
+                    </strong>
+                  </div>
                   <select
                     value={runOutDismissedPosition}
                     onChange={(e) => {
@@ -8231,6 +8861,13 @@ if (screen === "finished") {
                   </select>
 
                   <label>Final position of other batsman</label>
+                  <div className="selected-player-display">
+                    <strong>
+                      {runOutNotOutBatter
+                        ? PLAYER_NAME(runOutNotOutBatter)
+                        : "Other batsman"}
+                    </strong>
+                  </div>
                   <select
                     value={runOutOtherPosition}
                     onChange={(e) => {

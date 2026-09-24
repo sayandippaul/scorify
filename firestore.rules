@@ -243,6 +243,18 @@ service cloud.firestore {
         if request.auth != null;
     }
 
+    // =========================================================
+    // STRUCTURED COMMENTARY
+    // =========================================================
+    //
+    // Commentary is stored below:
+    // commentary/{matchId}/innings/{inningsId}/overs/{overId}/balls/{ballId}
+    // Keep access consistent with the existing authenticated match data.
+    match /commentary/{matchId}/{document=**} {
+      allow read, write:
+        if request.auth != null;
+    }
+
 
     // =========================================================
     // BACKWARD COMPATIBILITY

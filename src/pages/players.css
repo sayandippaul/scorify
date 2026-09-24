@@ -1068,6 +1068,291 @@
 
 
 /* =========================================
+   PRODUCTIVE SHOT REGIONS
+========================================= */
+
+.productive-shot-section {
+
+  overflow: hidden;
+
+}
+
+.productive-shot-list {
+
+  counter-reset: productive-shot;
+
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 10px;
+
+  list-style: none;
+
+  margin: 16px 0 0;
+
+  padding: 0;
+
+}
+
+.productive-shot-list li {
+
+  counter-increment: productive-shot;
+
+  position: relative;
+
+  isolation: isolate;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 10px;
+
+  min-height: 70px;
+
+  overflow: hidden;
+
+  padding: 12px 13px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 14px;
+
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--surface-2) 92%, var(--primary)),
+      var(--surface));
+
+  box-shadow:
+    0 5px 16px rgba(15, 23, 42, 0.05);
+
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+
+  animation: productive-shot-in 0.45s ease both;
+
+}
+
+.productive-shot-list li:nth-child(2) {
+  animation-delay: 45ms;
+}
+
+.productive-shot-list li:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+.productive-shot-list li:nth-child(4) {
+  animation-delay: 135ms;
+}
+
+.productive-shot-list li:nth-child(5) {
+  animation-delay: 180ms;
+}
+
+.productive-shot-list li:nth-child(6) {
+  animation-delay: 225ms;
+}
+
+.productive-shot-list li:nth-child(7) {
+  animation-delay: 270ms;
+}
+
+.productive-shot-list li:nth-child(8) {
+  animation-delay: 315ms;
+}
+
+.productive-shot-list li:nth-child(9) {
+  animation-delay: 360ms;
+}
+
+.productive-shot-list li::before {
+
+  content: counter(productive-shot);
+
+  display: grid;
+
+  flex: 0 0 27px;
+
+  width: 27px;
+
+  height: 27px;
+
+  place-items: center;
+
+  border-radius: 9px;
+
+  background: rgba(45, 212, 191, 0.14);
+
+  color: var(--primary);
+
+  font-size: 11px;
+
+  font-weight: 800;
+
+}
+
+.productive-shot-list li::after {
+
+  content: "";
+
+  position: absolute;
+
+  z-index: -1;
+
+  top: -45px;
+
+  right: -28px;
+
+  width: 90px;
+
+  height: 90px;
+
+  border-radius: 50%;
+
+  background: rgba(45, 212, 191, 0.08);
+
+  transition: transform 0.3s ease;
+
+}
+
+.productive-shot-list li:hover {
+
+  transform: translateY(-3px);
+
+  border-color: rgba(45, 212, 191, 0.42);
+
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.10);
+
+}
+
+.productive-shot-list li:hover::after {
+  transform: scale(1.5);
+}
+
+.productive-shot-list li > span {
+
+  display: flex;
+
+  min-width: 0;
+
+  flex-direction: column;
+
+  gap: 4px;
+
+}
+
+.productive-shot-list li strong {
+
+  overflow: hidden;
+
+  color: var(--text);
+
+  font-size: 12px;
+
+  font-weight: 750;
+
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+
+}
+
+.productive-shot-list li small {
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+
+  line-height: 1.2;
+
+}
+
+.productive-shot-list li b {
+
+  flex-shrink: 0;
+
+  color: var(--primary);
+
+  font-size: 12px;
+
+  font-weight: 800;
+
+  white-space: nowrap;
+
+}
+
+.productive-shot-empty {
+
+  margin: 16px 0 0;
+
+  padding: 18px 14px;
+
+  border: 1px dashed var(--border);
+
+  border-radius: 12px;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+
+  text-align: center;
+
+}
+
+@keyframes productive-shot-in {
+
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+}
+
+
+/* =========================================
+   PRODUCTIVE SHOT REGIONS - DARK MODE
+========================================= */
+
+[data-theme="dark"] .productive-shot-list li {
+
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--surface-2) 84%, var(--primary)),
+      var(--surface));
+
+  box-shadow:
+    0 7px 20px rgba(0, 0, 0, 0.20);
+
+}
+
+[data-theme="dark"] .productive-shot-list li:hover {
+
+  border-color: rgba(45, 212, 191, 0.48);
+
+  box-shadow:
+    0 11px 26px rgba(0, 0, 0, 0.30);
+
+}
+
+[data-theme="dark"] .productive-shot-list li::before {
+  background: rgba(45, 212, 191, 0.16);
+}
+
+
+/* =========================================
    DELETE MODAL
 ========================================= */
 
@@ -1565,6 +1850,39 @@
 
 
   /* -----------------------------------------
+     MOBILE PRODUCTIVE SHOT REGIONS
+  ----------------------------------------- */
+
+  .players-page .productive-shot-list {
+
+    grid-template-columns: 1fr;
+
+    gap: 8px;
+
+    margin-top: 14px;
+
+  }
+
+  .players-page .productive-shot-list li {
+
+    min-height: 60px;
+
+    padding: 10px 11px;
+
+    border-radius: 12px;
+
+  }
+
+  .players-page .productive-shot-list li strong {
+    font-size: 12px;
+  }
+
+  .players-page .productive-shot-list li b {
+    font-size: 11px;
+  }
+
+
+  /* -----------------------------------------
      DELETE MODAL
   ----------------------------------------- */
 
@@ -1733,6 +2051,14 @@
   .player-strength::before,
 
   .player-strength::after {
+
+    transition: none;
+
+    animation: none;
+
+  }
+
+  .productive-shot-list li {
 
     transition: none;
 

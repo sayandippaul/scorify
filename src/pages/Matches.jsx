@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   collection,
   getDocs,
+  onSnapshot,
+  query,
+  where,
 } from "firebase/firestore";
 import "./matches.css";
 import { calculateWinPrediction, getPredictionForDelivery } from "../services/winPrediction";
@@ -126,6 +129,18 @@ const testDisplayDay = ({ match, innings = [], scoringState = {} }) => {
 const isTestMatchRecord = (match) =>
   String(match?.matchType || "").toLowerCase() === "test";
 
+const isFinalMatch = (match) => {
+  const status = String(match?.status || "").toLowerCase();
+  return (
+    status === "finished" ||
+    status === "completed" ||
+    Boolean(match?.finishedAt || match?.completedAt) ||
+    match?.winner != null ||
+    match?.result?.winner != null ||
+    Boolean(match?.result && typeof match.result === "string")
+  );
+};
+
 const testInningsSuffix = (index) =>
   index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th";
 
@@ -144,6 +159,701 @@ const testInningsDisplayLabel = (innings, index, match) =>
 
 const testTeamInnings = (playedInnings, teamId) =>
   playedInnings.filter((innings) => innings.teamId === teamId);
+
+const shotRegionNames = [
+  "Behind Keeper",
+  "Third Man",
+  "Square Off",
+  "Cover",
+  "Long Off",
+  "Long On",
+  "Midwicket",
+  "Square Leg",
+  "Fine Leg",
+];
+
+const fallbackDeliveryCommentary = (delivery, commentaryBallNumber) => {
+  const over = Number(delivery?.over ?? delivery?.overNumber);
+  const overLabel = Number.isFinite(over)
+    ? Math.max(1, Math.floor(over))
+    : 1;
+  const ballLabel =
+    commentaryBallNumber ?? delivery?.commentaryBallNumber ?? 0;
+  const label = `${overLabel}.${ballLabel}`;
+  const striker = delivery?.strikerName || delivery?.batterName || "The batter";
+  const bowler = delivery?.bowlerName || "the bowler";
+  const batterRuns = Number(delivery?.batterRuns ?? delivery?.batsmanRuns ?? 0);
+  const totalRuns = Number(delivery?.runs ?? delivery?.totalRuns ?? batterRuns);
+  const type = String(delivery?.type || delivery?.extraType || "").toUpperCase();
+  const wicket = delivery?.wicket || (delivery?.wicketType ? {
+    type: delivery.wicketType,
+  } : null);
+  const region =
+    delivery?.shotRegion ||
+    (Number.isInteger(Number(delivery?.shotPosition))
+      ? shotRegionNames[Number(delivery.shotPosition) - 1]
+      : null) ||
+    "the field";
+
+  if (wicket) {
+    const dismissal = wicket.type || wicket.kind || "out";
+    return `${label} WICKET! ${striker} is out (${dismissal}) off ${bowler}.`;
+  }
+  if (type === "WD" || type === "WIDE") {
+    return `${label} Wide from ${bowler}.`;
+  }
+  if (type === "NB" || type === "NO_BALL") {
+    return batterRuns > 0
+      ? `${label} No ball, and ${striker} scores ${batterRuns} towards ${region} off ${bowler}.`
+      : `${label} No ball from ${bowler}.`;
+  }
+  if (type === "B" || type === "BYE") {
+    return `${label} Bye, ${totalRuns} run${totalRuns === 1 ? "" : "s"} taken off ${bowler}.`;
+  }
+  if (type === "LB" || type === "LEG_BYE") {
+    return `${label} Leg bye, ${totalRuns} run${totalRuns === 1 ? "" : "s"} taken off ${bowler}.`;
+  }
+  if (batterRuns === 6) {
+    return `${label} SIX! ${striker} launches ${bowler} over ${region}.`;
+  }
+  if (batterRuns === 4) {
+    return `${label} FOUR! ${striker} finds the boundary through ${region} off ${bowler}.`;
+  }
+  if (batterRuns > 0) {
+    return `${label} ${striker} takes ${batterRuns} run${batterRuns === 1 ? "" : "s"} towards ${region} off ${bowler}.`;
+  }
+  return `${label} Dot ball from ${bowler} to ${striker}.`;
+};
+
+const hydrateDeliveryCommentary = (deliveries = []) => {
+  /*
+   * Commentary must follow the exact recorded delivery sequence. Do not sort
+   * by the stored over/ball fields here: scoring can temporarily persist an
+   * over value ahead of the final legal ball, especially when several extras
+   * occur in the same over.
+   *
+   * The sequence below is therefore derived from the delivery array itself.
+   * Legal balls advance 1..6; extras stay attached to the current legal-ball
+   * slot. The next legal delivery after 6 starts the next over.
+   */
+  const sourceDeliveries = Array.isArray(deliveries) ? deliveries : [];
+  const hasPersistedSequence = sourceDeliveries.some((delivery) =>
+    Number.isFinite(Number(delivery?.sequence))
+  );
+  const orderedDeliveries = hasPersistedSequence
+    ? sourceDeliveries
+        .map((delivery, index) => ({ delivery, index }))
+        .sort(
+          (left, right) =>
+            Number(left.delivery?.sequence) -
+              Number(right.delivery?.sequence) ||
+            left.index - right.index
+        )
+        .map(({ delivery }) => delivery)
+    : sourceDeliveries;
+
+  let over = 0;
+  let legalBall = 0;
+
+  return orderedDeliveries
+    .filter(Boolean)
+    .map((delivery, index) => {
+      const type = String(delivery?.type || delivery?.extraType || "").toUpperCase();
+      const valid =
+        delivery.validBall === true ||
+        (!["NB", "WD", "DEAD", "NO_BALL", "WIDE"].includes(type) &&
+          delivery.validBall !== false);
+
+      if (valid) {
+        if (legalBall >= 6) {
+          over += 1;
+          legalBall = 0;
+        }
+        legalBall += 1;
+      }
+
+      const commentaryBallNumber = legalBall;
+
+      // Keep the chronological ball number derived from the actual delivery
+      // sequence, but use the delivery's recorded over for the over section
+      // whenever it is available. Extras such as 2.0 after 1.6 belong to the
+      // next over section even though they do not consume a legal ball.
+      const commentaryText = Array.isArray(delivery?.commentaryLines)
+        ? delivery.commentaryLines[0]
+        : delivery?.commentary;
+      const commentaryLabelMatch = String(commentaryText || "").match(/^(?:\s*)(\d+)\.(\d+)/);
+      const recordedOver = commentaryLabelMatch
+        ? Number(commentaryLabelMatch[1])
+        : Number(
+            delivery?.commentaryOverNumber ??
+            delivery?.over ??
+            delivery?.overNumber
+          );
+      const commentaryOverNumber = Number.isFinite(recordedOver)
+        ? Math.max(0, Math.floor(recordedOver))
+        : over;
+
+      const sourceDelivery = {
+        ...delivery,
+        __sourceIndex: index,
+        __normalizedOver: commentaryOverNumber,
+        __normalizedBall: commentaryBallNumber,
+        commentaryBallNumber,
+        commentaryOverNumber,
+      };
+
+      if (delivery.commentary || delivery.commentaryLines?.length) {
+        return sourceDelivery;
+      }
+
+      const commentary = fallbackDeliveryCommentary(
+        sourceDelivery,
+        commentaryBallNumber
+      );
+      return {
+        ...sourceDelivery,
+        commentary,
+        commentaryLines: [commentary],
+        commentaryType: delivery.commentaryType || "delivery",
+      };
+    });
+};
+
+const normalizedDeliveryValue = (value, fallback) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+
+const normalizeDeliveries = (deliveries = []) =>
+  (Array.isArray(deliveries) ? deliveries : [])
+    .map((delivery, index) => {
+      const over = normalizedDeliveryValue(
+        delivery?.over ?? delivery?.overNumber,
+        Math.floor(index / 6)
+      );
+      const ball = normalizedDeliveryValue(
+        delivery?.ball ?? delivery?.ballNumber,
+        index
+      );
+      return {
+        ...delivery,
+        __normalizedOver: Math.max(0, Math.floor(over)),
+        __normalizedBall: ball,
+        __sourceIndex: index,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.__normalizedOver - right.__normalizedOver ||
+        left.__normalizedBall - right.__normalizedBall ||
+        left.__sourceIndex - right.__sourceIndex ||
+        String(left.id ?? left.deliveryId ?? "").localeCompare(
+          String(right.id ?? right.deliveryId ?? "")
+        )
+    );
+
+const deliveryInningsIndex = (delivery) => {
+  const explicitIndex = Number(delivery?.inningsIndex);
+  if (Number.isInteger(explicitIndex) && explicitIndex >= 0) return explicitIndex;
+
+  const inningsNumber = Number(delivery?.inningsNumber);
+  if (Number.isInteger(inningsNumber) && inningsNumber > 0) return inningsNumber - 1;
+
+  const innings = Number(delivery?.innings);
+  if (Number.isInteger(innings) && innings >= 0) {
+    return innings > 0 ? innings - 1 : 0;
+  }
+
+  return null;
+};
+
+const mergePersistedDeliveries = (
+  innings,
+  persistedDeliveries = [],
+  matchId,
+  fallbackInningsIndex = null
+) => {
+  if (!innings) return innings;
+
+  const rawInningsIndex = Number(innings.inningsIndex);
+  const resolvedInningsIndex = Number.isInteger(rawInningsIndex) && rawInningsIndex >= 0
+    ? rawInningsIndex
+    : Number.isInteger(Number(fallbackInningsIndex)) && Number(fallbackInningsIndex) >= 0
+      ? Number(fallbackInningsIndex)
+      : 0;
+  const inningsNumber = resolvedInningsIndex + 1;
+  const deliveries = persistedDeliveries.filter((delivery) =>
+    [
+      delivery.matchId,
+      delivery.matchID,
+      delivery.match_id,
+    ].some((value) => String(value ?? "") === String(matchId)) &&
+    (
+      String(delivery.inningsId ?? "") === `${matchId}_innings_${inningsNumber}` ||
+      Number(delivery.inningsNumber) === inningsNumber ||
+      Number(delivery.inningsIndex) === resolvedInningsIndex ||
+      Number(delivery.innings) === inningsNumber ||
+      Number(delivery.innings) === resolvedInningsIndex
+    )
+  );
+
+  const deliveryKey = (delivery, index) =>
+    String(
+      delivery.id ??
+      delivery.deliveryId ??
+      `${delivery.over ?? delivery.overNumber ?? 0}-${delivery.ball ?? delivery.ballNumber ?? index}`
+    );
+  const merged = new Map(
+    (Array.isArray(innings.deliveries) ? innings.deliveries : []).map((delivery, index) => [
+      deliveryKey(delivery, index),
+      delivery,
+    ])
+  );
+  deliveries.forEach((delivery, index) => {
+    const key = deliveryKey(delivery, index);
+    merged.set(key, { ...merged.get(key), ...delivery });
+  });
+
+  return withDerivedInningsStats({
+    ...innings,
+    inningsIndex: resolvedInningsIndex,
+    deliveries: normalizeDeliveries([...merged.values()]).map(
+      ({ __normalizedOver, __normalizedBall, __sourceIndex, ...delivery }) => delivery
+    ),
+  });
+};
+
+const commentarySortBall = (delivery, fallbackIndex = 0) => {
+  const legalBall = Number(delivery?.commentaryBallNumber);
+  const rawBall = Number(delivery?.ball ?? delivery?.ballNumber);
+
+  // Scoring stores legal balls as 1..6. Prefer that value for normal
+  // deliveries so commentary is always shown in natural ball order.
+  if (Number.isInteger(legalBall) && legalBall >= 1 && legalBall <= 6) {
+    return legalBall;
+  }
+
+  // Extras/dead balls may not consume a legal ball. Their stored ball slot
+  // is still useful for keeping them beside the correct 1..6 ball.
+  if (Number.isInteger(rawBall) && rawBall >= 1 && rawBall <= 6) {
+    return rawBall;
+  }
+
+  return Number.isFinite(legalBall) ? legalBall : (Number.isFinite(rawBall) ? rawBall : fallbackIndex);
+};
+
+const commentaryDeliverySort = (left, right) => {
+  const ballDifference =
+    commentarySortBall(left, left?.__sourceIndex ?? 0) -
+    commentarySortBall(right, right?.__sourceIndex ?? 0);
+
+  if (ballDifference !== 0) return ballDifference;
+
+  // Keep the original chronological order for multiple deliveries sharing
+  // the same legal-ball slot (for example a no-ball followed by the legal ball).
+  const sourceDifference =
+    Number(left?.__sourceIndex ?? 0) - Number(right?.__sourceIndex ?? 0);
+  if (sourceDifference !== 0) return sourceDifference;
+
+  return String(left?.id ?? left?.deliveryId ?? "").localeCompare(
+    String(right?.id ?? right?.deliveryId ?? "")
+  );
+};
+
+const CommentarySections = ({ deliveries = [], loading = false, autoScrollLatest = false }) => {
+  const commentaryEndRef = useRef(null);
+  const hydratedDeliveries = hydrateDeliveryCommentary(deliveries);
+  const latestDelivery = hydratedDeliveries[hydratedDeliveries.length - 1];
+  const latestDeliveryKey = latestDelivery
+    ? String(
+        latestDelivery.id ??
+        latestDelivery.deliveryId ??
+        latestDelivery.sequence ??
+        hydratedDeliveries.length
+      )
+    : "";
+  const firstOver = hydratedDeliveries.reduce((lowest, delivery) => {
+    const over = Number(
+      delivery.commentaryOverNumber ??
+      delivery.__normalizedOver ??
+      delivery.over ??
+      delivery.overNumber
+    );
+    return Number.isFinite(over) ? Math.min(lowest, over) : lowest;
+  }, Number.POSITIVE_INFINITY);
+  const overDisplayOffset = firstOver === 0 ? 1 : 0;
+
+  const groups = hydratedDeliveries.reduce((result, delivery, index) => {
+    const over = Number(
+      delivery.commentaryOverNumber ??
+      delivery.__normalizedOver ??
+      delivery.over ??
+      delivery.overNumber
+    );
+    const key = Number.isFinite(over) ? String(over) : `unknown-${index}`;
+    if (!result[key]) result[key] = { over, deliveries: [] };
+    result[key].deliveries.push(delivery);
+    return result;
+  }, {});
+
+  const sections = Object.values(groups)
+    .sort((left, right) => left.over - right.over)
+    .map((section) => ({
+      ...section,
+      // hydrateDeliveryCommentary already produces the exact chronological
+      // order. Keep that order instead of re-sorting by possibly stale ball
+      // metadata, which is what caused extras to appear out of sequence.
+      displayOver: Number.isFinite(section.over)
+        ? section.over + overDisplayOffset
+        : null,
+    }));
+
+  useEffect(() => {
+    if (!autoScrollLatest || loading || !hydratedDeliveries.length) return;
+    const frame = window.requestAnimationFrame(() => {
+      commentaryEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [latestDeliveryKey, hydratedDeliveries.length, loading, autoScrollLatest]);
+
+  return (
+    <section className="match-commentary-section">
+      <div className="match-commentary-heading">
+        <div>
+          <p className="eyebrow">COMMENTARY</p>
+          <h4>Ball-by-ball commentary</h4>
+        </div>
+        <small>{hydratedDeliveries.length} records</small>
+      </div>
+      {loading ? (
+        <div className="match-commentary-loading" role="status" aria-live="polite">
+          <span className="match-commentary-spinner" aria-hidden="true" />
+          <span>Generating commentary…</span>
+        </div>
+      ) : sections.length ? sections.map((section) => (
+        <div className="match-commentary-over" key={String(section.over)}>
+          <h5>Over {Number.isFinite(section.displayOver) ? section.displayOver : "—"}</h5>
+          {section.deliveries.map((delivery, index) => (
+            <article className="match-commentary-item" key={delivery.id || `${section.over}-${index}`}>
+              {(delivery.commentaryLines || [delivery.commentary]).map((line, lineIndex) => (
+                <p key={`${delivery.id || index}-${lineIndex}`}>{line}</p>
+              ))}
+            </article>
+          ))}
+        </div>
+      )) : <p className="match-commentary-empty">No commentary was recorded.</p>}
+      <div ref={commentaryEndRef} aria-hidden="true" />
+    </section>
+  );
+};
+
+const getFinishedCommentaryInnings = ({ match, scoringState }) => {
+  /*
+   * Finished commentary must use the same match-wide delivery history that
+   * scoring.jsx shows live. scoringState.commentaryDeliveries is the primary
+   * source because it preserves the exact order in which commentary was
+   * recorded across innings. Older saved matches may not have that field, so
+   * fall back to the persisted innings deliveries.
+   */
+  const savedState = scoringState || match?.scoringState || {};
+  const commentaryHistory = Array.isArray(savedState.commentaryDeliveries)
+    ? savedState.commentaryDeliveries
+    : [];
+
+  const historicalInnings = scorecardHistoryInnings({
+    match,
+    scoringState: savedState,
+  }).filter(Boolean);
+
+  const rawInningsSources = [
+    ...(Array.isArray(match?.testInnings) ? match.testInnings : []),
+    ...(Array.isArray(match?.innings) ? match.innings : []),
+    ...(match?.firstInningsData ? [match.firstInningsData] : []),
+    ...(match?.secondInningsData ? [match.secondInningsData] : []),
+  ];
+
+  const inningsMap = new Map();
+  const addInnings = (innings, fallbackIndex) => {
+    if (!innings) return;
+
+    const rawIndex = Number(innings?.inningsIndex);
+    const inningsIndex =
+      Number.isInteger(rawIndex) && rawIndex >= 0
+        ? rawIndex
+        : fallbackIndex;
+
+    const existing = inningsMap.get(inningsIndex);
+    inningsMap.set(
+      inningsIndex,
+      existing
+        ? {
+            ...existing,
+            ...innings,
+            deliveries: [
+              ...(Array.isArray(existing.deliveries) ? existing.deliveries : []),
+              ...(Array.isArray(innings.deliveries) ? innings.deliveries : []),
+            ],
+          }
+        : {
+            ...innings,
+            inningsIndex,
+          }
+    );
+  };
+
+  historicalInnings.forEach((innings, index) => addInnings(innings, index));
+  rawInningsSources.forEach((innings, index) => addInnings(innings, index));
+
+  const persistedByInnings = new Map();
+  (Array.isArray(match?.persistedDeliveries)
+    ? match.persistedDeliveries
+    : []
+  ).forEach((delivery) => {
+    const matches = [
+      delivery?.matchId,
+      delivery?.matchID,
+      delivery?.match_id,
+    ].some(
+      (value) => String(value ?? "") === String(match?.id ?? "")
+    );
+    if (!matches) return;
+
+    const index = deliveryInningsIndex(delivery);
+    if (index == null) return;
+
+    if (!persistedByInnings.has(index)) persistedByInnings.set(index, []);
+    persistedByInnings.get(index).push(delivery);
+  });
+
+  persistedByInnings.forEach((deliveries, inningsIndex) => {
+    const existing = inningsMap.get(inningsIndex) || { inningsIndex };
+    inningsMap.set(inningsIndex, {
+      ...existing,
+      inningsIndex,
+      deliveries: [
+        ...(Array.isArray(existing.deliveries) ? existing.deliveries : []),
+        ...deliveries,
+      ],
+    });
+  });
+
+  const getInningsIndex = (delivery) => {
+    const explicitIndex = Number(delivery?.inningsIndex);
+    if (Number.isInteger(explicitIndex) && explicitIndex >= 0) {
+      return explicitIndex;
+    }
+
+    const inningsNumber = Number(delivery?.inningsNumber);
+    if (Number.isInteger(inningsNumber) && inningsNumber > 0) {
+      return inningsNumber - 1;
+    }
+
+    const innings = Number(delivery?.innings);
+    if (Number.isInteger(innings) && innings >= 0) {
+      return innings > 0 ? innings - 1 : 0;
+    }
+
+    return null;
+  };
+
+  const hydrateInnings = (items) =>
+    items
+      .filter(Boolean)
+      .sort((left, right) => Number(left.inningsIndex) - Number(right.inningsIndex))
+      .map((item, index) => ({
+        ...item,
+        inningsIndex: Number.isInteger(Number(item.inningsIndex))
+          ? Number(item.inningsIndex)
+          : index,
+        deliveries: hydrateFinishedCommentaryInRecordedOrder(
+          Array.isArray(item.deliveries) ? item.deliveries : []
+        ),
+      }));
+
+  /*
+   * New matches: use the exact match-wide commentary history from scoring.jsx.
+   * This keeps innings order and delivery order identical to the live
+   * commentary sequence.
+   */
+  if (commentaryHistory.length) {
+    const grouped = new Map();
+
+    commentaryHistory.forEach((delivery) => {
+      if (!delivery) return;
+      const inningsIndex = getInningsIndex(delivery);
+      if (inningsIndex == null) return;
+
+      if (!grouped.has(inningsIndex)) grouped.set(inningsIndex, []);
+      grouped.get(inningsIndex).push(delivery);
+    });
+
+    const innings = [...grouped.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([inningsIndex, deliveries]) => {
+        const savedInnings = inningsMap.get(inningsIndex) || {};
+        return {
+          ...savedInnings,
+          inningsIndex,
+          teamId: savedInnings.teamId || null,
+          teamName: savedInnings.teamName || null,
+          deliveries: hydrateFinishedCommentaryInRecordedOrder(deliveries),
+        };
+      });
+
+    if (innings.length) return innings;
+  }
+
+  /*
+   * Legacy/older finished matches: reconstruct the same innings sequence from
+   * all saved innings and persisted deliveries.
+   */
+  return hydrateInnings([...inningsMap.values()]);
+};
+
+
+const getLiveCommentaryInnings = ({ match, scoringState }) => {
+  const savedState = scoringState || match?.scoringState || {};
+
+  // Live commentary uses the exact same primary history as finished
+  // commentary. This preserves the recorded sequence across extra balls,
+  // no-balls and wides instead of rebuilding the order from persisted score
+  // records whose over/ball fields can be temporarily ahead.
+  const records = Array.isArray(savedState.commentaryDeliveries) && savedState.commentaryDeliveries.length
+    ? savedState.commentaryDeliveries
+    : Array.isArray(match?.persistedDeliveries) && match.persistedDeliveries.length
+      ? match.persistedDeliveries
+      : Array.isArray(savedState.deliveries)
+        ? savedState.deliveries
+        : [];
+
+  if (!records.length) return [];
+
+  const history = scorecardHistoryInnings({ match, scoringState: savedState }).filter(Boolean);
+  const inningsMap = new Map(history.map((innings, index) => [
+    Number.isInteger(Number(innings?.inningsIndex)) ? Number(innings.inningsIndex) : index,
+    innings,
+  ]));
+
+  const grouped = new Map();
+  records.forEach((delivery) => {
+    const index = deliveryInningsIndex(delivery);
+    if (index == null) return;
+    if (!grouped.has(index)) grouped.set(index, []);
+    grouped.get(index).push(delivery);
+  });
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([inningsIndex, deliveries]) => {
+      const savedInnings = inningsMap.get(inningsIndex) || {};
+      const teamId = savedInnings.teamId || (
+        Array.isArray(match?.inningsOrder) && match.inningsOrder[inningsIndex]
+          ? match.inningsOrder[inningsIndex]
+          : inningsIndex % 2 === 0
+            ? (match?.firstInningsTeamId === "B" ? "B" : "A")
+            : (match?.firstInningsTeamId === "B" ? "A" : "B")
+      );
+      const team = teamId === "B" ? match?.teamB : match?.teamA;
+      return {
+        ...savedInnings,
+        inningsIndex,
+        teamId,
+        teamName: savedInnings.teamName || team?.name || (teamId === "B" ? match?.teamBName : match?.teamAName),
+        deliveries: hydrateDeliveryCommentary(deliveries),
+      };
+    });
+};
+
+const hydrateFinishedCommentaryInRecordedOrder = (deliveries = []) => {
+  // Finished and live commentary use the exact same chronological numbering.
+  // This prevents extra deliveries and the final ball of an over from being
+  // moved into the wrong over by stale stored over/ball values.
+  return hydrateDeliveryCommentary(deliveries);
+};
+
+const CommentaryTabs = ({ innings = [], autoScrollLatest = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [generatedInnings, setGeneratedInnings] = useState([]);
+
+  const hydrateInnings = (sourceInnings) =>
+    (Array.isArray(sourceInnings) ? sourceInnings : [])
+      .filter(Boolean)
+      .map((item, index) => ({
+        ...item,
+        inningsIndex: Number.isInteger(Number(item?.inningsIndex))
+          ? Number(item.inningsIndex)
+          : index,
+        deliveries: hydrateDeliveryCommentary(
+          Array.isArray(item?.deliveries) ? item.deliveries : []
+        ),
+      }));
+
+  useEffect(() => {
+    if (!isOpen || isGenerating) return;
+    const hydrated = hydrateInnings(innings);
+    setGeneratedInnings(hydrated);
+    setSelectedIndex((index) =>
+      Math.min(index, Math.max(hydrated.length - 1, 0))
+    );
+  }, [innings, isOpen, isGenerating]);
+
+  const openCommentary = () => {
+    if (isOpen) return;
+    setIsOpen(true);
+    setIsGenerating(true);
+
+    window.setTimeout(() => {
+      setGeneratedInnings(hydrateInnings(innings));
+      setSelectedIndex(0);
+      setIsGenerating(false);
+    }, 0);
+  };
+
+  return (
+    <section className="match-commentary-panel">
+      {!isOpen ? (
+        <button
+          type="button"
+          className="match-commentary-view-button"
+          onClick={openCommentary}
+        >
+          View full commentary
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="match-commentary-close-button"
+            onClick={() => setIsOpen(false)}
+          >
+            Close commentary
+          </button>
+          <div className="match-commentary-tabs" role="tablist" aria-label="Commentary innings">
+            {generatedInnings.map((item, index) => (
+              <button
+                key={`commentary-innings-${item?.inningsIndex ?? index}-${index}`}
+                type="button"
+                className={selectedIndex === index ? "active" : ""}
+                onClick={() => setSelectedIndex(index)}
+                role="tab"
+                aria-selected={selectedIndex === index}
+              >
+                {item?.teamName || `Innings ${index + 1}`}
+              </button>
+            ))}
+          </div>
+          <CommentarySections
+            deliveries={generatedInnings[selectedIndex]?.deliveries || []}
+            loading={isGenerating}
+            autoScrollLatest={autoScrollLatest}
+          />
+        </>
+      )}
+    </section>
+  );
+};
 
 const scorecardTeam = (match, teamId) => {
   const team = teamId === "B" ? match?.teamB : match?.teamA;
@@ -370,16 +1080,231 @@ const deliveryHistoryTotals = (deliveries = []) =>
     { runs: 0, wickets: 0, legalBalls: 0 }
   );
 
+const deriveInningsPlayerStats = (deliveries = []) => {
+  const battingStats = {};
+  const bowlingStats = {};
+  const isExtra = (delivery) =>
+    ["NB", "WD", "DEAD", "NO_BALL", "WIDE"].includes(
+      String(delivery?.type || delivery?.extraType || "").toUpperCase()
+    );
+
+  (Array.isArray(deliveries) ? deliveries : []).forEach((delivery) => {
+    const strikerId = delivery?.strikerId;
+    const bowlerId = delivery?.bowlerId;
+    const batterRuns = Number(delivery?.batterRuns ?? delivery?.batsmanRuns ?? 0);
+    const bowlerRuns = Number(
+      delivery?.bowlerRuns ??
+      (isExtra(delivery) && ["BYE", "LB", "LEG_BYE"].includes(
+        String(delivery?.type || delivery?.extraType || "").toUpperCase()
+      )
+        ? 0
+        : delivery?.runs ?? 0)
+    );
+    const validBall =
+      delivery?.validBall === true ||
+      (delivery?.validBall !== false && !isExtra(delivery));
+
+    if (strikerId) {
+      const key = String(strikerId);
+      const current = battingStats[key] || {
+        id: key,
+        name: delivery?.strikerName || delivery?.batterName || key,
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        status: "yet",
+      };
+      current.runs += batterRuns;
+      if (validBall) current.balls += 1;
+      if (batterRuns === 4) current.fours += 1;
+      if (batterRuns === 6) current.sixes += 1;
+      battingStats[key] = current;
+    }
+
+    if (bowlerId) {
+      const key = String(bowlerId);
+      const current = bowlingStats[key] || {
+        id: key,
+        name: delivery?.bowlerName || key,
+        legalBalls: 0,
+        runs: 0,
+        wickets: 0,
+        maidens: 0,
+      };
+      if (validBall) current.legalBalls += 1;
+      current.runs += bowlerRuns;
+      if (
+        delivery?.wicket &&
+        !["Run out", "Retired hurt", "Obstructing the field"].includes(
+          delivery.wicket.type
+        )
+      ) {
+        current.wickets += 1;
+      }
+      bowlingStats[key] = current;
+    }
+
+    const dismissedId = delivery?.wicket?.batterId;
+    if (dismissedId) {
+      const key = String(dismissedId);
+      const current = battingStats[key] || {
+        id: key,
+        name: delivery?.wicket?.batterName || key,
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        status: "yet",
+      };
+      current.status = "out";
+      current.dismissal = delivery.wicket.type || "out";
+      current.fielder = delivery.wicket.fielder || "";
+      current.bowler = delivery.wicket.bowler || delivery.bowlerName || "";
+      battingStats[key] = current;
+    }
+  });
+
+  return { battingStats, bowlingStats };
+};
+
+const withDerivedInningsStats = (innings) => {
+  if (!innings) return innings;
+  const derived = deriveInningsPlayerStats(innings.deliveries);
+  return {
+    ...innings,
+    battingStats: {
+      ...derived.battingStats,
+      ...(innings.battingStats || {}),
+    },
+    bowlingStats: {
+      ...derived.bowlingStats,
+      ...(innings.bowlingStats || {}),
+    },
+  };
+};
+
+
+const buildLiveScorecardSnapshot = (match, persistedDeliveries = []) => {
+  if (!match || String(match?.status || "").toLowerCase() !== "live") {
+    return match;
+  }
+
+  const savedState = match.scoringState || {};
+  const records = Array.isArray(persistedDeliveries) ? persistedDeliveries.filter(Boolean) : [];
+  if (!records.length) {
+    const inningsIndex = Number(savedState.inningsIndex);
+    const inningsRuns = Number(savedState.inningsRuns);
+    const inningsWickets = Number(savedState.inningsWickets);
+
+    if (
+      !Number.isInteger(inningsIndex) ||
+      inningsIndex < 0 ||
+      !Number.isFinite(inningsRuns) ||
+      !Number.isFinite(inningsWickets)
+    ) {
+      return match;
+    }
+
+    const liveTeamId =
+      Array.isArray(match.inningsOrder) && match.inningsOrder[inningsIndex]
+        ? match.inningsOrder[inningsIndex]
+        : inningsIndex === 1
+          ? (match.battingTeamId === "A" ? "B" : "A")
+          : match.battingTeamId || (inningsIndex % 2 === 0 ? "A" : "B");
+
+    return {
+      ...match,
+      scoringState: {
+        ...savedState,
+        inningsIndex,
+        inningsRuns,
+        inningsWickets,
+      },
+      ...(liveTeamId === "A"
+        ? { scoreA: inningsRuns, wicketsA: inningsWickets }
+        : { scoreB: inningsRuns, wicketsB: inningsWickets }),
+    };
+  }
+
+  const inningsIndexes = records
+    .map((delivery) => deliveryInningsIndex(delivery))
+    .filter((index) => index != null);
+  const currentInningsIndex = Number.isInteger(Number(savedState.inningsIndex))
+    ? Number(savedState.inningsIndex)
+    : inningsIndexes.length
+      ? Math.max(...inningsIndexes)
+      : 0;
+  const currentDeliveries = records.filter(
+    (delivery) => deliveryInningsIndex(delivery) === currentInningsIndex
+  );
+
+  if (!currentDeliveries.length) return match;
+
+  const persistedTotals = deliveryHistoryTotals(currentDeliveries);
+  const totals = {
+    runs: Number.isFinite(Number(savedState.inningsRuns))
+      ? Number(savedState.inningsRuns)
+      : persistedTotals.runs,
+    wickets: Number.isFinite(Number(savedState.inningsWickets))
+      ? Number(savedState.inningsWickets)
+      : persistedTotals.wickets,
+    legalBalls: Number.isFinite(Number(savedState.legalBalls))
+      ? Number(savedState.legalBalls)
+      : persistedTotals.legalBalls,
+  };
+  const liveTeamId = savedState.inningsIndex === 1
+    ? (match.battingTeamId === "A" ? "B" : "A")
+    : match.battingTeamId || (
+        Array.isArray(match.inningsOrder) && match.inningsOrder[currentInningsIndex]
+          ? match.inningsOrder[currentInningsIndex]
+          : currentInningsIndex % 2 === 0 ? "A" : "B"
+      );
+
+  const nextState = {
+    ...savedState,
+    inningsIndex: currentInningsIndex,
+    inningsRuns: totals.runs,
+    inningsWickets: totals.wickets,
+    legalBalls: totals.legalBalls,
+    deliveries: currentDeliveries,
+  };
+
+  return {
+    ...match,
+    scoringState: nextState,
+    ...(liveTeamId === "A"
+      ? { scoreA: totals.runs, wicketsA: totals.wickets }
+      : { scoreB: totals.runs, wicketsB: totals.wickets }),
+  };
+};
+
 const scorecardHistoryInnings = ({ match, scoringState }) => {
   const teams = {
     A: scorecardTeam(match, "A"),
     B: scorecardTeam(match, "B"),
   };
 
-  if (isTestMatchRecord(match)) {
-    const savedInnings = Array.isArray(match?.testInnings)
+  if (isTestMatchRecord(match) && isFinalMatch(match)) {
+    const explicitTestInnings = Array.isArray(match?.testInnings)
       ? match.testInnings
-      : Array.isArray(match?.innings) ? match.innings : [];
+      : [];
+    const genericInnings = Array.isArray(match?.innings)
+      ? match.innings
+      : [];
+    const legacyInnings = [
+      ...(Array.isArray(match?.firstInningsData)
+        ? match.firstInningsData
+        : match?.firstInningsData ? [match.firstInningsData] : []),
+      ...(Array.isArray(match?.secondInningsData)
+        ? match.secondInningsData
+        : match?.secondInningsData ? [match.secondInningsData] : []),
+    ];
+    const savedInnings = explicitTestInnings.length
+      ? explicitTestInnings
+      : genericInnings.length
+        ? genericInnings
+        : legacyInnings;
     const currentIndex = Number(scoringState?.inningsIndex);
     const liveInnings = Number.isInteger(currentIndex) && currentIndex >= 0
       ? {
@@ -431,16 +1356,58 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
           liveInnings,
         ]
       : savedInnings;
-    return mergedInnings
-      .slice()
-      .sort((a, b) => Number(a.inningsIndex || 0) - Number(b.inningsIndex || 0))
-      .map((innings, index) => {
-        const inningsIndex = Number.isInteger(Number(innings.inningsIndex))
-          ? Number(innings.inningsIndex)
-          : index;
-        const teamId = innings.teamId === "B" ? "B" : "A";
 
-        return {
+    const persistedByInnings = new Map();
+    (Array.isArray(match?.persistedDeliveries) ? match.persistedDeliveries : []).forEach((delivery) => {
+      const matches = [delivery.matchId, delivery.matchID, delivery.match_id]
+        .some((value) => String(value ?? "") === String(match?.id ?? ""));
+      const index = deliveryInningsIndex(delivery);
+      if (!matches || index == null) return;
+      if (!persistedByInnings.has(index)) persistedByInnings.set(index, []);
+      persistedByInnings.get(index).push(delivery);
+    });
+
+    const candidates = new Map();
+    mergedInnings.forEach((innings, index) => {
+      if (!innings) return;
+      const explicitIndex = Number(innings.inningsIndex);
+      const inningsIndex = Number.isInteger(explicitIndex) && explicitIndex >= 0
+        ? explicitIndex
+        : index;
+      const existing = candidates.get(inningsIndex);
+      candidates.set(inningsIndex, existing
+        ? { ...existing, ...innings, deliveries: [
+            ...(Array.isArray(existing.deliveries) ? existing.deliveries : []),
+            ...(Array.isArray(innings.deliveries) ? innings.deliveries : []),
+          ] }
+        : { ...innings });
+    });
+    persistedByInnings.forEach((deliveries, inningsIndex) => {
+      const existing = candidates.get(inningsIndex) || {};
+      candidates.set(inningsIndex, {
+        ...existing,
+        inningsIndex,
+        deliveries: [
+          ...(Array.isArray(existing.deliveries) ? existing.deliveries : []),
+          ...deliveries,
+        ],
+      });
+    });
+
+    return [...candidates.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([inningsIndex, innings]) => {
+        const teamId = innings.teamId === "B"
+          ? "B"
+          : innings.teamId === "A"
+            ? "A"
+            : Array.isArray(match?.inningsOrder) && match.inningsOrder[inningsIndex] === "B"
+              ? "B"
+              : inningsIndex % 2 === 0
+                ? (match?.firstInningsTeamId === "B" ? "B" : "A")
+                : (match?.firstInningsTeamId === "B" ? "A" : "B");
+
+        return mergePersistedDeliveries({
         ...innings,
         inningsIndex,
         teamId,
@@ -453,7 +1420,7 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
         deliveries: Array.isArray(innings.deliveries) ? innings.deliveries : [],
         battingStats: innings.battingStats || {},
         bowlingStats: innings.bowlingStats || {},
-        };
+        }, match?.persistedDeliveries, match?.id);
       });
   }
 
@@ -490,12 +1457,15 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
     };
   };
 
+  const currentScoringInnings = fromScoringState();
   const first =
-    firstSaved ||
-    (Number(scoringState?.inningsIndex) === 0 ? fromScoringState() : null);
+    Number(scoringState?.inningsIndex) === 0
+      ? currentScoringInnings || firstSaved
+      : firstSaved;
   const second =
-    secondSaved ||
-    (Number(scoringState?.inningsIndex) === 1 ? fromScoringState() : null);
+    Number(scoringState?.inningsIndex) === 1
+      ? currentScoringInnings || secondSaved
+      : secondSaved;
 
   return [first, second].map((innings, index) => {
     if (!innings) return null;
@@ -510,36 +1480,30 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
       ? innings.deliveries
       : [];
 
-    return {
+    return mergePersistedDeliveries({
       ...innings,
+      inningsIndex: Number.isInteger(Number(innings.inningsIndex))
+        ? Number(innings.inningsIndex)
+        : index,
       teamId,
       teamName: innings.teamName || fallbackTeam?.name,
       deliveries,
       battingStats: innings.battingStats || {},
       bowlingStats: innings.bowlingStats || {},
-    };
+    }, match?.persistedDeliveries, match?.id, index);
   });
 };
 
 const getLastRecordedPredictionByOver = ({ match, innings, inningsIndex }) => {
-  const deliveries = Array.isArray(innings?.deliveries)
-    ? innings.deliveries
-    : [];
+  const deliveries = normalizeDeliveries(innings?.deliveries);
   if (!deliveries.length) return [];
 
   const groups = [];
   deliveries.forEach((delivery, deliveryIndex) => {
-    const rawOver = Number(delivery?.over);
-    const over = Number.isFinite(rawOver)
-      ? Math.max(1, Math.floor(rawOver))
-      : Math.floor(deliveryIndex / 6) + 1;
-
+    const over = delivery.__normalizedOver;
     const existing = groups.findIndex((item) => item.over === over);
-    if (existing >= 0) {
-      groups[existing].lastIndex = deliveryIndex;
-    } else {
-      groups.push({ over, lastIndex: deliveryIndex });
-    }
+    if (existing >= 0) groups[existing].lastIndex = deliveryIndex;
+    else groups.push({ over, lastIndex: deliveryIndex });
   });
 
   const historyMatch = predictionHistoryMatch(match);
@@ -604,10 +1568,36 @@ const buildPredictionHistory = ({ match, scoringState }) => {
       inningsIndex,
     });
 
+    if (isTestMatchRecord(match)) {
+      // Test scorecards show one prediction point per played innings, not
+      // every over. An innings is considered played only when it has recorded
+      // deliveries or a non-zero recorded score.
+      const deliveries = Array.isArray(inningsData.deliveries)
+        ? inningsData.deliveries
+        : [];
+      const played =
+        deliveries.length > 0 ||
+        Number(inningsData.runs || 0) > 0 ||
+        Number(inningsData.balls || 0) > 0 ||
+        Number(inningsData.wickets || 0) > 0;
+      const finalOver = overRecords[overRecords.length - 1];
+
+      if (!played || !finalOver?.prediction) return;
+
+      records.push({
+        key: `test-innings-${inningsIndex}`,
+        label: `AFTER ${inningsIndex + 1}${testInningsSuffix(inningsIndex)} INNINGS`,
+        subLabel: `${inningsData.teamName || `Team ${inningsData.teamId}`} • ${finalOver.score}`,
+        prediction: finalOver.prediction,
+      });
+      return;
+    }
+
+    // Limited Overs history remains over-by-over.
     overRecords.forEach((record) => {
       records.push({
         key: `${inningsIndex + 1}-${record.over}-${record.index}`,
-        label: `${inningsIndex === 0 ? "1ST INNINGS" : "2ND INNINGS"} • OVER ${record.over}`,
+        label: `${inningsIndex + 1}${testInningsSuffix(inningsIndex)} INNINGS • OVER ${record.over}`,
         subLabel: `${inningsData.teamName || `Team ${inningsData.teamId}`} • ${record.score}`,
         prediction: record.prediction,
       });
@@ -659,6 +1649,8 @@ const buildPredictionHistory = ({ match, scoringState }) => {
 function PredictionOverHistory({ match, scoringState }) {
   const records = buildPredictionHistory({ match, scoringState });
   const isTestMatch = isTestMatchRecord(match);
+  const inningsCount = scorecardHistoryInnings({ match, scoringState })
+    .filter(Boolean).length;
 
   if (!records.length) return null;
 
@@ -666,7 +1658,10 @@ function PredictionOverHistory({ match, scoringState }) {
     <section className="win-prediction-history">
       <div className="section-title">
         <span>WIN PREDICTION BY OVER</span>
-        <small>Before match, every recorded over of both innings, and after match</small>
+        <small>
+          Before match, every recorded over across {inningsCount || "available"}{" "}
+          innings, and after match
+        </small>
       </div>
 
       <div className="win-prediction-history-list">
@@ -1075,7 +2070,14 @@ function MatchMatchImpactSections({ match, scoringState }) {
   );
 }
 
-function MatchInningsScorecard({ innings, battingTeam, bowlingTeam, match }) {
+function MatchInningsScorecard({
+  innings,
+  battingTeam,
+  bowlingTeam,
+  match,
+  commentaryLoading = false,
+  commentaryEnabled = true,
+}) {
   if (!battingTeam) return null;
 
   const data = innings || {};
@@ -1142,6 +2144,10 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam, match }) {
       (bowler) =>
         bowler.legalBalls || bowler.runs || bowler.wickets
     );
+
+  const commentaryDeliveries = hydrateDeliveryCommentary(
+    Array.isArray(data.deliveries) ? data.deliveries : []
+  );
 
   const totalExtras =
     Number(extras.nb || 0) +
@@ -1261,6 +2267,13 @@ function MatchInningsScorecard({ innings, battingTeam, bowlingTeam, match }) {
           </table>
         </div>
       </div>
+
+      {commentaryEnabled && (
+        <CommentarySections
+          deliveries={commentaryDeliveries}
+          loading={commentaryLoading && !commentaryDeliveries.length}
+        />
+      )}
     </section>
   );
 }
@@ -3361,7 +4374,7 @@ function FinishedMatchAnalysisGraphs({ match }) {
   );
 }
 
-function MatchScorecard({ match }) {
+function MatchScorecard({ match, commentaryLoading = false }) {
   const [activeInnings, setActiveInnings] = useState(
     () => {
       if (!isTestMatchRecord(match)) return "first";
@@ -3395,17 +4408,21 @@ function MatchScorecard({ match }) {
   const firstTeamId = match.firstInningsData?.teamId ||
     (match.firstInningsTeamId === "B" ? "B" : "A");
   const secondTeamId = firstTeamId === "A" ? "B" : "A";
-  const firstInnings = match.firstInningsData || (
+  const historicalInnings = scorecardHistoryInnings({
+    match,
+    scoringState: savedState,
+  });
+  const firstInnings = historicalInnings[0] || match.firstInningsData || (
     savedState.inningsIndex === 0 ? liveInnings : null
   );
-  const secondInnings = match.secondInningsData || (
+  const secondInnings = historicalInnings[1] || match.secondInningsData || (
     savedState.inningsIndex === 1 ? liveInnings : null
   );
 
   const tossResult = match.secondTossResult || null;
   const tossWinner = match.secondTossWinner;
 
-  const inningsFor = (data, defaultBattingTeam) => {
+  const inningsFor = (data, defaultBattingTeam, options = {}) => {
     const battingTeam = data?.teamId === "B" ? teamB : data?.teamId === "A" ? teamA : defaultBattingTeam;
     const bowlingTeam = battingTeam.id === "A" ? teamB : teamA;
 
@@ -3416,6 +4433,8 @@ function MatchScorecard({ match }) {
         battingTeam={battingTeam}
         bowlingTeam={bowlingTeam}
         match={match}
+        commentaryLoading={commentaryLoading}
+        commentaryEnabled={options.commentaryEnabled === true}
       />
     );
   };
@@ -3428,6 +4447,85 @@ function MatchScorecard({ match }) {
   const testScorecardInnings = isTestMatch
     ? scorecardHistoryInnings({ match, scoringState: savedState })
     : [];
+  const commentaryInnings = isFinalMatch(match)
+    ? getFinishedCommentaryInnings({
+        match,
+        scoringState: savedState,
+      })
+    : getLiveCommentaryInnings({
+        match,
+        scoringState: savedState,
+      });
+
+  // useEffect(() => {
+  //   if (!isFinalMatch(match)) return;
+
+  //   const deliveriesByInnings = commentaryInnings.map((innings, inningsIndex) => ({
+  //     innings: inningsIndex + 1,
+  //     team: innings?.teamName || innings?.teamId || "Unknown team",
+  //     overs: hydrateDeliveryCommentary(
+  //       Array.isArray(innings?.deliveries) ? innings.deliveries : []
+  //     ).reduce((overs, delivery) => {
+  //       const overNumber = Number(
+  //         delivery.__normalizedOver ??
+  //         delivery.over ??
+  //         delivery.overNumber ??
+  //         0
+  //       );
+  //       const key = String(Number.isFinite(overNumber) ? overNumber : 0);
+  //       if (!overs[key]) overs[key] = [];
+  //       overs[key].push({
+  //         over: overNumber,
+  //         ball: Number(
+  //           delivery.__normalizedBall ??
+  //           delivery.ball ??
+  //           delivery.ballNumber ??
+  //           0
+  //         ),
+  //         batter: delivery.strikerName || delivery.batterName || "Unknown batter",
+  //         bowler: delivery.bowlerName || "Unknown bowler",
+  //         runs: Number(
+  //           delivery.runs ??
+  //           delivery.totalRuns ??
+  //           delivery.batterRuns ??
+  //           0
+  //         ),
+  //         wicket: delivery.wicket?.type || delivery.wicketType || null,
+  //         position: delivery.shotRegion || delivery.shotPosition || "(no position)",
+  //       });
+  //       return overs;
+  //     }, {}),
+  //   }));
+
+  //   console.groupCollapsed(
+  //     `[Scorify] Finished match deliveries: ${match.id || "unknown match"}`
+  //   );
+  //   deliveriesByInnings.forEach((innings) => {
+  //     console.groupCollapsed(
+  //       `Innings ${innings.innings} - ${innings.team}`
+  //     );
+  //     Object.keys(innings.overs)
+  //       .sort((left, right) => Number(left) - Number(right))
+  //       .forEach((over) => {
+  //         console.log(`Over ${over}`, innings.overs[over]);
+  //       });
+  //     console.groupEnd();
+  //   });
+  //   console.groupEnd();
+  // }, [
+  //   match?.id,
+  //   match?.persistedDeliveries?.length,
+  //   match?.scoringState?.deliveries?.length,
+  //   commentaryInnings.length,
+  // ]);
+
+  const finalMatch = isFinalMatch(match);
+  const printableCommentaryInnings = commentaryInnings.map((innings) => ({
+    ...innings,
+    deliveries: hydrateDeliveryCommentary(
+      Array.isArray(innings?.deliveries) ? innings.deliveries : []
+    ),
+  }));
   const testTotals = testScorecardInnings.reduce((totals, innings) => {
     totals[innings.teamId === "B" ? "B" : "A"] += Number(innings.runs || 0);
     return totals;
@@ -3627,12 +4725,16 @@ function MatchScorecard({ match }) {
                   {innings.declared || (Array.isArray(match.declaredInnings) && match.declaredInnings.includes(Number(innings.inningsIndex))) ? " (d)" : ""}
                   {match.followOnEnforced && Number(innings.inningsIndex) === 2 ? " (f/o)" : ""}
                 </h3>
-                {inningsFor(innings, innings.teamId === "B" ? teamB : teamA)}
+                {inningsFor(innings, innings.teamId === "B" ? teamB : teamA, {
+                  commentaryEnabled: false,
+                })}
               </div>
             ))}
           </section>
         )}
-        <MatchMatchImpactSections match={match} scoringState={savedState} />
+        {finalMatch && (
+          <MatchMatchImpactSections match={match} scoringState={savedState} />
+        )}
 
         <div className="match-toss-summary">
           <span className="match-toss-coin">
@@ -3645,7 +4747,9 @@ function MatchScorecard({ match }) {
         </div>
 
         {firstInnings
-          ? inningsFor(firstInnings, firstTeamId === "B" ? teamB : teamA)
+          ? inningsFor(firstInnings, firstTeamId === "B" ? teamB : teamA, {
+              commentaryEnabled: false,
+            })
           : (
             <p className="match-scorecard-note">
               Detailed first-innings scorecard is not available for this match.
@@ -3655,19 +4759,31 @@ function MatchScorecard({ match }) {
         <div className="scorecard-print-page-break" />
 
         {secondInnings
-          ? inningsFor(secondInnings, secondTeamId === "B" ? teamB : teamA)
+          ? inningsFor(secondInnings, secondTeamId === "B" ? teamB : teamA, {
+              commentaryEnabled: false,
+            })
           : (
             <p className="match-scorecard-note">
               Detailed second-innings scorecard is not available for this match.
             </p>
           )}
 
-        <FinishedMatchAnalysisGraphs match={match} />
-        <PredictionOverHistory match={match} scoringState={savedState} />
+        {finalMatch && (
+          <>
+            <FinishedMatchAnalysisGraphs match={match} />
+            <PredictionOverHistory match={match} scoringState={savedState} />
+          </>
+        )}
+        {finalMatch && printableCommentaryInnings.map((innings, index) => (
+          <section className="scorecard-print-commentary" key={`print-commentary-${index}`}>
+            <h2>{innings.teamName || `Innings ${index + 1}`} Commentary</h2>
+            <CommentarySections deliveries={innings.deliveries} />
+          </section>
+        ))}
       </div>
 
       <div className="match-scorecard-full">
-        <button
+        {finalMatch && <button
           type="button"
           className="scorecard-download-button"
           onClick={handleDownloadScorecardPdf}
@@ -3689,11 +4805,17 @@ function MatchScorecard({ match }) {
             <path d="M5 21h14" />
           </svg>
           <span>Download PDF</span>
-        </button> 
+        </button>}
+           <CommentaryTabs
+        innings={commentaryInnings}
+        autoScrollLatest={!finalMatch}
+      />
 
         <LiveWinPredictionCard prediction={prediction} testMatch={isTestMatch} />
         {isTestMatch && <strong className="test-match-label">TEST MATCH</strong>}
-        <MatchMatchImpactSections match={match} scoringState={savedState} />
+        {finalMatch && (
+          <MatchMatchImpactSections match={match} scoringState={savedState} />
+        )}
       {isTestMatch ? (
         <>
           <div className="test-scorecard-summary">
@@ -3731,13 +4853,15 @@ function MatchScorecard({ match }) {
           >
             {firstInnings?.teamName || (firstTeamId === "B" ? teamB.name : teamA.name)}
           </button>
-          <button
-            type="button"
-            className={activeInnings === "second" ? "active" : ""}
-            onClick={() => setActiveInnings("second")}
-          >
-            {secondInnings?.teamName || (secondTeamId === "A" ? teamA.name : teamB.name)}
-          </button>
+          {secondInnings && (
+            <button
+              type="button"
+              className={activeInnings === "second" ? "active" : ""}
+              onClick={() => setActiveInnings("second")}
+            >
+              {secondInnings.teamName || (secondTeamId === "A" ? teamA.name : teamB.name)}
+            </button>
+          )}
         </div>
       )}
 
@@ -3772,11 +4896,13 @@ function MatchScorecard({ match }) {
           Only appears after the match is completed.
       ================================================== */}
 
-      <FinishedMatchAnalysisGraphs
-        match={match}
-      />
-      <PredictionOverHistory match={match} scoringState={savedState} />
-    </div>
+      {finalMatch && (
+        <>
+          <FinishedMatchAnalysisGraphs match={match} />
+          <PredictionOverHistory match={match} scoringState={savedState} />
+        </>
+      )}
+      </div>
     </>
   );
 }
@@ -3855,6 +4981,8 @@ function Matches() {
   });
 
   const [viewingMatch, setViewingMatch] = useState(null);
+  const [persistedDeliveries, setPersistedDeliveries] = useState([]);
+  const [commentaryLoading, setCommentaryLoading] = useState(false);
 
   // Id of the match currently being deleted (prevents double clicks).
   const [deletingMatchId, setDeletingMatchId] = useState(null);
@@ -4017,8 +5145,57 @@ function Matches() {
 
     if (latestMatch && latestMatch !== viewingMatch) {
       setViewingMatch(latestMatch);
+      if (isFinalMatch(latestMatch)) {
+        setScreen("view-scorecard");
+      }
     }
   }, [matches, viewingMatch]);
+
+  useEffect(() => {
+    if (!viewingMatch?.id) {
+      setPersistedDeliveries([]);
+      setCommentaryLoading(false);
+      return undefined;
+    }
+
+    setCommentaryLoading(true);
+    const deliveriesQuery = query(
+      collection(db, "deliveries"),
+      where("matchId", "==", String(viewingMatch.id))
+    );
+
+    return onSnapshot(
+      deliveriesQuery,
+      async (snapshot) => {
+        let records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+
+        // Older matches may have stored a numeric matchId (or a legacy key)
+        // even though new delivery records use a string matchId.
+        if (!records.length) {
+          try {
+            const legacySnapshot = await getDocs(collection(db, "deliveries"));
+            records = legacySnapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }))
+              .filter((delivery) => [
+                delivery.matchId,
+                delivery.matchID,
+                delivery.match_id,
+              ].some((value) => String(value ?? "") === String(viewingMatch.id)));
+          } catch (error) {
+            console.error("Unable to load legacy match commentary:", error);
+          }
+        }
+
+        setPersistedDeliveries(records);
+        setCommentaryLoading(false);
+      },
+      (error) => {
+        console.error("Unable to load saved match commentary:", error);
+        setPersistedDeliveries([]);
+        setCommentaryLoading(false);
+      }
+    );
+  }, [viewingMatch?.id]);
 
   // Open a scorecard requested from the finished scoring screen after the
   // event-driven matches snapshot has loaded.
@@ -5112,6 +6289,12 @@ function Matches() {
         })
     : sortedMatches;
 
+  const displayMatches = visibleMatches.map((match) =>
+    String(match?.status || "").toLowerCase() === "live"
+      ? buildLiveScorecardSnapshot(match)
+      : match
+  );
+
   // --------------------------------------------------
   // DELETE ONLY THE SELECTED MATCH (ADMIN)
   // --------------------------------------------------
@@ -5229,7 +6412,7 @@ function Matches() {
             </div>
           ) : (
             <div className="matches-list">
-              {visibleMatches.map((match) => (
+              {displayMatches.map((match) => (
                 <div
                   className="match-date-group"
                   key={match.id}
@@ -6737,6 +7920,14 @@ const teamsWithPlayers = savedTeams.map((team) => {
       return null;
     }
 
+    const scorecardMatch = buildLiveScorecardSnapshot(
+      {
+        ...viewingMatch,
+        persistedDeliveries,
+      },
+      persistedDeliveries
+    );
+
     return (
       <>
         <div className="page matches-page">
@@ -6792,8 +7983,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
 
             {isTestMatchRecord(viewingMatch) ? (() => {
               const playedInnings = scorecardHistoryInnings({
-                match: viewingMatch,
-                scoringState: viewingMatch.scoringState || {},
+                match: scorecardMatch,
+                scoringState: scorecardMatch.scoringState || {},
               });
               const renderTeam = (team, teamId) => (
                 <div className="test-scorecard-team">
@@ -6836,8 +8027,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
                     )}
                   </strong>
                   <span>
-                    {viewingMatch.scoreA || 0}/
-                    {viewingMatch.wicketsA || 0}
+                    {scorecardMatch.scoreA || 0}/
+                    {scorecardMatch.wicketsA || 0}
                   </span>
                 </div>
 
@@ -6855,8 +8046,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
                     )}
                   </strong>
                   <span>
-                    {viewingMatch.scoreB || 0}/
-                    {viewingMatch.wicketsB || 0}
+                    {scorecardMatch.scoreB || 0}/
+                    {scorecardMatch.wicketsB || 0}
                   </span>
                 </div>
               </div>
@@ -6877,8 +8068,8 @@ const teamsWithPlayers = savedTeams.map((team) => {
             <div className="scorecard-info-grid">
               {isTestMatchRecord(viewingMatch) ? (() => {
                 const playedInnings = scorecardHistoryInnings({
-                  match: viewingMatch,
-                  scoringState: viewingMatch.scoringState || {},
+                  match: scorecardMatch,
+                  scoringState: scorecardMatch.scoringState || {},
                 });
                 const totalOvers = playedInnings.reduce(
                   (total, innings) => total + testCompletedOvers(innings.balls),
@@ -6941,7 +8132,10 @@ const teamsWithPlayers = savedTeams.map((team) => {
             </div>
           </div>
 
-          <MatchScorecard match={viewingMatch} />
+          <MatchScorecard
+            match={scorecardMatch}
+            commentaryLoading={commentaryLoading}
+          />
         </div>
       </>
     );

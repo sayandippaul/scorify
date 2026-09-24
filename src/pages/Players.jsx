@@ -29,16 +29,30 @@ import {
   db,
 } from "../firebase/firebase";
 import LoadingOverlay from "../components/LoadingOverlay";
+import CareerPerformanceSummary from "../components/CareerPerformanceSummary";
 import { calculateStrengthPoints } from "../services/playerStrength";
 import {
   getCareerMatchStats,
   getMaidenCount,
 } from "../services/careerMatchStats";
+import { getPlayerDismissalStats } from "../services/dismissalStats";
 
 
 import { ADMIN_UID } from "../config/security";
 import { saveLastAdminDelete } from "../services/adminUndoService";
 const DEFAULT_PASSWORD = "cricket";
+
+const SHOT_REGIONS = {
+  1: "Behind Keeper",
+  2: "Third Man",
+  3: "Square Off",
+  4: "Cover",
+  5: "Long Off",
+  6: "Long On",
+  7: "Midwicket",
+  8: "Square Leg",
+  9: "Fine Leg",
+};
 
 const formatBowlingOvers = (balls) => {
   const totalBalls = Math.max(0, Math.floor(Number(balls) || 0));
@@ -342,6 +356,8 @@ const getMatchInnings = (match) => {
             savedState.battingStats,
           bowlingStats:
             savedState.bowlingStats || {},
+          deliveries:
+            savedState.deliveries || [],
         }
       : null;
 
@@ -454,6 +470,7 @@ const computePlayerStatistics = ({
   playerIds,
   battingStats = [],
   bowlingStats = [],
+  deliveries = [],
   matches = [],
   tournaments = [],
   playerStrength = "0.0",
@@ -569,6 +586,46 @@ const computePlayerStatistics = ({
 
   let bestBowlingMatch =
     "—";
+
+  const productiveShotRuns = new Map();
+  const dismissalStats = getPlayerDismissalStats(deliveries, playerIds);
+
+  const addProductiveShots = (match, innings) => {
+    const matchId = idString(match?.id || match?.matchId);
+    const candidates = [
+      ...(Array.isArray(innings?.deliveries) ? innings.deliveries : []),
+      ...deliveries.filter((delivery) => {
+        const deliveryMatchId = idString(
+          delivery?.matchId || delivery?.matchID
+        );
+        return Boolean(deliveryMatchId && matchId && deliveryMatchId === matchId);
+      }),
+    ];
+    const seen = new Set();
+
+    candidates.forEach((delivery) => {
+      const deliveryId = idString(delivery?.id);
+      if (deliveryId && seen.has(deliveryId)) return;
+      if (deliveryId) seen.add(deliveryId);
+
+      const batterRuns = Number(
+        delivery?.batterRuns ?? delivery?.batsmanRuns
+      );
+      const position = Number(delivery?.shotPosition);
+
+      if (
+        playerIds.has(idString(delivery?.strikerId)) &&
+        batterRuns > 0 &&
+        Number.isInteger(position) &&
+        SHOT_REGIONS[position]
+      ) {
+        productiveShotRuns.set(
+          position,
+          (productiveShotRuns.get(position) || 0) + batterRuns
+        );
+      }
+    });
+  };
 
 
   let totalMatches = 0;
@@ -714,6 +771,7 @@ const computePlayerStatistics = ({
     if (innings.length) {
 
       innings.forEach((inning) => {
+        addProductiveShots(match, inning);
 
         /* ----- batting ----- */
 
@@ -816,6 +874,7 @@ const computePlayerStatistics = ({
       });
 
     } else {
+      addProductiveShots(match, null);
 
       /* Fallback: match without a saved scorecard */
 
@@ -1150,11 +1209,22 @@ const computePlayerStatistics = ({
 
     losePercentage,
 
+    productiveShotRegions: [...productiveShotRuns.entries()]
+      .map(([position, runs]) => ({
+        position,
+        region: SHOT_REGIONS[position],
+        runs,
+      }))
+      .sort((left, right) => right.runs - left.runs)
+      .slice(0, 2),
+
     ...getCareerMatchStats({
       playerIds,
       matches,
       tournaments,
     }),
+
+    ...dismissalStats,
 
   };
 
@@ -1170,6 +1240,7 @@ function Players() {
   const [players, setPlayers] = useState([]);
   const [battingStats, setBattingStats] = useState([]);
   const [bowlingStats, setBowlingStats] = useState([]);
+  const [deliveriesData, setDeliveriesData] = useState([]);
 
 
   /* =========================================
@@ -1275,7 +1346,8 @@ function Players() {
       getDocs(playersRef),
       getDocs(collection(db, "battingStats")),
       getDocs(collection(db, "bowlingStats")),
-    ]).then(([snapshot, battingSnapshot, bowlingSnapshot]) => {
+      getDocs(collection(db, "deliveries")),
+    ]).then(([snapshot, battingSnapshot, bowlingSnapshot, deliveriesSnapshot]) => {
 
           const firestorePlayers =
             snapshot.docs.map(
@@ -1310,6 +1382,12 @@ function Players() {
           );
           setBowlingStats(
             bowlingSnapshot.docs.map((item) => ({
+              id: item.id,
+              ...item.data(),
+            }))
+          );
+          setDeliveriesData(
+            deliveriesSnapshot.docs.map((item) => ({
               id: item.id,
               ...item.data(),
             }))
@@ -2099,6 +2177,7 @@ const isAdmin =
             ),
           battingStats,
           bowlingStats,
+          deliveries: deliveriesData,
           matches:
             matchesData,
           tournaments: tournamentsData,
@@ -3331,6 +3410,11 @@ const isAdmin =
                       }
                     />
 
+                    <StatCard
+                      label="Most Dismissed By"
+                      value={statistics.mostCommonBattingDismissal}
+                    />
+
                   </div>
 
 
@@ -3433,6 +3517,11 @@ const isAdmin =
                       }
                     />
 
+                    <StatCard
+                      label="Most Wickets By"
+                      value={statistics.mostCommonBowlingDismissal}
+                    />
+
                   </div>
 
 
@@ -3474,52 +3563,40 @@ const isAdmin =
                 </div>
 
 
+                <div className="profile-stat-section productive-shot-section">
+                  <div className="profile-stat-title">
+                    <span className="profile-stat-title-icon">📍</span>
+                    <div>
+                      <h3>MOST PRODUCTIVE SHOT REGIONS</h3>
+                      <p>Runs scored by recorded shot position</p>
+                    </div>
+                  </div>
+                  {statistics.productiveShotRegions?.length ? (
+                    <ol className="productive-shot-list">
+                      {statistics.productiveShotRegions.map((item) => (
+                        <li key={item.position}>
+                          <span>
+                            <strong>{item.region}</strong>
+                            <small>Region {item.position}</small>
+                          </span>
+                          <b>{item.runs} runs</b>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="productive-shot-empty">No shot-region record</p>
+                  )}
+                </div>
+
+
                 {/* ===================================================
                     MATCH RESULTS
                     =================================================== */}
 
-                <div className="profile-stat-section">
-
-                  <div className="profile-stat-title">
-
-                    {/* <span className="profile-stat-title-icon">
-                      🏆
-                    </span> */}
-
-
-                    {/* <div>
-
-                      <h3>
-                        Match Results
-                      </h3>
-
-
-                      <p>
-                        Recorded match results
-                      </p>
-
-                    </div> */}
-
-                    <div className="profile-stat-section career-format-section">
-                      <div className="profile-stat-title">
-                        <span className="profile-stat-title-icon">📈</span>
-                        <div>
-                          <h3>Match & Tournament Record</h3>
-                          <p>Results across the player&apos;s recorded career</p>
-                        </div>
-                      </div>
-                      <div className="career-format-grid">
-                        <div className="career-format-card"><span>🏏 Test Matches</span><strong>{statistics.testPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.testWon} won</b><b className="career-result-loss">{statistics.testLost} lost</b><b className="career-result-draw">{statistics.testDraw} drawn</b></small></div>
-                        <div className="career-format-card"><span>⚡ Limited Overs</span><strong>{statistics.limitedPlayed}</strong><small className="career-result-counts"><b className="career-result-win">{statistics.limitedWon} won</b><b className="career-result-loss">{statistics.limitedLost} lost</b><b className="career-result-draw">{statistics.limitedDraw} drawn</b></small></div>
-                        <div className="career-format-card"><span>🏆 Tournaments</span><strong>{statistics.tournamentPlayed}</strong><small>{statistics.tournamentWon} won • {statistics.tournamentLost} lost</small></div>
-                      </div>
-                      <div className="career-award-card"><span>🌟</span><div><strong>{statistics.manOfMatch}</strong><small>Man of the Match awards</small></div></div>
-                    </div>
-
-                  </div>
-
-
-                </div>
+                <CareerPerformanceSummary
+                  statistics={statistics}
+                  description="Results across the player's recorded career"
+                />
 
                 </>
 
