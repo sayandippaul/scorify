@@ -425,6 +425,68 @@ const UNIQUE_PLAYERS = (players = []) => {
   return [...map.values()];
 };
 
+const tournamentKnockoutStage = (match) => {
+  const stage = String(match?.tournamentStage || match?.tournamentMatchType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return stage === "final" || stage === "semi_final" || stage === "semifinal"
+    ? stage === "semifinal" ? "semi_final" : stage
+    : null;
+};
+
+const createTournamentSuperOver = (match) => {
+  const stage = tournamentKnockoutStage(match);
+  if (!match?.tournamentId || !stage) return null;
+
+  const number = Number(match.tournamentSuperOverNumber || 0) + 1;
+  const id = `${match.id}-super-over-${number}`;
+  const now = new Date().toISOString();
+  const teamAPlayers = UNIQUE_PLAYERS(match.teamAPlayers || match.teamA?.players || []);
+  const teamBPlayers = UNIQUE_PLAYERS(match.teamBPlayers || match.teamB?.players || []);
+
+  return {
+    id,
+    matchId: id,
+    tournamentId: match.tournamentId,
+    tournamentName: match.tournamentName,
+    tournamentMatchType: `${stage}_super_over`,
+    tournamentStage: stage,
+    tournamentParentMatchId: match.id,
+    tournamentBaseMatchId: match.tournamentBaseMatchId || match.id,
+    tournamentSuperOverNumber: number,
+    tournamentFixtureId: id,
+    tournamentGroup: match.tournamentGroup || null,
+    tournamentCreatedBy: match.tournamentCreatedBy || match.createdBy || null,
+    createdBy: match.createdBy || match.tournamentCreatedBy || null,
+    teamAId: match.teamAId || match.teamA?.teamId || null,
+    teamBId: match.teamBId || match.teamB?.teamId || null,
+    teamAName: match.teamAName || match.teamA?.name || "Team A",
+    teamBName: match.teamBName || match.teamB?.name || "Team B",
+    teamA: {
+      ...(match.teamA || {}),
+      id: "A",
+      players: teamAPlayers,
+    },
+    teamB: {
+      ...(match.teamB || {}),
+      id: "B",
+      players: teamBPlayers,
+    },
+    teamAPlayers,
+    teamBPlayers,
+    matchType: "limited-overs",
+    overs: 1,
+    status: "scheduled",
+    winner: null,
+    winnerId: null,
+    result: null,
+    resultText: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
 const TEAM_PLAYERS = (team, fallback = []) => {
   if (!team) return UNIQUE_PLAYERS(fallback);
 
@@ -2657,6 +2719,21 @@ export default function Scoring() {
       finishedAt:
         new Date().toISOString(),
     });
+
+    const isDrawnResult =
+      winner === "DRAW" ||
+      (winner == null && (
+        finalValues.drawState === "draw" ||
+        String(text || "").toLowerCase().includes("draw")
+      ));
+    if (isDrawnResult && tournamentKnockoutStage(match)) {
+      const superOver = createTournamentSuperOver(updatedMatch || match);
+      if (superOver) {
+        saveMatch(superOver).catch((error) => {
+          console.error("Unable to create tournament super over:", error);
+        });
+      }
+    }
 
     /*
      * Team composition changes made during the match are

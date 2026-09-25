@@ -25,6 +25,31 @@ const emptyTeams = (count) =>
     players: [],
   }));
 
+const tournamentMatchLabel = (match) => {
+  const type = String(match?.tournamentMatchType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  const superOverNumber = Number(match?.tournamentSuperOverNumber || 0);
+  const semiFinalNumber = String(
+    match?.tournamentBaseMatchId ||
+    match?.tournamentParentMatchId ||
+    match?.id ||
+    ""
+  ).match(/-semi-(\d+)(?:-|$)/i)?.[1];
+  if (type.includes("semi") && type.includes("super over")) {
+    return `Semi Final ${semiFinalNumber || 1} Super Over ${superOverNumber || 1}`;
+  }
+  if (type.includes("final") && type.includes("super over")) {
+    return `Final Super Over ${superOverNumber || 1}`;
+  }
+  if (type === "semi final" || type === "semifinal") {
+    return `Semi Final ${semiFinalNumber || 1}`;
+  }
+  if (type === "league") return "League Match";
+  return type.replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Match";
+};
+
 function Tournament() {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState([]);
@@ -277,7 +302,7 @@ function Tournament() {
               <p><strong>📈 Per Innings Average Score</strong><span>{statistics?.averageInningsScore ? `${statistics.averageInningsScore.toFixed(2)} runs` : "No completed matches yet."}</span></p>
             </div>
           )}
-          {panel === "matches" && <div className="tournament-match-list">{selectedMatches.map((match) => { const creator = String(getCurrentTournamentUser()?.uid || "") === String(selected.createdBy); const started = ["live", "finished", "completed", "unfinished"].includes(String(match.status).toLowerCase()); return <div key={match.id}><span><strong>{match.tournamentMatchType === "league" ? "League Match" : match.tournamentMatchType}</strong><br />{match.teamAName || "TBD"} vs {match.teamBName || "TBD"}</span><div>{!started && creator && match.teamAName && match.teamBName && <button type="button" onClick={() => navigate(`/matches?tournamentId=${selected.id}&fixtureId=${match.id}`)}>Start This Match</button>}<button type="button" disabled={!started} onClick={() => navigate(`/matches/${match.id}/scorecard`)}>View Scorecard</button></div></div>; })}</div>}
+          {panel === "matches" && <div className="tournament-match-list">{selectedMatches.map((match) => { const creator = String(getCurrentTournamentUser()?.uid || "") === String(selected.createdBy); const started = ["live", "finished", "completed", "unfinished"].includes(String(match.status).toLowerCase()); return <div key={match.id}><span><strong>{tournamentMatchLabel(match)}</strong><br />{match.teamAName || "TBD"} vs {match.teamBName || "TBD"}</span><div>{!started && creator && match.teamAName && match.teamBName && <button type="button" onClick={() => navigate(`/matches?tournamentId=${selected.id}&fixtureId=${match.id}`)}>Start This Match</button>}<button type="button" disabled={!started} onClick={() => navigate(`/matches/${match.id}/scorecard`)}>View Scorecard</button></div></div>; })}</div>}
         </section>
         </div>
       )}

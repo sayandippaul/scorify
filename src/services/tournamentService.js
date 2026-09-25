@@ -367,33 +367,10 @@ const winnerForMatch = (match, tournament, matches = []) => {
   const result = String(match?.winner || match?.result?.winner || "").toLowerCase();
   const teams = tournament.teams || [];
 
-  const matchType = String(match?.tournamentMatchType || "").toLowerCase()
-    .replace(/[\s_-]+/g, "-");
-  const isKnockout = matchType === "final" || matchType.startsWith("semi-");
   const isDraw =
     result === "draw" ||
     result === "tie" ||
     String(match?.resultText || "").toLowerCase().includes("draw");
-
-  if (isDraw && isKnockout) {
-    const standings = calculateTournamentStandings(tournament, matches);
-    const teamA = standings.find((standing) =>
-      idOf(standing.teamId) === idOf(match?.teamAId) ||
-      nameOf(standing.teamName).toLowerCase() === nameOf(match?.teamAName).toLowerCase()
-    );
-    const teamB = standings.find((standing) =>
-      idOf(standing.teamId) === idOf(match?.teamBId) ||
-      nameOf(standing.teamName).toLowerCase() === nameOf(match?.teamBName).toLowerCase()
-    );
-
-    if (teamA && teamB) {
-      const teamARank = standings.indexOf(teamA);
-      const teamBRank = standings.indexOf(teamB);
-      return teams.find((team) => idOf(team.id) === idOf(
-        teamARank <= teamBRank ? teamA.teamId : teamB.teamId
-      )) || null;
-    }
-  }
 
   if (isDraw) return null;
 
@@ -403,6 +380,37 @@ const winnerForMatch = (match, tournament, matches = []) => {
     (result === "a" && team.id === match?.teamAId) ||
     (result === "b" && team.id === match?.teamBId)
   ) || null;
+};
+
+const isDrawnMatch = (match) =>
+  ["draw", "tie"].includes(
+    String(match?.winner || match?.result?.winner || "").toLowerCase()
+  ) ||
+  String(match?.resultText || "").toLowerCase().includes("draw");
+
+const winnerForKnockoutStage = (stageMatch, tournament, matches) => {
+  if (!stageMatch) return null;
+
+  let current = stageMatch;
+  const visited = new Set();
+  while (current && !visited.has(String(current.id))) {
+    visited.add(String(current.id));
+    const winner = winnerForMatch(current, tournament, matches);
+    if (winner) return winner;
+    if (!isDrawnMatch(current)) {
+      return null;
+    }
+    current = matches
+      .filter((match) =>
+        String(match.tournamentParentMatchId || "") === String(current.id) &&
+        String(match.tournamentStage || "").toLowerCase() ===
+          String(stageMatch.tournamentStage || stageMatch.tournamentMatchType || "").toLowerCase()
+      )
+      .sort((left, right) =>
+        Number(left.tournamentSuperOverNumber || 0) - Number(right.tournamentSuperOverNumber || 0)
+      )[0];
+  }
+  return null;
 };
 
 export const syncTournamentStructure = async (tournament, matches) => {
@@ -447,7 +455,7 @@ export const syncTournamentStructure = async (tournament, matches) => {
       addDefinition("final", "final", null, table[0], table[1]);
     } else if (table.length >= 5) {
       const semi = existing.find((fixture) => fixture.tournamentMatchType === "semi_final" && fixture.id.endsWith("-semi-1"));
-      const semiWinner = semi && winnerForMatch(
+      const semiWinner = semi && winnerForKnockoutStage(
         matches.find((match) => String(match.tournamentFixtureId) === String(semi.id)),
         tournament,
         matches
@@ -460,12 +468,12 @@ export const syncTournamentStructure = async (tournament, matches) => {
     const [tableA, tableB] = tables;
     const semiOne = existing.find((fixture) => fixture.id.endsWith("-semi-1"));
     const semiTwo = existing.find((fixture) => fixture.id.endsWith("-semi-2"));
-    const winnerOne = semiOne && winnerForMatch(
+    const winnerOne = semiOne && winnerForKnockoutStage(
       matches.find((match) => String(match.tournamentFixtureId) === String(semiOne.id)),
       tournament,
       matches
     );
-    const winnerTwo = semiTwo && winnerForMatch(
+    const winnerTwo = semiTwo && winnerForKnockoutStage(
       matches.find((match) => String(match.tournamentFixtureId) === String(semiTwo.id)),
       tournament,
       matches
@@ -494,7 +502,7 @@ export const syncTournamentStructure = async (tournament, matches) => {
 
   const finalMatch = matches.find((match) => String(match.tournamentFixtureId) === `${tournament.id}-final`);
   const finalWinner = finalMatch && completedMatch(finalMatch)
-    ? winnerForMatch(finalMatch, tournament, matches)
+    ? winnerForKnockoutStage(finalMatch, tournament, matches)
     : null;
   const status = finalWinner ? "FINISHED" : matches.some((match) => ["live", "unfinished"].includes(String(match.status).toLowerCase())) ? "LIVE" : "UPCOMING";
   const updated = { ...tournament, fixtures, status, winnerId: finalWinner?.id || null, winnerName: finalWinner?.name || null, updatedAt: now() };

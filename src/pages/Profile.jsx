@@ -150,6 +150,8 @@ function Profile({
       tournamentPlayed: 0,
       tournamentWon: 0,
       tournamentLost: 0,
+      tournamentChampion: 0,
+      tournamentRunnerUp: 0,
       manOfMatch: 0,
       productiveShotRegions: [],
     });

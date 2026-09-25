@@ -141,6 +141,31 @@ const isFinalMatch = (match) => {
   );
 };
 
+const tournamentMatchLabel = (match) => {
+  const type = String(match?.tournamentMatchType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  const superOverNumber = Number(match?.tournamentSuperOverNumber || 0);
+  const semiFinalNumber = String(
+    match?.tournamentBaseMatchId ||
+    match?.tournamentParentMatchId ||
+    match?.id ||
+    ""
+  ).match(/-semi-(\d+)(?:-|$)/i)?.[1];
+  if (type.includes("semi") && type.includes("super over")) {
+    return `Semi Final ${semiFinalNumber || 1} Super Over ${superOverNumber || 1}`;
+  }
+  if (type.includes("final") && type.includes("super over")) {
+    return `Final Super Over ${superOverNumber || 1}`;
+  }
+  if (type === "semi final" || type === "semifinal") {
+    return `Semi Final ${semiFinalNumber || 1}`;
+  }
+  if (type === "league") return "League Match";
+  return type.replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Match";
+};
+
 const testInningsSuffix = (index) =>
   index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th";
 
@@ -5092,6 +5117,10 @@ function Matches() {
       tournamentId: fixture.tournamentId,
       tournamentName: fixture.tournamentName,
       tournamentMatchType: fixture.tournamentMatchType,
+      tournamentStage: fixture.tournamentStage,
+      tournamentParentMatchId: fixture.tournamentParentMatchId,
+      tournamentBaseMatchId: fixture.tournamentBaseMatchId,
+      tournamentSuperOverNumber: fixture.tournamentSuperOverNumber,
       tournamentFixtureId: fixture.tournamentFixtureId || fixture.id,
       tournamentGroup: fixture.tournamentGroup || fixture.groupId,
       tournamentCreatedBy: fixture.tournamentCreatedBy || fixture.createdBy,
@@ -6275,17 +6304,42 @@ function Matches() {
           (match) => String(match.tournamentId) === String(tournamentFilterId)
         )
         .sort((a, b) => {
-          const rank = (match) => {
+          const order = (match) => {
             const type = String(match.tournamentMatchType || "")
               .trim()
               .toLowerCase()
               .replace(/[_\s]+/g, "-");
-            if (type === "final") return 0;
-            if (type === "semi-final" || type === "semifinal" || type.startsWith("semi-")) return 1;
-            if (type === "league") return 2;
-            return 3;
+            const isSuperOver = type.includes("super-over");
+            const isFinal = type === "final" || (isSuperOver && type.startsWith("final-"));
+            const isSemiFinal = type === "semi-final" || type === "semifinal" || type.startsWith("semi-");
+            const semiNumber = Number(
+              String(
+                match.tournamentBaseMatchId ||
+                match.tournamentParentMatchId ||
+                match.id ||
+                ""
+              ).match(/-semi-(\d+)(?:-|$)/i)?.[1] || 0
+            );
+            const superOverNumber = Number(match.tournamentSuperOverNumber || 0);
+
+            if (isFinal) return [0, isSuperOver ? 1 : 0, isSuperOver ? -superOverNumber : 0];
+            if (isSemiFinal) {
+              return [
+                1,
+                -semiNumber,
+                isSuperOver ? 1 : 0,
+                isSuperOver ? -superOverNumber : 0,
+              ];
+            }
+            if (type === "league") return [2, 0, 0, 0];
+            return [3, 0, 0, 0];
           };
-          return rank(a) - rank(b) || new Date(b.createdAt) - new Date(a.createdAt);
+          const left = order(a);
+          const right = order(b);
+          for (let index = 0; index < left.length; index += 1) {
+            if (left[index] !== right[index]) return left[index] - right[index];
+          }
+          return new Date(b.createdAt) - new Date(a.createdAt);
         })
     : sortedMatches;
 
@@ -6432,11 +6486,7 @@ function Matches() {
                         </div>
                         {match.tournamentId && (
                           <span className="tournament-match-stage">
-                            {match.tournamentMatchType === "league"
-                              ? "League Match"
-                              : String(match.tournamentMatchType || "Match")
-                                .replace(/[_-]+/g, " ")
-                                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                            {tournamentMatchLabel(match)}
                           </span>
                         )}
                       </div>

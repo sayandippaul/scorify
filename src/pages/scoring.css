@@ -106,9 +106,11 @@
   box-sizing: border-box;
   margin: 16px 0;
   padding: 18px;
-  border: 1px solid var(--border-color, #334155);
+  border: 1px solid #d9e1ec;
   border-radius: 18px;
-  background: var(--card-bg, #111827);
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 8px 24px rgba(23, 32, 51, 0.08);
 }
 
 .commentary-list {
@@ -121,6 +123,7 @@
   scroll-behavior: smooth;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-color: #aebbd0 transparent;
 }
 
 .commentary-item {
@@ -128,7 +131,7 @@
   padding: 12px 14px;
   border-left: 3px solid #60a5fa;
   border-radius: 10px;
-  background: rgba(96, 165, 250, 0.08);
+  background: #eff6ff;
 }
 
 .commentary-over {
@@ -138,13 +141,13 @@
 }
 
 .commentary-over-break {
-  border-top: 1px solid var(--border-color, #334155);
+  border-top: 1px solid #d9e1ec;
   padding-top: 14px;
 }
 
 .commentary-over-title {
   margin: 0;
-  color: var(--muted-text-color, #94a3b8);
+  color: #64748b;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -177,10 +180,37 @@
 
 .commentary-item p {
   margin: 0;
-  color: var(--text-color, #f8fafc);
+  color: #172033;
   font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+[data-theme="dark"] .commentary-card {
+  border-color: #334155;
+  background: #111827;
+  color: #f8fafc;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .commentary-list {
+  scrollbar-color: #64748b transparent;
+}
+
+[data-theme="dark"] .commentary-item {
+  background: rgba(96, 165, 250, 0.08);
+}
+
+[data-theme="dark"] .commentary-over-break {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .commentary-over-title {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .commentary-item p {
+  color: #f8fafc;
 }
 
 .commentary-item p + p {

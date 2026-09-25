@@ -30,7 +30,7 @@ function CareerPerformanceSummary({ statistics, description }) {
         <div className="career-format-card">
           <span>🏆 Tournaments</span>
           <strong>{statistics.tournamentPlayed}</strong>
-          <small>{statistics.tournamentWon} won • {statistics.tournamentLost} lost</small>
+          <small>{statistics.tournamentChampion} champion • {statistics.tournamentRunnerUp} runners up</small>
         </div>
       </div>
       <div className="career-award-card">

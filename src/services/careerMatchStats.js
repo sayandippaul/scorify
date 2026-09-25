@@ -224,6 +224,8 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     tournamentPlayed: 0,
     tournamentWon: 0,
     tournamentLost: 0,
+    tournamentChampion: 0,
+    tournamentRunnerUp: 0,
     manOfMatch: 0,
   };
   const tournamentParticipation = new Map();
@@ -320,8 +322,13 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
           [idOf(tournament?.winnerId), nameOf(tournament?.winnerName)]
             .includes(nameOf(team?.name));
       }));
-    if (winner && [...entry.sides].some((side) => side === winner)) result.tournamentWon += 1;
-    else if (winner) result.tournamentLost += 1;
+    if (winner && [...entry.sides].some((side) => side === winner)) {
+      result.tournamentWon += 1;
+      result.tournamentChampion += 1;
+    } else if (winner) {
+      result.tournamentLost += 1;
+      result.tournamentRunnerUp += 1;
+    }
   });
 
   return result;
