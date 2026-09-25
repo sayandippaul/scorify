@@ -301,6 +301,28 @@ const getMatchInnings = (match) => {
   const isTestMatch =
     String(match?.matchType || "").toLowerCase() === "test";
 
+  const asInnings = (value) =>
+    Array.isArray(value)
+      ? value
+      : value && typeof value === "object"
+        ? Object.values(value)
+        : [];
+  const dedupeInnings = (items) => {
+    const seen = new Set();
+    return items.filter((item, index) => {
+      const key = [
+        item?.inningsId,
+        item?.inningsIndex ?? item?.inningsNumber ?? index,
+        item?.teamId ?? item?.battingTeamId ?? "",
+        item?.runs ?? "",
+        item?.balls ?? item?.legalBalls ?? "",
+      ].join(":");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   /*
    * Test matches persist each innings in testInnings. Unlike a
    * limited-overs match, a player can have batting and bowling
@@ -308,12 +330,12 @@ const getMatchInnings = (match) => {
    * must be included in the career totals.
    */
   if (isTestMatch) {
-    const persistedTestInnings =
-      Array.isArray(match?.testInnings)
-        ? match.testInnings
-        : Array.isArray(match?.innings)
-          ? match.innings
-          : [];
+    const persistedTestInnings = dedupeInnings([
+      ...asInnings(match?.testInnings),
+      ...asInnings(match?.innings),
+      ...asInnings(match?.inningsData),
+      ...asInnings(match?.savedInnings),
+    ]);
 
     if (persistedTestInnings.length) {
       const currentIndex = Number(match?.scoringState?.inningsIndex);
@@ -380,7 +402,13 @@ const getMatchInnings = (match) => {
     );
 
 
-  return [first, second].filter(Boolean);
+  return dedupeInnings([
+    first,
+    second,
+    ...asInnings(match?.innings),
+    ...asInnings(match?.inningsData),
+    ...asInnings(match?.savedInnings),
+  ].filter(Boolean));
 
 };
 
@@ -417,7 +445,9 @@ const findPlayerStat = (
         idString(
           stat.id ??
           stat.playerId ??
-          stat.uid
+          stat.uid ??
+          stat.name ??
+          stat.playerName
         )
       )
     ) {
@@ -488,7 +518,9 @@ const computePlayerStatistics = ({
         idString(
           stat.playerId ||
           stat.uid ||
-          stat.id
+          stat.id ||
+          stat.name ||
+          stat.playerName
         )
       )
     ) {
@@ -526,7 +558,9 @@ const computePlayerStatistics = ({
         idString(
           stat.playerId ||
           stat.uid ||
-          stat.id
+          stat.id ||
+          stat.name ||
+          stat.playerName
         )
       )
     ) {
@@ -1483,11 +1517,25 @@ function Players() {
     );
     const batting = battingStats.filter(
       (stat) =>
-        String(stat.playerId || stat.uid || "") === playerId
+        String(
+          stat.playerId ||
+          stat.uid ||
+          stat.id ||
+          stat.name ||
+          stat.playerName ||
+          ""
+        ).toLowerCase() === playerId.toLowerCase()
     );
     const bowling = bowlingStats.filter(
       (stat) =>
-        String(stat.playerId || stat.uid || "") === playerId
+        String(
+          stat.playerId ||
+          stat.uid ||
+          stat.id ||
+          stat.name ||
+          stat.playerName ||
+          ""
+        ).toLowerCase() === playerId.toLowerCase()
     );
     const matchIds = new Set(
       [...batting, ...bowling]
@@ -2171,6 +2219,7 @@ const isAdmin =
               [
                 selectedPlayer.uid,
                 selectedPlayer.id,
+                selectedPlayer.name,
               ]
                 .filter(Boolean)
                 .map(idString)

@@ -16,7 +16,6 @@ import {
   getTeamsOnce,
   getPlayersOnce,
   getMatchesOnce,
-  getCareerStatsOnce,
   syncStructuredCommentary,
 } from "../services/matchService";
 
@@ -222,14 +221,18 @@ function ShotPositionMap({ onSelect, battingHand, selectedPosition }) {
 
 const CAREER_RUNS = (player, careerStats) => {
   const id = String(PLAYER_ID(player));
+  const name = String(PLAYER_NAME(player)).trim().toLowerCase();
 
-  const aggregated = careerStats?.runsByPlayer?.[id];
-  if (aggregated !== undefined) {
-    const parsedAggregate = Number(aggregated);
-    return Number.isFinite(parsedAggregate) ? parsedAggregate : 0;
-  }
-
-  const value =
+  const aggregated =
+    (careerStats?.runsByPlayer?.[id] || 0) +
+    (careerStats?.runsByPlayer?.[`name:${name}`] || 0);
+  const hasAggregate =
+    Object.prototype.hasOwnProperty.call(careerStats?.runsByPlayer || {}, id) ||
+    Object.prototype.hasOwnProperty.call(
+      careerStats?.runsByPlayer || {},
+      `name:${name}`
+    );
+  const profileValue =
     player?.careerRuns ??
     player?.totalRuns ??
     player?.runsScored ??
@@ -240,20 +243,29 @@ const CAREER_RUNS = (player, careerStats) => {
     player?.runs ??
     0;
 
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  const parsedProfile = Number(profileValue);
+  const parsedAggregate = Number(aggregated);
+  return hasAggregate && Number.isFinite(parsedAggregate)
+    ? parsedAggregate
+    : Number.isFinite(parsedProfile)
+      ? parsedProfile
+      : 0;
 };
 
 const CAREER_WICKETS = (player, careerStats) => {
   const id = String(PLAYER_ID(player));
+  const name = String(PLAYER_NAME(player)).trim().toLowerCase();
 
-  const aggregated = careerStats?.wicketsByPlayer?.[id];
-  if (aggregated !== undefined) {
-    const parsedAggregate = Number(aggregated);
-    return Number.isFinite(parsedAggregate) ? parsedAggregate : 0;
-  }
-
-  const value =
+  const aggregated =
+    (careerStats?.wicketsByPlayer?.[id] || 0) +
+    (careerStats?.wicketsByPlayer?.[`name:${name}`] || 0);
+  const hasAggregate =
+    Object.prototype.hasOwnProperty.call(careerStats?.wicketsByPlayer || {}, id) ||
+    Object.prototype.hasOwnProperty.call(
+      careerStats?.wicketsByPlayer || {},
+      `name:${name}`
+    );
+  const profileValue =
     player?.careerWickets ??
     player?.totalWickets ??
     player?.wicketsTaken ??
@@ -264,8 +276,139 @@ const CAREER_WICKETS = (player, careerStats) => {
     player?.wickets ??
     0;
 
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  const parsedProfile = Number(profileValue);
+  const parsedAggregate = Number(aggregated);
+  return hasAggregate && Number.isFinite(parsedAggregate)
+    ? parsedAggregate
+    : Number.isFinite(parsedProfile)
+      ? parsedProfile
+      : 0;
+};
+
+const aggregateCareerStatsFromMatches = (matches = []) => {
+  const runsByPlayer = {};
+  const wicketsByPlayer = {};
+  const seenInnings = new Set();
+
+  const addStat = (target, stat, field, name, statKey = "") => {
+    if (!stat) return;
+
+    const id = String(
+      stat.id ??
+      stat.playerId ??
+      stat.uid ??
+      stat._id ??
+      (statKey && !String(statKey).startsWith("name:") ? statKey : "")
+    ).trim();
+    const playerName = String(stat.name ?? stat.playerName ?? name ?? "")
+      .trim()
+      .toLowerCase();
+    const value = Number(stat[field] || 0);
+    if (!Number.isFinite(value)) return;
+
+    if (id) {
+      target[id] = (target[id] || 0) + value;
+    } else if (playerName) {
+      const nameKey = `name:${playerName}`;
+      target[nameKey] = (target[nameKey] || 0) + value;
+    }
+  };
+
+  matches.forEach((match) => {
+    const matchId = String(match?.id ?? match?.matchId ?? "");
+    if (!matchId) return;
+
+    const asInnings = (value) =>
+      Array.isArray(value)
+        ? value
+        : value && typeof value === "object"
+          ? Object.values(value)
+          : [];
+    const dedupeInnings = (items) => {
+      const seen = new Set();
+      return items.filter((item, index) => {
+        const key = [
+          item?.inningsId,
+          item?.inningsIndex ?? item?.inningsNumber ?? index,
+          item?.teamId ?? item?.battingTeamId ?? "",
+          item?.runs ?? "",
+          item?.balls ?? item?.legalBalls ?? "",
+        ].join(":");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
+    const persistedTestInnings = dedupeInnings([
+      ...asInnings(match?.testInnings),
+      ...asInnings(match?.innings),
+      ...asInnings(match?.inningsData),
+      ...asInnings(match?.savedInnings),
+    ]);
+    const savedState = match?.scoringState || {};
+    const liveInnings = savedState.battingStats
+      ? {
+          battingStats: savedState.battingStats,
+          bowlingStats: savedState.bowlingStats || {},
+          deliveries: savedState.deliveries || [],
+        }
+      : null;
+
+    let innings;
+    if (
+      String(match?.matchType || "").toLowerCase() === "test" &&
+      persistedTestInnings.length
+    ) {
+      const currentIndex = Number(savedState.inningsIndex);
+      innings =
+        liveInnings && Number.isInteger(currentIndex) && currentIndex >= 0
+          ? [
+              ...persistedTestInnings.filter(
+                (item) => Number(item?.inningsIndex) !== currentIndex
+              ),
+              {
+                ...persistedTestInnings.find(
+                  (item) => Number(item?.inningsIndex) === currentIndex
+                ),
+                inningsIndex: currentIndex,
+                ...liveInnings,
+              },
+            ]
+          : persistedTestInnings;
+    } else {
+      const first =
+        match?.firstInningsData ||
+        (Number(savedState.inningsIndex) === 0 ? liveInnings : null);
+      const second =
+        match?.secondInningsData ||
+        (Number(savedState.inningsIndex) === 1 ? liveInnings : null);
+      innings = dedupeInnings([
+        first,
+        second,
+        ...asInnings(match?.innings),
+        ...asInnings(match?.inningsData),
+        ...asInnings(match?.savedInnings),
+      ].filter(Boolean));
+    }
+
+    innings.forEach((item, index) => {
+      const inningsIndex = item.inningsIndex ?? item.inningsNumber ?? index;
+      const teamId = item.teamId ?? item.battingTeamId ?? "";
+      const key = `${matchId}:${inningsIndex}:${teamId}:${Number(item.balls || item.legalBalls || 0)}:${Number(item.runs || 0)}`;
+      if (seenInnings.has(key)) return;
+      seenInnings.add(key);
+
+      Object.entries(item.battingStats || {}).forEach(([statKey, stat]) => {
+        addStat(runsByPlayer, stat, "runs", undefined, statKey);
+      });
+      Object.entries(item.bowlingStats || {}).forEach(([statKey, stat]) => {
+        addStat(wicketsByPlayer, stat, "wickets", undefined, statKey);
+      });
+    });
+  });
+
+  return { runsByPlayer, wicketsByPlayer };
 };
 
 const UNIQUE_PLAYERS = (players = []) => {
@@ -820,9 +963,10 @@ export default function Scoring() {
   useEffect(() => {
     let cancelled = false;
 
-    getCareerStatsOnce(matchId)
-      .then((stats) => {
-        if (!cancelled && stats) {
+    getMatchesOnce()
+      .then((matches) => {
+        if (!cancelled) {
+          const stats = aggregateCareerStatsFromMatches(matches, matchId);
           setCareerStats(stats);
         }
       })
@@ -961,6 +1105,7 @@ export default function Scoring() {
   const [currentOverBalls, setCurrentOverBalls] =
     useState([]);
   const overCompletionRef = useRef("");
+  const automaticInningsFinishRef = useRef("");
 
   const [deliveries, setDeliveries] =
     useState([]);
@@ -1787,16 +1932,23 @@ export default function Scoring() {
 
   const canSelectBowler = (player) => {
     const id = PLAYER_ID(player);
+    const activeBatterIds = new Set(
+      [
+        strikerId,
+        nonStrikerId,
+        striker && PLAYER_ID(striker),
+        nonStriker && PLAYER_ID(nonStriker),
+      ]
+        .filter(Boolean)
+        .map(String)
+    );
 
     /*
      * BOTH player cannot bowl while
      * currently batting.
      */
 
-    if (
-      id === String(strikerId) ||
-      id === String(nonStrikerId)
-    ) {
+    if (activeBatterIds.has(String(id))) {
       return false;
     }
 
@@ -3054,15 +3206,73 @@ export default function Scoring() {
      * Overs completed.
      */
 
-    if (
-      balls >=
-      Number(match.overs || 3) * 6
-    ) {
+    const configuredOvers = Number(match.overs);
+    const maximumBalls =
+      Number.isFinite(configuredOvers) && configuredOvers > 0
+        ? configuredOvers * 6
+        : 3 * 6;
+
+    if (balls >= maximumBalls) {
       return deferFinish(() => finishCurrentInnings(runs, wickets, balls, finalInningsData));
     }
 
     return false;
   };
+
+  useEffect(() => {
+    if (isTestMatch || screen !== "scoring") {
+      return;
+    }
+
+    const configuredOvers = Number(match?.overs);
+    const maximumBalls =
+      Number.isFinite(configuredOvers) && configuredOvers > 0
+        ? configuredOvers * 6
+        : 3 * 6;
+
+    if (legalBalls < maximumBalls) {
+      return;
+    }
+
+    const finishKey = `${inningsIndex}:${legalBalls}`;
+    if (automaticInningsFinishRef.current === finishKey) {
+      return;
+    }
+    automaticInningsFinishRef.current = finishKey;
+
+    checkInningsEnd(
+      inningsRuns,
+      inningsWickets,
+      legalBalls,
+      {
+        teamId: battingTeam.id,
+        teamName: battingTeam.name,
+        runs: inningsRuns,
+        wickets: inningsWickets,
+        balls: legalBalls,
+        battingStats,
+        bowlingStats,
+        extras,
+        deliveries: deliveriesRef.current,
+        fallOfWickets,
+        completedOvers,
+      }
+    );
+  }, [
+    battingStats,
+    battingTeam,
+    bowlingStats,
+    completedOvers,
+    extras,
+    fallOfWickets,
+    inningsIndex,
+    inningsRuns,
+    inningsWickets,
+    isTestMatch,
+    legalBalls,
+    match?.overs,
+    screen,
+  ]);
 
   const getRemainingBatters = (stats, dismissedId = "") => {
     const seen = new Set();
@@ -3383,8 +3593,15 @@ export default function Scoring() {
         (delivery) => String(delivery.id) === String(ball.id)
       ) || ball
     );
-    const validCount = overBalls.filter((ball) => ball.validBall).length;
-    const completionKey = `${inningsIndex}:${currentOver}:${legalBalls}`;
+    const validBalls = overBalls.filter((ball) => ball.validBall === true);
+    const validCount = validBalls.length;
+    const lastValidBall = validBalls[validBalls.length - 1];
+    /*
+     * Use the completed delivery itself as the idempotency key. The
+     * React state values for legalBalls/currentOver are intentionally
+     * one render behind while a delivery is being recorded.
+     */
+    const completionKey = `${inningsIndex}:${currentOver}:${lastValidBall?.id || ""}`;
     if (validCount < 6 || overCompletionRef.current === completionKey) {
       return;
     }
@@ -3820,6 +4037,10 @@ export default function Scoring() {
 
     setFreeHit(false);
 
+    if (newBalls % 6 === 0) {
+      completeOver(bowlerKey, [...currentOverBalls, ball]);
+    }
+
     const inningsEnded =
       checkInningsEnd(
         newRuns,
@@ -3842,12 +4063,6 @@ export default function Scoring() {
 
     if (inningsEnded) {
       return;
-    }
-
-    if (
-      newBalls % 6 === 0
-    ) {
-      completeOver(bowlerKey, [...currentOverBalls, ball]);
     }
   };
 
@@ -4435,6 +4650,10 @@ export default function Scoring() {
 
     setFreeHit(false);
 
+    if (newBalls % 6 === 0) {
+      completeOver(bowlerKey, [...currentOverBalls, ball]);
+    }
+
     const ended =
       checkInningsEnd(
         newRuns,
@@ -4456,12 +4675,6 @@ export default function Scoring() {
       );
 
     if (ended) return;
-
-    if (
-      newBalls % 6 === 0
-    ) {
-      completeOver(bowlerKey, [...currentOverBalls, ball]);
-    }
   };
 
   /* =========================================================
@@ -4591,6 +4804,10 @@ export default function Scoring() {
 
     setFreeHit(false);
 
+    if (newBalls % 6 === 0) {
+      completeOver(bowlerKey, [...currentOverBalls, ball]);
+    }
+
     const ended =
       checkInningsEnd(
         newRuns,
@@ -4612,12 +4829,6 @@ export default function Scoring() {
       );
 
     if (ended) return;
-
-    if (
-      newBalls % 6 === 0
-    ) {
-      completeOver(bowlerKey, [...currentOverBalls, ball]);
-    }
   };
 
   /* =========================================================

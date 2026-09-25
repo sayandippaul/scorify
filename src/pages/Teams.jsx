@@ -1530,7 +1530,7 @@ function Teams() {
   // =========================================================
 
   const teamA =
-    teams.find(
+    visibleTeams.find(
       (team) =>
         String(
           team.id ||
@@ -1540,7 +1540,7 @@ function Teams() {
     ) || null;
 
   const teamB =
-    teams.find(
+    visibleTeams.find(
       (team) =>
         String(
           team.id ||
@@ -1825,7 +1825,7 @@ function Teams() {
     }, [
       teamA,
       teamB,
-      teams,
+      visibleTeams,
       players,
       teamPlayers,
       battingStats,

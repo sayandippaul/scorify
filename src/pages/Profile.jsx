@@ -395,6 +395,8 @@ function Profile({
               playerId,
               user?.uid,
               user?.id,
+              user?.name,
+              playerData?.name,
             ]
               .filter(Boolean)
               .map(idString)
@@ -2405,12 +2407,33 @@ const getMatchInnings = (match) => {
    * must be included in the career totals.
    */
   if (isTestMatch) {
-    const persistedTestInnings =
-      Array.isArray(match?.testInnings)
-        ? match.testInnings
-        : Array.isArray(match?.innings)
-          ? match.innings
+    const asInnings = (value) =>
+      Array.isArray(value)
+        ? value
+        : value && typeof value === "object"
+          ? Object.values(value)
           : [];
+    const dedupeInnings = (items) => {
+      const seen = new Set();
+      return items.filter((item, index) => {
+        const key = [
+          item?.inningsId,
+          item?.inningsIndex ?? item?.inningsNumber ?? index,
+          item?.teamId ?? item?.battingTeamId ?? "",
+          item?.runs ?? "",
+          item?.balls ?? item?.legalBalls ?? "",
+        ].join(":");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+    const persistedTestInnings = dedupeInnings([
+      ...asInnings(match?.testInnings),
+      ...asInnings(match?.innings),
+      ...asInnings(match?.inningsData),
+      ...asInnings(match?.savedInnings),
+    ]);
 
     if (persistedTestInnings.length) {
       const currentIndex = Number(match?.scoringState?.inningsIndex);
@@ -2475,7 +2498,35 @@ const getMatchInnings = (match) => {
     );
 
 
-  return [first, second].filter(Boolean);
+  const asInnings = (value) =>
+    Array.isArray(value)
+      ? value
+      : value && typeof value === "object"
+        ? Object.values(value)
+        : [];
+  const dedupeInnings = (items) => {
+    const seen = new Set();
+    return items.filter((item, index) => {
+      const key = [
+        item?.inningsId,
+        item?.inningsIndex ?? item?.inningsNumber ?? index,
+        item?.teamId ?? item?.battingTeamId ?? "",
+        item?.runs ?? "",
+        item?.balls ?? item?.legalBalls ?? "",
+      ].join(":");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  return dedupeInnings([
+    first,
+    second,
+    ...asInnings(match?.innings),
+    ...asInnings(match?.inningsData),
+    ...asInnings(match?.savedInnings),
+  ].filter(Boolean));
 
 };
 
@@ -2512,7 +2563,9 @@ const findPlayerStat = (
         idString(
           stat.id ??
           stat.playerId ??
-          stat.uid
+          stat.uid ??
+          stat.name ??
+          stat.playerName
         )
       )
     ) {
@@ -2582,7 +2635,9 @@ const computePlayerStatistics = ({
       !playerIds.has(
         idString(
           stat.playerId ||
-          stat.uid
+          stat.uid ||
+          stat.name ||
+          stat.playerName
         )
       )
     ) {
