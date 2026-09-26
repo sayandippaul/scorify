@@ -1,0 +1,406 @@
+.offline-screen {
+  position: fixed;
+  z-index: 20000;
+  inset: 0;
+  display: grid;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: auto;
+  padding: 32px 18px;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 5%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 48%),
+    var(--bg, #f5f7fa);
+  color: var(--text, #17202a);
+}
+
+.offline-screen::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--primary) 20%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+  content: "";
+  opacity: 0.22;
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+
+.offline-screen-orbit {
+  position: absolute;
+  z-index: -1;
+  width: min(74vw, 700px);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--primary) 10%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.offline-screen-orbit-one {
+  transform: scale(0.76);
+}
+
+.offline-screen-orbit-two {
+  transform: scale(1.04);
+}
+
+.offline-screen-card {
+  display: flex;
+  width: min(100%, 510px);
+  align-items: center;
+  flex-direction: column;
+  padding: clamp(26px, 6vw, 48px);
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, var(--border));
+  border-radius: 30px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow:
+    0 28px 90px rgba(15, 40, 50, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  text-align: center;
+  backdrop-filter: blur(16px);
+  animation: offline-card-appear 500ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.offline-screen-illustration {
+  position: relative;
+  width: 152px;
+  height: 124px;
+  margin-bottom: 24px;
+}
+
+.offline-screen-cloud {
+  position: absolute;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 85%, white);
+}
+
+.offline-screen-cloud::before,
+.offline-screen-cloud::after {
+  position: absolute;
+  border: inherit;
+  border-bottom: 0;
+  border-radius: 50% 50% 0 0;
+  background: inherit;
+  content: "";
+}
+
+.offline-screen-cloud-back {
+  top: 31px;
+  left: 14px;
+  width: 78px;
+  height: 30px;
+  opacity: 0.62;
+}
+
+.offline-screen-cloud-back::before {
+  bottom: 10px;
+  left: 13px;
+  width: 32px;
+  height: 25px;
+}
+
+.offline-screen-cloud-back::after {
+  right: 10px;
+  bottom: 9px;
+  width: 26px;
+  height: 20px;
+}
+
+.offline-screen-cloud-front {
+  right: 9px;
+  bottom: 26px;
+  width: 103px;
+  height: 38px;
+  background: var(--surface, #fff);
+  box-shadow: 0 9px 22px rgba(15, 40, 50, 0.08);
+}
+
+.offline-screen-cloud-front::before {
+  bottom: 13px;
+  left: 15px;
+  width: 40px;
+  height: 32px;
+}
+
+.offline-screen-cloud-front::after {
+  right: 13px;
+  bottom: 11px;
+  width: 34px;
+  height: 27px;
+}
+
+.offline-screen-ball {
+  position: absolute;
+  z-index: 1;
+  top: 1px;
+  right: 17px;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 26%, #ff8b91 0%, #eb4751 52%, #bd2435 100%);
+  box-shadow:
+    inset -7px -8px 13px rgba(104, 13, 30, 0.32),
+    0 10px 24px rgba(195, 41, 55, 0.24);
+  animation: offline-ball-float 2.3s ease-in-out infinite;
+}
+
+.offline-screen-ball span {
+  width: 13px;
+  height: 35px;
+  border: 2px dashed rgba(255, 244, 244, 0.95);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  transform: rotate(36deg);
+}
+
+.offline-screen-signal {
+  position: absolute;
+  z-index: 2;
+  right: 24px;
+  bottom: 21px;
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 2px solid var(--surface, #fff);
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.offline-screen-eyebrow {
+  margin-bottom: 10px;
+  color: var(--primary, #0f766e);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.offline-screen-card h1 {
+  max-width: 420px;
+  font-size: clamp(27px, 6vw, 38px);
+  font-weight: 850;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+
+.offline-screen-message {
+  max-width: 390px;
+  margin-top: 13px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.offline-screen-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.offline-screen-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.13);
+  animation: offline-status-pulse 1.8s ease-in-out infinite;
+}
+
+.offline-screen-fact {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 13px;
+  margin-top: 26px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  text-align: left;
+}
+
+.offline-screen-fact-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  font-size: 19px;
+}
+
+.offline-screen-fact > div {
+  min-width: 0;
+}
+
+.offline-screen-fact p {
+  margin: 1px 0 6px;
+  color: var(--primary, #0f766e);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.offline-screen-fact blockquote {
+  color: var(--text, #17202a);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.offline-screen-retry {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 21px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--primary, #0f766e);
+  box-shadow: 0 9px 20px color-mix(in srgb, var(--primary) 24%, transparent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+  cursor: pointer;
+}
+
+.offline-screen-retry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 32%, transparent);
+  filter: brightness(1.06);
+}
+
+.offline-screen-retry:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 45%, white);
+  outline-offset: 3px;
+}
+
+.offline-screen-retry span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+:root[data-theme="dark"] .offline-screen-card {
+  border-color: rgba(94, 234, 212, 0.17);
+  background: color-mix(in srgb, #182027 94%, transparent);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .offline-screen-cloud {
+  border-color: rgba(94, 234, 212, 0.25);
+  background: #24323a;
+}
+
+:root[data-theme="dark"] .offline-screen-cloud-front {
+  background: #182027;
+}
+
+:root[data-theme="dark"] .offline-screen-fact {
+  background: rgba(45, 212, 191, 0.06);
+}
+
+@keyframes offline-card-appear {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes offline-ball-float {
+  0%, 100% {
+    transform: translateY(0) rotate(-9deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(10deg);
+  }
+}
+
+@keyframes offline-status-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.13);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.07);
+  }
+}
+
+@media (max-width: 520px) {
+  .offline-screen {
+    padding: 18px 14px;
+  }
+
+  .offline-screen-card {
+    border-radius: 24px;
+  }
+
+  .offline-screen-illustration {
+    margin-bottom: 17px;
+  }
+
+  .offline-screen-message {
+    font-size: 13px;
+  }
+
+  .offline-screen-fact {
+    margin-top: 22px;
+    padding: 14px;
+  }
+}
+
+@media (max-height: 690px) {
+  .offline-screen {
+    place-items: start center;
+  }
+
+  .offline-screen-card {
+    padding-top: 22px;
+    padding-bottom: 22px;
+  }
+
+  .offline-screen-illustration {
+    height: 102px;
+    margin-bottom: 12px;
+    transform: scale(0.86);
+    transform-origin: center top;
+  }
+
+  .offline-screen-fact {
+    margin-top: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-screen-card,
+  .offline-screen-ball,
+  .offline-screen-status-dot {
+    animation: none;
+  }
+
+  .offline-screen-retry {
+    transition: none;
+  }
+}

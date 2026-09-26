@@ -63,6 +63,7 @@ function Tournament() {
   const [selected, setSelected] = useState(null);
   const [panel, setPanel] = useState(null);
   const [selectedMatches, setSelectedMatches] = useState([]);
+  const [tournamentMatchesById, setTournamentMatchesById] = useState({});
   const statusSyncRef = useRef(new Set());
   const canSyncTournament = (tournament) => {
     const uid = String(auth.currentUser?.uid || "");
@@ -94,9 +95,15 @@ function Tournament() {
       if (statusSyncRef.current.has(tournament.id)) return;
       statusSyncRef.current.add(tournament.id);
       getTournamentMatches(tournament.id)
-        .then((matches) => canSyncTournament(tournament)
-          ? syncTournamentStructure(tournament, matches)
-          : tournament)
+        .then((matches) => {
+          setTournamentMatchesById((current) => ({
+            ...current,
+            [tournament.id]: matches,
+          }));
+          return canSyncTournament(tournament)
+            ? syncTournamentStructure(tournament, matches)
+            : tournament;
+        })
         .catch((loadError) => console.error("Unable to refresh tournament status:", loadError));
     });
   }, [tournaments]);
@@ -191,6 +198,19 @@ function Tournament() {
     () => (selected ? calculateTournamentStatistics(selectedMatches, players) : null),
     [selected, selectedMatches, players]
   );
+  const tournamentStatisticsById = useMemo(
+    () =>
+      new Map(
+        sortedTournaments.map((tournament) => [
+          tournament.id,
+          calculateTournamentStatistics(
+            tournamentMatchesById[tournament.id] || [],
+            players
+          ),
+        ])
+      ),
+    [sortedTournaments, tournamentMatchesById, players]
+  );
   const standingsByGroup = useMemo(() => {
     if (!selected) return [];
     const groups = selected.groups?.length
@@ -243,14 +263,31 @@ function Tournament() {
             <div className="tournament-card-heading"><div><h3>{tournament.name}</h3><span>{tournament.teamCount} Teams</span></div><strong>{tournament.status === "FINISHED" ? "FINISHED" : "LIVE"}</strong></div>
             <p className="tournament-card-date">{new Date(tournament.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
             {tournament.status === "FINISHED" && (
-              <p className="tournament-winner-banner" aria-label={`Winner: ${tournament.winnerName || "Unknown"}`}>
-                <span className="tournament-winner-trophy" aria-hidden="true">🏆</span>
-                <span className="tournament-winner-copy">
-                  <small>Winner Declared</small>
-                  <strong>{tournament.winnerName || "Unknown"}</strong>
-                </span>
-                <span className="tournament-winner-sparkle" aria-hidden="true">✨</span>
-              </p>
+              <>
+                <p className="tournament-winner-banner" aria-label={`Winner: ${tournament.winnerName || "Unknown"}`}>
+                  <span className="tournament-winner-trophy" aria-hidden="true">🏆</span>
+                  <span className="tournament-winner-copy">
+                    <small>Winner Declared</small>
+                    <strong>{tournament.winnerName || "Unknown"}</strong>
+                  </span>
+                  <span className="tournament-winner-sparkle" aria-hidden="true">✨</span>
+                </p>
+                {tournamentStatisticsById.get(tournament.id)?.playerOfCompetition && (
+                  <p className="tournament-player-award">
+                    <span aria-hidden="true">🌟</span>
+                    <span>
+                      <small>Player of the Tournament</small>
+                      <strong>
+                        {tournamentStatisticsById.get(tournament.id).playerOfCompetition.playerName}
+                      </strong>
+                      <small>
+                        {tournamentStatisticsById.get(tournament.id).playerOfCompetition.averagePoints.toFixed(2)} average points ·{" "}
+                        {tournamentStatisticsById.get(tournament.id).playerOfCompetition.matchesPlayed} matches
+                      </small>
+                    </span>
+                  </p>
+                )}
+              </>
             )}
             <div className="tournament-actions">
               <button type="button" onClick={() => navigate(`/matches?tournamentId=${encodeURIComponent(tournament.id)}`)}>View Matches</button>

@@ -7,6 +7,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/firebase";
+import { calculateCompetitionPlayerAward } from "./competitionPlayerAwards";
 
 export const TOURNAMENT_TEAM_COUNTS = [3, 4, 5, 6, 8, 10, 12];
 
@@ -356,6 +357,7 @@ export const calculateTournamentStatistics = (matches, players = []) => {
     highestBowler: best(bowling, bowlingNames),
     highestInningsScore,
     averageInningsScore: inningsCount ? inningsRuns / inningsCount : 0,
+    playerOfCompetition: calculateCompetitionPlayerAward(matches),
   };
 };
 

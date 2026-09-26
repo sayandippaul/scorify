@@ -98,7 +98,7 @@
   display: grid;
 
   grid-template-columns:
-    repeat(4, minmax(0, 1fr));
+    repeat(5, minmax(0, 1fr));
 
   gap: 18px;
 
@@ -1021,7 +1021,7 @@
 
   .stats-grid {
     grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+      repeat(3, minmax(0, 1fr));
   }
 
   .welcome-section {
@@ -1406,4 +1406,135 @@
     transition: none;
   }
 
+}
+
+/* =========================================================
+   DASHBOARD STAT ICONS
+   ========================================================= */
+
+.stats-grid > .stat-card {
+  overflow: hidden;
+}
+
+.stats-grid > .stat-card:nth-child(1) .stat-icon {
+  --stat-icon-tint: 37, 99, 235;
+}
+
+.stats-grid > .stat-card:nth-child(2) .stat-icon {
+  --stat-icon-tint: 14, 165, 125;
+}
+
+.stats-grid > .stat-card:nth-child(3) .stat-icon {
+  --stat-icon-tint: 234, 88, 12;
+}
+
+.stats-grid > .stat-card:nth-child(4) .stat-icon {
+  --stat-icon-tint: 124, 58, 237;
+}
+
+.stats-grid > .stat-card:nth-child(5) .stat-icon {
+  --stat-icon-tint: 217, 119, 6;
+}
+
+.stats-grid .stat-icon {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(var(--stat-icon-tint, 37, 99, 235), 0.2);
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.95), transparent 48%),
+    linear-gradient(
+      145deg,
+      rgba(var(--stat-icon-tint, 37, 99, 235), 0.2),
+      rgba(var(--stat-icon-tint, 37, 99, 235), 0.08)
+    );
+  box-shadow:
+    0 5px 12px rgba(var(--stat-icon-tint, 37, 99, 235), 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  transform: translateZ(0);
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    box-shadow 220ms ease,
+    background 220ms ease;
+  animation: dashboard-stat-icon-enter 480ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.stats-grid .stat-icon::after {
+  position: absolute;
+  z-index: -1;
+  inset: -55%;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.48) 50%,
+    transparent 58%
+  );
+  content: "";
+  transform: translateX(-70%) rotate(12deg);
+  transition: transform 500ms ease;
+}
+
+.stats-grid > .stat-card:nth-child(2) .stat-icon {
+  animation-delay: 45ms;
+}
+
+.stats-grid > .stat-card:nth-child(3) .stat-icon {
+  animation-delay: 90ms;
+}
+
+.stats-grid > .stat-card:nth-child(4) .stat-icon {
+  animation-delay: 135ms;
+}
+
+.stats-grid > .stat-card:nth-child(5) .stat-icon {
+  animation-delay: 180ms;
+}
+
+.stats-grid > .stat-card:hover .stat-icon {
+  transform: translateY(-3px) rotate(-5deg) scale(1.06);
+  box-shadow:
+    0 9px 18px rgba(var(--stat-icon-tint, 37, 99, 235), 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.stats-grid > .stat-card:hover .stat-icon::after {
+  transform: translateX(70%) rotate(12deg);
+}
+
+[data-theme="dark"] .stats-grid .stat-icon {
+  border-color: rgba(var(--stat-icon-tint, 96, 165, 250), 0.35);
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.12), transparent 48%),
+    linear-gradient(
+      145deg,
+      rgba(var(--stat-icon-tint, 96, 165, 250), 0.3),
+      rgba(var(--stat-icon-tint, 96, 165, 250), 0.13)
+    );
+  box-shadow:
+    0 5px 14px rgba(var(--stat-icon-tint, 96, 165, 250), 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+@keyframes dashboard-stat-icon-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 600px) {
+  .stats-grid > .stat-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-grid .stat-icon {
+    animation: none;
+    transition: none;
+  }
 }

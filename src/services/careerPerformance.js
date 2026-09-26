@@ -1205,6 +1205,7 @@ export const loadCareerRecords =
       "bowlingStats",
       "deliveries",
       "tournaments",
+      "series",
     ];
 
     const snapshots =
@@ -1243,6 +1244,8 @@ export const loadCareerRecords =
         records[4],
       tournaments:
         records[5],
+      series:
+        records[6],
     };
   };
 
@@ -1255,6 +1258,7 @@ export const getCareerPerformanceStats =
     bowlingStats = [],
     deliveries = [],
     tournaments = [],
+    series = [],
   } = {}) => {
     const ids = new Set(
       [...playerIds]
@@ -2575,7 +2579,12 @@ export const getCareerPerformanceStats =
       getCareerMatchStats({
         playerIds: ids,
         matches: participation,
+        allMatches: matches,
         tournaments,
+        series,
+        inningsRecords,
+        battingStats,
+        bowlingStats,
       });
 
     const resultMatches =

@@ -1,3 +1,8 @@
+import {
+  calculateCompetitionPlayerAward,
+  calculatePlayerImpactPoints,
+} from "./competitionPlayerAwards.js";
+
 const idOf = (value) =>
   String(
     typeof value === "object"
@@ -185,32 +190,21 @@ const performanceForMatch = (match) => {
 
   return [...map.values()].map((player) => ({
     ...player,
-    impact: (() => {
-      const strikeRate = player.balls > 0
-        ? (player.runs / player.balls) * 100
-        : 0;
-      const economy = player.legalBalls > 0
-        ? (player.conceded / player.legalBalls) * 6
-        : null;
-      const battingImpact =
-        player.runs * 2 +
-        player.fours * 0.5 +
-        player.sixes * 1.5 +
-        (player.balls > 0
-          ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04))
-          : 0);
-      const bowlingImpact =
-        player.wickets * 7 +
-        (economy == null
-          ? 0
-          : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
-      return (battingImpact + bowlingImpact) /
-        Math.max(1, new Set(player.teamIds || [player.side]).size);
-    })(),
+    impact: calculatePlayerImpactPoints({
+      ...player,
+      runsConceded: player.conceded,
+      teamCount: new Set(player.teamIds || [player.side]).size,
+    }),
   }));
 };
 
-export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] }) => {
+export const getCareerMatchStats = ({
+  playerIds,
+  matches = [],
+  allMatches = matches,
+  tournaments = [],
+  series = [],
+}) => {
   const ids = new Set([...playerIds].map(idOf));
   const result = {
     testPlayed: 0,
@@ -227,8 +221,11 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     tournamentChampion: 0,
     tournamentRunnerUp: 0,
     manOfMatch: 0,
+    manOfTournament: 0,
+    manOfSeries: 0,
   };
   const tournamentParticipation = new Map();
+  const seriesParticipation = new Set();
 
   matches.forEach((match) => {
     const innings = inningsFor(match);
@@ -250,6 +247,8 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
       entry.matches.push({ match, participantSides });
       tournamentParticipation.set(tournamentId, entry);
     }
+    const seriesId = String(match?.seriesId || "").trim();
+    if (seriesId) seriesParticipation.add(seriesId);
 
     const outcome = outcomeFor(match);
     if (!outcome || participantSides.size !== 1) return;
@@ -328,6 +327,58 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     } else if (winner) {
       result.tournamentLost += 1;
       result.tournamentRunnerUp += 1;
+    }
+
+    const competition = tournaments.find(
+      (item) => String(item?.id || item?.tournamentId) === tournamentId
+    );
+    const competitionMatches = allMatches.filter(
+      (match) => String(match?.tournamentId || "").trim() === tournamentId
+    );
+    const finalPlayed = competitionMatches.some(
+      (match) =>
+        String(match?.tournamentMatchType || "").toLowerCase() === "final" &&
+        completedMatch(match)
+    );
+    if (
+      (String(competition?.status || "").toUpperCase() === "FINISHED" ||
+        finalPlayed) &&
+      competitionMatches.length
+    ) {
+      const award = calculateCompetitionPlayerAward(competitionMatches);
+      if (
+        award &&
+        (ids.has(idOf(award.playerId)) || ids.has(nameOf(award.playerName)))
+      ) {
+        result.manOfTournament += 1;
+      }
+    }
+  });
+
+  seriesParticipation.forEach((seriesId) => {
+    const competition = series.find(
+      (item) => String(item?.id || item?.seriesId) === seriesId
+    );
+    const competitionMatches = allMatches.filter(
+      (match) => String(match?.seriesId || "").trim() === seriesId
+    );
+    const completedSeriesMatches = competitionMatches.filter(completedMatch);
+    const expectedMatches = Number(
+      competition?.numberOfMatches || competitionMatches.length
+    );
+    if (
+      expectedMatches <= 0 ||
+      completedSeriesMatches.length < expectedMatches
+    ) {
+      return;
+    }
+
+    const award = calculateCompetitionPlayerAward(competitionMatches);
+    if (
+      award &&
+      (ids.has(idOf(award.playerId)) || ids.has(nameOf(award.playerName)))
+    ) {
+      result.manOfSeries += 1;
     }
   });
 

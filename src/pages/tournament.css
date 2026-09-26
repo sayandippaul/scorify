@@ -93,6 +93,44 @@
   animation: winner-banner-in .45s ease both;
 }
 
+.tournament-player-award {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  margin: .55rem 0 0;
+  padding: .7rem .8rem;
+  border: 1px solid color-mix(in srgb, var(--tournament-accent) 30%, var(--tournament-border));
+  border-radius: 13px;
+  background: var(--tournament-surface-soft);
+  color: var(--tournament-text);
+  animation: tournament-stat-in .35s ease both;
+}
+
+.tournament-player-award > span:first-child {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+}
+
+.tournament-player-award > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: .12rem;
+}
+
+.tournament-player-award small {
+  color: var(--tournament-muted);
+  font-size: .68rem;
+  font-weight: 750;
+}
+
+.tournament-player-award strong {
+  overflow: hidden;
+  color: var(--tournament-accent);
+  font-size: .9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tournament-winner-banner::after {
   position: absolute;
   inset: 0;

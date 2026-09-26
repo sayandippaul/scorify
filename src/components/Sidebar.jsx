@@ -50,6 +50,17 @@ function Sidebar() {
   </span>
 </NavLink>
 
+
+  <NavLink
+        to="/series"
+        className={({ isActive }) =>
+          isActive ? "nav-item active" : "nav-item"
+        }
+      >
+        <span className="nav-icon">👑</span>
+        <span>Series</span>
+      </NavLink>
+
       <NavLink
         to="/tournaments"
         className={({ isActive }) =>

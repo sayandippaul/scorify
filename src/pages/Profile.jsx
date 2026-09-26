@@ -160,6 +160,8 @@ function Profile({
       tournamentChampion: 0,
       tournamentRunnerUp: 0,
       manOfMatch: 0,
+      manOfTournament: 0,
+      manOfSeries: 0,
       productiveShotRegions: [],
     });
 
@@ -331,6 +333,7 @@ function Profile({
           inningsRecords,
           deliveries: deliveryDocs,
           tournaments: tournamentDocs,
+          series: seriesDocs,
         } = careerRecords;
 
 
@@ -356,6 +359,7 @@ function Profile({
           inningsRecords,
           deliveries: deliveryDocs,
           tournaments: tournamentDocs,
+          series: seriesDocs,
         });
         const canonicalPlayerId =
           playerData.uid || playerData.id || playerId;
@@ -1684,7 +1688,7 @@ function Profile({
             OVERALL STATS
             =================================================== */}
 
-        <div className="profile-stat-grid">
+        <div className="profile-stat-grid profile-award-summary-grid">
 
           <StatCard
             icon="🏏"
@@ -1708,6 +1712,18 @@ function Profile({
             icon="🌟"
             label="Man of the Match"
             value={statistics.manOfMatch || 0}
+          />
+
+          <StatCard
+            icon="🏆"
+            label="Man of the Tournament"
+            value={statistics.manOfTournament || 0}
+          />
+
+          <StatCard
+            icon="👑"
+            label="Man of the Series"
+            value={statistics.manOfSeries || 0}
           />
 
         </div>

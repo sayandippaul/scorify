@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -18,7 +18,9 @@ import Scoring from "./pages/Scoring";
 import TestScoring from "./pages/TestScoring";
 import Profile from "./pages/Profile";
 import Tournament from "./pages/Tournament";
+import Series from "./pages/Series";
 import PageLoader from "./components/PageLoader";
+import OfflineScreen from "./components/OfflineScreen";
 
 
 /* =========================================================
@@ -163,10 +165,26 @@ function App() {
   const [user, setUser] =
     useState(getSavedUser);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine
+  );
   const completeLoading = useCallback(
     () => setIsLoading(false),
     []
   );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
 
   /* =======================================================
@@ -278,6 +296,18 @@ function App() {
   /* =========================================================
      APP UI
      ========================================================= */
+
+  if (!isOnline) {
+    return (
+      <OfflineScreen
+        onRetry={() =>
+          setIsOnline(
+            typeof navigator !== "undefined" && navigator.onLine
+          )
+        }
+      />
+    );
+  }
 
   if (isLoading) {
     return <PageLoader onComplete={completeLoading} />;
@@ -424,6 +454,13 @@ function App() {
                   path="/tournaments"
                   element={
                     <Tournament />
+                  }
+                />
+
+                <Route
+                  path="/series"
+                  element={
+                    <Series />
                   }
                 />
 

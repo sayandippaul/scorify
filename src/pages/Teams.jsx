@@ -99,6 +99,7 @@ const getSafeName = (
 function Teams() {
   const [searchParams] = useSearchParams();
   const tournamentId = searchParams.get("tournamentId");
+  const seriesId = searchParams.get("seriesId");
   // =========================================================
   // USER / ADMIN
   // =========================================================
@@ -128,6 +129,8 @@ function Teams() {
   const [careerRecords, setCareerRecords] =
     useState(null);
   const [tournamentTeams, setTournamentTeams] =
+    useState([]);
+  const [seriesTeams, setSeriesTeams] =
     useState([]);
 
   const [loading, setLoading] =
@@ -269,8 +272,21 @@ function Teams() {
             }))
           : [];
         setTournamentTeams(tournamentTeamsData);
+        setSeriesTeams([]);
+      } else if (seriesId) {
+        const seriesSnapshot = await getDoc(doc(db, "series", seriesId));
+        const seriesTeamIds = seriesSnapshot.exists()
+          ? (seriesSnapshot.data().teamIds || []).map(String)
+          : [];
+        setSeriesTeams(
+          loadedTeams.filter((team) =>
+            seriesTeamIds.includes(String(team.teamId || team.id))
+          )
+        );
+        setTournamentTeams([]);
       } else {
         setTournamentTeams([]);
+        setSeriesTeams([]);
       }
     } catch (error) {
       console.error(
@@ -289,9 +305,13 @@ function Teams() {
 
   useEffect(() => {
     loadData();
-  }, [tournamentId]);
+  }, [tournamentId, seriesId]);
 
-  const visibleTeams = (tournamentId ? tournamentTeams : teams)
+  const visibleTeams = (tournamentId
+    ? tournamentTeams
+    : seriesId
+      ? seriesTeams
+      : teams)
     .slice()
     .sort((a, b) =>
       String(a.name || a.teamName || "Unnamed Team").localeCompare(

@@ -27,6 +27,7 @@ function Dashboard() {
   const [matchCount, setMatchCount] = useState(0);
   const [inningsCount, setInningsCount] = useState(0);
   const [tournamentCount, setTournamentCount] = useState(0);
+  const [seriesCount, setSeriesCount] = useState(0);
   const [playerName, setPlayerName] = useState(
     auth.currentUser?.displayName?.trim() ||
       "Player"
@@ -79,6 +80,7 @@ function Dashboard() {
         matchesSnapshot,
         inningsSnapshot,
         tournamentsSnapshot,
+        seriesSnapshot,
         battingStatsSnapshot,
         bowlingStatsSnapshot,
         careerRecords,
@@ -88,6 +90,7 @@ function Dashboard() {
         getDocs(collection(db, "matches")),
         getDocs(collection(db, "innings")),
         getDocs(collection(db, "tournaments")),
+        getDocs(collection(db, "series")),
         getDocs(collection(db, "battingStats")),
         getDocs(collection(db, "bowlingStats")),
         loadCareerRecords(),
@@ -102,6 +105,7 @@ function Dashboard() {
       setMatchCount(matchesSnapshot.size);
       setInningsCount(inningsSnapshot.size);
       setTournamentCount(tournamentsSnapshot.size);
+      setSeriesCount(seriesSnapshot.size);
 
       // ========================================
       // CREATE PLAYER MAP
@@ -819,6 +823,28 @@ function Dashboard() {
 
             <h3>
               {tournamentCount}
+            </h3>
+
+          </div>
+
+        </div>
+
+        {/* SERIES */}
+
+        <div className="stat-card">
+
+          <div className="stat-icon">
+            👑
+          </div>
+
+          <div>
+
+            <p>
+              Series
+            </p>
+
+            <h3>
+              {seriesCount}
             </h3>
 
           </div>

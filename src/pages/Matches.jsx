@@ -26,6 +26,8 @@ import {
   getCurrentUserId,
   deleteMatchCascade,
 } from "../services/matchService";
+import { createSeries } from "../services/seriesService";
+import { calculatePlayerImpactPoints } from "../services/competitionPlayerAwards";
 
 const PLAYER_STORAGE_KEY = "cricket_players";
 const MATCH_STORAGE_KEY = "cricket_matches";
@@ -1890,22 +1892,14 @@ const recordedPlayerPerformances = ({ match }) => {
       ? (player.runsConceded / player.legalBalls) * 6
       : null;
 
-    const battingImpact =
-      player.runs*2 +
-      player.fours * 0.5 +
-      player.sixes * 1.5 +
-      (player.balls > 0 ? Math.max(-4, Math.min(4, (strikeRate - 100) * 0.04)) : 0);
-
-    const bowlingImpact =
-      player.wickets * 7 +
-      (economy == null ? 0 : Math.max(-8, Math.min(8, (6.5 - economy) * 2)));
-
     return {
       ...player,
       strikeRate,
       economy,
-      impact: (battingImpact + bowlingImpact) /
-        Math.max(1, player.teamIds.size),
+      impact: calculatePlayerImpactPoints({
+        ...player,
+        teamCount: player.teamIds.size,
+      }),
       teamIds: [...player.teamIds],
     };
   });
@@ -1971,6 +1965,22 @@ const getPlayerOfTheMatch = (match) => {
     .sort((a, b) => b.impact - a.impact);
 
   return performances[0] || allPerformances[0] || null;
+};
+
+const getPlayerOfTheMatchContenders = (match, playerOfTheMatch) => {
+  if (!match) return [];
+  const contenders = recordedPlayerPerformances({ match })
+    .filter(
+      (player) =>
+        player.id !== playerOfTheMatch?.id &&
+        (player.runs > 0 ||
+          player.wickets > 0 ||
+          player.balls > 0 ||
+          player.legalBalls > 0)
+    )
+    .sort((left, right) => right.impact - left.impact);
+
+  return contenders.slice(0, contenders.length > 2 ? 2 : 1);
 };
 
 
@@ -2098,6 +2108,7 @@ function MatchMatchImpactSections({ match, scoringState }) {
   const teamAName = teamA.name;
   const teamBName = teamB.name;
   const player = getPlayerOfTheMatch(match);
+  const contenders = getPlayerOfTheMatchContenders(match, player);
   const turningPoint = getTurningPoint({ match, scoringState });
   const finished =
     String(match?.status || "").toLowerCase() === "finished" ||
@@ -2117,13 +2128,58 @@ function MatchMatchImpactSections({ match, scoringState }) {
             <span>{player.teamName}</span>
             <div className="match-impact-stats">
               {player.runs > 0 && <small>{player.runs} runs</small>}
+              {player.balls > 0 && <small>{player.balls} balls faced</small>}
               {player.wickets > 0 && <small>{player.wickets} wicket{player.wickets === 1 ? "" : "s"}</small>}
               {player.balls > 0 && <small>SR {player.strikeRate.toFixed(1)}</small>}
               {player.legalBalls > 0 && player.economy != null && <small>Eco {player.economy.toFixed(2)}</small>}
+              <small className="match-impact-points">{player.impact.toFixed(1)} pts</small>
             </div>
           </div>
         ) : (
           <p className="match-impact-empty">Player of the match will appear here after a completed match with recorded player statistics.</p>
+        )}
+        {contenders.length > 0 && (
+          <section
+            className="match-impact-contenders"
+            aria-label="Player of the match contenders"
+          >
+            <div className="match-impact-contenders-heading">
+              <strong>CONTENDERS FOR PLAYER OF THE MATCH</strong>
+              <small>Next highest impact points across both teams</small>
+            </div>
+            <div className="match-impact-contenders-list">
+              {contenders.map((contender, index) => (
+                <div className="match-impact-contender" key={contender.id}>
+                  <span className="match-impact-contender-rank">
+                    {index + 1}
+                  </span>
+                  <div className="match-impact-contender-details">
+                    <strong>
+                      {scorecardDisplayName(match, contender.teamId, contender)}
+                    </strong>
+                    <small>{contender.teamName}</small>
+                    <small className="match-impact-contender-contribution">
+                      {[
+                        contender.runs > 0 && `${contender.runs} runs`,
+                        contender.balls > 0 && `${contender.balls} balls`,
+                        contender.wickets > 0 &&
+                          `${contender.wickets} wicket${contender.wickets === 1 ? "" : "s"}`,
+                        contender.balls > 0 &&
+                          `SR ${contender.strikeRate.toFixed(1)}`,
+                        contender.legalBalls > 0 && contender.economy != null &&
+                          `Eco ${contender.economy.toFixed(2)}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </div>
+                  <span className="match-impact-contender-points">
+                    {contender.impact.toFixed(1)} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </section>
 
@@ -5066,6 +5122,13 @@ function Matches() {
   const [searchParams] = useSearchParams();
   const tournamentFilterId = searchParams.get("tournamentId");
   const tournamentFixtureId = searchParams.get("fixtureId");
+  const seriesFilterId = searchParams.get("seriesId");
+  const seriesMatchId = searchParams.get("seriesMatchId");
+  const isSeriesCreation = searchParams.get("seriesCreate") === "true";
+  const seriesCreationName = searchParams.get("seriesName") || "";
+  const seriesCreationMatchCount = Number(
+    searchParams.get("numberOfMatches") || 0
+  );
   const isAdmin =
     Boolean(ADMIN_UID) &&
     String(getCurrentUserId() || "") === String(ADMIN_UID);
@@ -5150,6 +5213,7 @@ function Matches() {
   // Id of the match currently being deleted (prevents double clicks).
   const [deletingMatchId, setDeletingMatchId] = useState(null);
   const [tournamentContext, setTournamentContext] = useState(null);
+  const [seriesSetupSaving, setSeriesSetupSaving] = useState(false);
 
   // --------------------------------------------------
   // LOAD DATA
@@ -5262,6 +5326,68 @@ function Matches() {
     ]);
     setScreen("tournament-setup");
   }, [matches, screen, tournamentFilterId, tournamentFixtureId]);
+
+  useEffect(() => {
+    if (!isSeriesCreation || screen !== "list") return;
+    setTeamMode("create");
+    setTeamA({ ...emptyTeam, id: "A", name: "" });
+    setTeamB({ ...emptyTeam, id: "B", name: "" });
+    setCaptainA(null);
+    setCaptainB(null);
+    setTournamentContext(null);
+    setScreen("team-names");
+  }, [isSeriesCreation, screen]);
+
+  useEffect(() => {
+    if (!seriesMatchId || !matches.length || screen !== "list") return;
+
+    const fixture = matches.find(
+      (item) => String(item.id || item.matchId) === String(seriesMatchId)
+    );
+    if (!fixture || String(fixture.seriesId) !== String(seriesFilterId)) return;
+    if (String(fixture.createdBy || "") !== String(getCurrentUserId())) {
+      alert("Only the series creator can start this match.");
+      return;
+    }
+    if (fixture.status !== "scheduled") return;
+
+    const playersA = fixture.teamAPlayers || fixture.teamA?.players || [];
+    const playersB = fixture.teamBPlayers || fixture.teamB?.players || [];
+    const captainA = playersA[0] || null;
+    const captainB = playersB[0] || null;
+    if (!captainA || !captainB) {
+      alert("Both series teams need at least one player before the match can start.");
+      return;
+    }
+
+    setTournamentContext({
+      seriesId: fixture.seriesId,
+      seriesName: fixture.seriesName,
+      seriesMatchNumber: fixture.seriesMatchNumber,
+      seriesMatchId: fixture.id,
+      createdBy: fixture.createdBy,
+    });
+    setTeamA({
+      id: "A",
+      teamId: fixture.teamAId,
+      name: fixture.teamAName,
+      players: playersA,
+    });
+    setTeamB({
+      id: "B",
+      teamId: fixture.teamBId,
+      name: fixture.teamBName,
+      players: playersB,
+    });
+    setCaptainA(null);
+    setCaptainB(null);
+    setMatchType("limited-overs");
+    setDraftSelections([
+      ...playersA.map((player) => ({ player, team: "A" })),
+      ...playersB.map((player) => ({ player, team: "B" })),
+    ]);
+    setScreen("tournament-setup");
+  }, [matches, screen, seriesFilterId, seriesMatchId]);
 
   const continueTournamentSetup = () => {
     if (!tournamentContext || !teamA.players?.length || !teamB.players?.length) {
@@ -6008,6 +6134,18 @@ function Matches() {
   // --------------------------------------------------
 
   const confirmTeams = async () => {
+    if (isSeriesCreation && seriesSetupSaving) return;
+    if (
+      isSeriesCreation &&
+      (!seriesCreationName.trim() ||
+        !Number.isInteger(seriesCreationMatchCount) ||
+        seriesCreationMatchCount < 2 ||
+        seriesCreationMatchCount > 10)
+    ) {
+      alert("Series name and a match count between 2 and 10 are required.");
+      navigate("/series", { replace: true });
+      return;
+    }
     if (!teamA.name.trim() || !teamB.name.trim()) {
       alert("Please enter both team names.");
       return;
@@ -6067,6 +6205,7 @@ function Matches() {
 
     // Persist reusable teams for the Use Existing Team flow.
     try {
+      if (isSeriesCreation) setSeriesSetupSaving(true);
       const current = Array.isArray(savedTeams) ? savedTeams : [];
       const now = new Date().toISOString();
 
@@ -6120,9 +6259,30 @@ function Matches() {
 
         return Array.from(merged.values());
       });
+
+      if (isSeriesCreation) {
+        setTeamA((currentTeam) => ({
+          ...currentTeam,
+          teamId: savedTeamA.teamId,
+        }));
+        setTeamB((currentTeam) => ({
+          ...currentTeam,
+          teamId: savedTeamB.teamId,
+        }));
+        await createSeries({
+          name: seriesCreationName,
+          numberOfMatches: seriesCreationMatchCount,
+          teams: [savedTeamA, savedTeamB],
+          createdBy: getCurrentUserId(),
+        });
+        navigate("/series", { replace: true });
+        return;
+      }
     } catch (error) {
       alert(error.message || "Unable to save teams to Firebase.");
       return;
+    } finally {
+      if (isSeriesCreation) setSeriesSetupSaving(false);
     }
 
     // Captain A is explicitly shown as the final toss caller in the existing UI.
@@ -6210,7 +6370,10 @@ function Matches() {
 
   const startLiveMatch = async (batting, bowling) => {
     const now = new Date().toISOString();
-    const id = tournamentContext?.tournamentFixtureId || Date.now();
+    const id =
+      tournamentContext?.tournamentFixtureId ||
+      tournamentContext?.seriesMatchId ||
+      Date.now();
 
     const battingTeamId =
       String(batting?.id) === "B" || batting === teamB ? "B" : "A";
@@ -6469,7 +6632,11 @@ function Matches() {
           }
           return new Date(b.createdAt) - new Date(a.createdAt);
         })
-    : sortedMatches;
+    : seriesFilterId
+      ? sortedMatches.filter(
+          (match) => String(match.seriesId) === String(seriesFilterId)
+        )
+      : sortedMatches;
 
   const displayMatches = visibleMatches.map((match) =>
     getMatchStatus(match) === "live"
@@ -6608,13 +6775,35 @@ function Matches() {
                       <div className="match-card-heading">
                         <div className="match-card-competition">
                           <span className="match-card-competition-icon" aria-hidden="true">
-                            {match.tournamentId ? "🏆" : "🏏"}
+                            {match.seriesId ? "👑" : match.tournamentId ? "🏆" : "🏏"}
                           </span>
-                          <strong>{match.tournamentId ? match.tournamentName : "Friendly Match"}</strong>
+                          <strong>
+                            {match.tournamentId
+                              ? match.tournamentName
+                              : match.seriesId
+                                ? match.seriesName || "Series"
+                                : "Friendly Match"}
+                          </strong>
+                          {(match.tournamentId || match.seriesId) && (
+                            <span
+                              className={`match-card-competition-badge ${
+                                match.seriesId
+                                  ? "match-card-competition-badge-series"
+                                  : "match-card-competition-badge-tournament"
+                              }`}
+                            >
+                              {match.seriesId ? "SERIES" : "TOURNAMENT"}
+                            </span>
+                          )}
                         </div>
                         {match.tournamentId && (
                           <span className="tournament-match-stage">
                             {tournamentMatchLabel(match)}
+                          </span>
+                        )}
+                        {match.seriesId && (
+                          <span className="tournament-match-stage">
+                            Match {match.seriesMatchNumber || ""}
                           </span>
                         )}
                       </div>
@@ -6780,6 +6969,21 @@ function Matches() {
                             START THIS MATCH
                           </button>
                         )}
+                      {match.seriesId &&
+                        getMatchStatus(match) === "scheduled" &&
+                        String(match.createdBy || "") === String(getCurrentUserId()) && (
+                          <button
+                            type="button"
+                            className="primary-button full-button"
+                            onClick={() =>
+                              navigate(
+                                `/matches?seriesId=${encodeURIComponent(match.seriesId)}&seriesMatchId=${encodeURIComponent(match.id)}`
+                              )
+                            }
+                          >
+                            START THIS MATCH
+                          </button>
+                        )}
                       {(getMatchStatus(match) === "live" || getMatchStatus(match) === "unfinished") &&
                         (!match.createdBy || String(match.createdBy) === String(getCurrentUserId())) ? (
                         <button
@@ -6832,8 +7036,14 @@ function Matches() {
         <div className="setup-modal-backdrop tournament-match-setup-backdrop">
           <div className="setup-card tournament-start-modal">
             <div className="setup-header">
-              <p className="eyebrow">TOURNAMENT MATCH SETUP</p>
-              <h2>{tournamentContext?.tournamentName || "Tournament Match"}</h2>
+              <p className="eyebrow">
+                {tournamentContext?.seriesId ? "SERIES MATCH SETUP" : "TOURNAMENT MATCH SETUP"}
+              </p>
+              <h2>
+                {tournamentContext?.seriesName ||
+                  tournamentContext?.tournamentName ||
+                  "Tournament Match"}
+              </h2>
               <p className="subtitle">Choose overs and one captain from each team.</p>
             </div>
             <label htmlFor="tournament-match-overs">Overs to be played</label>
@@ -6969,14 +7179,16 @@ function Matches() {
           <button
             type="button"
             className="back-button"
-            onClick={() => setScreen("team-mode")}
+            onClick={() =>
+              isSeriesCreation ? navigate("/series") : setScreen("team-mode")
+            }
           >
             ← Back
           </button>
 
           <div className="setup-header">
             <p className="eyebrow">STEP 1</p>
-            <h2>Name Your Teams</h2>
+            <h2>{isSeriesCreation ? "Name Your Series Teams" : "Name Your Teams"}</h2>
             <p className="subtitle">Enter both team names first.</p>
           </div>
 
@@ -7004,7 +7216,7 @@ function Matches() {
             </div>
           </div>
 
-          {matchType !== "test" && <div className="setup-card">
+          {!isSeriesCreation && matchType !== "test" && <div className="setup-card">
             <label>Match Overs</label>
             <select
               value={matchOvers}
@@ -7025,7 +7237,7 @@ function Matches() {
               <option value="20">20 Overs</option>
             </select>
           </div>}
-          {matchType === "test" && (
+          {!isSeriesCreation && matchType === "test" && (
             <div className="setup-card">
               <label>Overs per day</label>
               <input type="number" min="3" max="90" value={testOvers} onChange={(e) => setTestOvers(e.target.value)} />
@@ -7074,7 +7286,9 @@ function Matches() {
           <button
             type="button"
             className="back-button"
-            onClick={() => setScreen("team-mode")}
+            onClick={() =>
+              isSeriesCreation ? setScreen("team-names") : setScreen("team-mode")
+            }
           >
             ← Back
           </button>
@@ -7564,9 +7778,12 @@ function Matches() {
           <button
             type="button"
             className="primary-button full-button"
+            disabled={isSeriesCreation && seriesSetupSaving}
             onClick={confirmTeams}
           >
-            Confirm Teams →
+            {isSeriesCreation && seriesSetupSaving
+              ? "Saving Teams and Series…"
+              : "Confirm Teams →"}
           </button>
         </div>
       </>

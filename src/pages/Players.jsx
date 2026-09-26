@@ -2191,7 +2191,8 @@ const isAdmin =
           deliveries: careerRecords?.deliveries || deliveriesData,
           matches: matchesData,
           tournaments: tournamentsData,
-          }),
+          series: careerRecords?.series || [],
+          } ),
           playerStrength: getPlayerStrength(selectedPlayer),
         }
       : null;
@@ -3306,7 +3307,7 @@ const isAdmin =
                     OVERALL STATS
                     =================================================== */}
 
-                <div className="profile-stat-grid">
+                <div className="profile-stat-grid profile-award-summary-grid">
 
                   <StatCard
                     icon="🏏"
@@ -3330,6 +3331,18 @@ const isAdmin =
                     icon="🌟"
                     label="Man of the Match"
                     value={statistics.manOfMatch}
+                  />
+
+                  <StatCard
+                    icon="🏆"
+                    label="Man of the Tournament"
+                    value={statistics.manOfTournament || 0}
+                  />
+
+                  <StatCard
+                    icon="👑"
+                    label="Man of the Series"
+                    value={statistics.manOfSeries || 0}
                   />
 
                 </div>

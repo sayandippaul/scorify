@@ -69,6 +69,34 @@ service cloud.firestore {
         if isAdmin();
     }
 
+    // =========================================================
+    // SERIES
+    // =========================================================
+    match /series/{seriesId} {
+
+      allow read:
+        if request.auth != null;
+
+      allow create:
+        if request.auth != null
+        && (
+          request.resource.data.createdBy == request.auth.uid
+          || isAdmin()
+        );
+
+      allow update:
+        if request.auth != null
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isAdmin()
+        );
+
+      allow delete:
+        if isAdmin();
+    }
+
+
     match /adminUndo/{adminId} {
       allow read, write:
         if isAdmin() && adminId == request.auth.uid;
