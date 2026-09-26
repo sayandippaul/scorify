@@ -135,6 +135,8 @@ const testDisplayDay = ({ match, innings = [], scoringState = {} }) => {
 const isTestMatchRecord = (match) =>
   String(match?.matchType || "").toLowerCase() === "test";
 
+const hasCompetitionId = (value) => String(value ?? "").trim().length > 0;
+
 const isFinalMatch = (match) => {
   const status = String(match?.status || "")
     .trim()
@@ -5135,6 +5137,7 @@ function Matches() {
 
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [activeMatchTab, setActiveMatchTab] = useState("all");
   const [savedTeams, setSavedTeams] = useState([]);
   const [savedTeamPlayers, setSavedTeamPlayers] = useState([]);
   const [careerRecords, setCareerRecords] = useState(null);
@@ -6589,7 +6592,7 @@ function Matches() {
       new Date(a.createdAt)
   );
 
-  const visibleMatches = tournamentFilterId
+  const scopedMatches = tournamentFilterId
     ? sortedMatches
         .filter(
           (match) => String(match.tournamentId) === String(tournamentFilterId)
@@ -6637,6 +6640,46 @@ function Matches() {
           (match) => String(match.seriesId) === String(seriesFilterId)
         )
       : sortedMatches;
+
+  const matchTabs = [
+    { id: "all", label: "All", matches: scopedMatches },
+    {
+      id: "limited-over",
+      label: "Limited Over",
+      matches: scopedMatches.filter((match) => !isTestMatchRecord(match)),
+    },
+    {
+      id: "test",
+      label: "Test Matches",
+      matches: scopedMatches.filter(isTestMatchRecord),
+    },
+    {
+      id: "friendly",
+      label: "Friendly Matches",
+      matches: scopedMatches.filter(
+        (match) =>
+          !hasCompetitionId(match.seriesId) &&
+          !hasCompetitionId(match.tournamentId)
+      ),
+    },
+    {
+      id: "series",
+      label: "Series",
+      matches: scopedMatches.filter((match) =>
+        hasCompetitionId(match.seriesId)
+      ),
+    },
+    {
+      id: "tournaments",
+      label: "Tournaments",
+      matches: scopedMatches.filter((match) =>
+        hasCompetitionId(match.tournamentId)
+      ),
+    },
+  ];
+  const selectedMatchTab =
+    matchTabs.find((tab) => tab.id === activeMatchTab) || matchTabs[0];
+  const visibleMatches = selectedMatchTab.matches;
 
   const displayMatches = visibleMatches.map((match) =>
     getMatchStatus(match) === "live"
@@ -6738,14 +6781,37 @@ function Matches() {
             </button>
           </div>
 
+          <nav className="match-filter-tabs" aria-label="Filter matches">
+            {matchTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`match-filter-tab${activeMatchTab === tab.id ? " is-active" : ""}`}
+                aria-pressed={activeMatchTab === tab.id}
+                onClick={() => setActiveMatchTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                <span className="match-filter-count" aria-hidden="true">
+                  {tab.matches.length}
+                </span>
+              </button>
+            ))}
+          </nav>
+
           {visibleMatches.length === 0 ? (
             <div className="empty-card matches-empty">
               <div className="empty-icon">🏏</div>
 
-              <h3>No matches yet</h3>
+              <h3>
+                {scopedMatches.length === 0
+                  ? "No matches yet"
+                  : `No ${selectedMatchTab.label.toLowerCase()} matches`}
+              </h3>
 
               <p>
-                Start your first local cricket match.
+                {scopedMatches.length === 0
+                  ? "Start your first local cricket match."
+                  : "Try another match filter to see more games."}
               </p>
 
               <button
@@ -6764,7 +6830,7 @@ function Matches() {
               {displayMatches.map((match) => (
                 <div
                   className="match-date-group"
-                  key={match.id}
+                  key={`${activeMatchTab}-${match.id}`}
                 >
                   <div className="match-date">
                     {formatDate(match.createdAt)}
