@@ -243,6 +243,14 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     });
     if (!participantSides.size) return;
 
+    const tournamentId = String(match?.tournamentId || "").trim();
+    if (tournamentId) {
+      const entry = tournamentParticipation.get(tournamentId) || { sides: new Set(), matches: [] };
+      participantSides.forEach((side) => entry.sides.add(side));
+      entry.matches.push({ match, participantSides });
+      tournamentParticipation.set(tournamentId, entry);
+    }
+
     const outcome = outcomeFor(match);
     if (!outcome || participantSides.size !== 1) return;
 
@@ -260,14 +268,6 @@ export const getCareerMatchStats = ({ playerIds, matches = [], tournaments = [] 
     } else {
       if (isTest) result.testLost += 1;
       else result.limitedLost += 1;
-    }
-
-    const tournamentId = String(match?.tournamentId || "").trim();
-    if (tournamentId) {
-      const entry = tournamentParticipation.get(tournamentId) || { sides: new Set(), matches: [] };
-      participantSides.forEach((side) => entry.sides.add(side));
-      entry.matches.push({ match, participantSides });
-      tournamentParticipation.set(tournamentId, entry);
     }
 
     const explicitAward = [

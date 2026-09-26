@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./players.css";
 import "./profile.css";
 
@@ -29,13 +29,20 @@ import {
   db,
 } from "../firebase/firebase";
 import LoadingOverlay from "../components/LoadingOverlay";
-import CareerPerformanceSummary from "../components/CareerPerformanceSummary";
-import { calculateStrengthPoints } from "../services/playerStrength";
 import {
   getCareerMatchStats,
   getMaidenCount,
 } from "../services/careerMatchStats";
+import {
+  getCareerPerformanceByPlayer,
+  getCareerPerformanceStats,
+  loadCareerRecords,
+} from "../services/careerPerformance";
 import { getPlayerDismissalStats } from "../services/dismissalStats";
+import {
+  CareerDismissalRecords,
+  CareerOutcomeRecords,
+} from "../components/CareerPerformanceRecords";
 
 
 import { ADMIN_UID } from "../config/security";
@@ -1289,6 +1296,9 @@ function Players() {
   const [tournamentsData, setTournamentsData] =
     useState([]);
 
+  const [careerRecords, setCareerRecords] =
+    useState(null);
+
   const [matchDataLoaded, setMatchDataLoaded] =
     useState(false);
 
@@ -1381,7 +1391,8 @@ function Players() {
       getDocs(collection(db, "battingStats")),
       getDocs(collection(db, "bowlingStats")),
       getDocs(collection(db, "deliveries")),
-    ]).then(([snapshot, battingSnapshot, bowlingSnapshot, deliveriesSnapshot]) => {
+      loadCareerRecords(),
+    ]).then(([snapshot, battingSnapshot, bowlingSnapshot, deliveriesSnapshot, records]) => {
 
           const firestorePlayers =
             snapshot.docs.map(
@@ -1426,6 +1437,10 @@ function Players() {
               ...item.data(),
             }))
           );
+          setCareerRecords(records);
+          setMatchesData(records.matches);
+          setTournamentsData(records.tournaments);
+          setMatchDataLoaded(true);
 
 
           setLoading(false);
@@ -1460,19 +1475,11 @@ function Players() {
     setLoadingMatchData(true);
 
 
-    getDocs(
-      collection(db, "matches")
-    ).then((matchesSnapshot) => {
-
-      setMatchesData(
-        matchesSnapshot.docs.map((item) => ({
-          ...item.data(),
-          id: item.id,
-        }))
-      );
-
-      return getDocs(collection(db, "tournaments"));
-
+    loadCareerRecords().then((records) => {
+      setCareerRecords(records);
+      setMatchesData(records.matches);
+      setTournamentsData(records.tournaments);
+      setMatchDataLoaded(true);
     }).catch((error) => {
 
       console.error(
@@ -1484,16 +1491,6 @@ function Players() {
         "Unable to load match statistics from Firebase."
       );
 
-    }).then((tournamentsSnapshot) => {
-      if (tournamentsSnapshot) {
-        setTournamentsData(
-          tournamentsSnapshot.docs.map((item) => ({
-            ...item.data(),
-            id: item.id,
-          }))
-        );
-      }
-      setMatchDataLoaded(true);
     }).finally(() => {
 
       setLoadingMatchData(false);
@@ -1508,59 +1505,27 @@ function Players() {
     matchDataError,
   ]);
 
+  const careerByPlayer = useMemo(
+    () =>
+      careerRecords
+        ? getCareerPerformanceByPlayer(
+            players.map((player) => ({
+              id: player.uid || player.id || player.playerId,
+              name: player.name,
+            })),
+            careerRecords
+          )
+        : new Map(),
+    [careerRecords, players]
+  );
+
   const getPlayerStrength = (player) => {
-    const playerId = String(
-      player?.id ||
-        player?.uid ||
-        player?.playerId ||
-        ""
+    const playerId =
+      player?.uid || player?.id || player?.playerId || player?.name;
+    const careerStats = careerByPlayer.get(
+      idString(playerId).toLowerCase()
     );
-    const batting = battingStats.filter(
-      (stat) =>
-        String(
-          stat.playerId ||
-          stat.uid ||
-          stat.id ||
-          stat.name ||
-          stat.playerName ||
-          ""
-        ).toLowerCase() === playerId.toLowerCase()
-    );
-    const bowling = bowlingStats.filter(
-      (stat) =>
-        String(
-          stat.playerId ||
-          stat.uid ||
-          stat.id ||
-          stat.name ||
-          stat.playerName ||
-          ""
-        ).toLowerCase() === playerId.toLowerCase()
-    );
-    const matchIds = new Set(
-      [...batting, ...bowling]
-        .map((stat) => stat.matchId || stat.matchID || stat.id)
-        .filter(Boolean)
-        .map(String)
-    );
-    const matchesPlayed =
-      matchIds.size ||
-      Number(player?.matchesPlayed || player?.matches || 0);
-    const runs = batting.reduce(
-      (sum, stat) => sum + Number(stat.runs || 0),
-      0
-    );
-    const wickets = bowling.reduce(
-      (sum, stat) => sum + Number(stat.wickets || 0),
-      0
-    );
-    return matchesPlayed > 0
-      ? calculateStrengthPoints({
-          runs,
-          wickets,
-          matchesPlayed,
-        })
-      : 0;
+    return careerStats?.playerStrength || "0.0";
   };
 
   const formatStrength = (value) =>
@@ -2213,30 +2178,22 @@ const isAdmin =
     showPlayer &&
     selectedPlayer &&
     matchDataLoaded
-      ? computePlayerStatistics({
-          playerIds:
-            new Set(
-              [
-                selectedPlayer.uid,
-                selectedPlayer.id,
-                selectedPlayer.name,
-              ]
-                .filter(Boolean)
-                .map(idString)
-            ),
-          battingStats,
-          bowlingStats,
-          deliveries: deliveriesData,
-          matches:
-            matchesData,
+      ? {
+          ...getCareerPerformanceStats({
+          playerIds: new Set([
+            selectedPlayer.uid,
+            selectedPlayer.id,
+            selectedPlayer.name,
+          ].filter(Boolean).map(idString)),
+          battingStats: careerRecords?.battingStats || battingStats,
+          bowlingStats: careerRecords?.bowlingStats || bowlingStats,
+          inningsRecords: careerRecords?.inningsRecords || [],
+          deliveries: careerRecords?.deliveries || deliveriesData,
+          matches: matchesData,
           tournaments: tournamentsData,
-          playerStrength:
-            formatStrength(
-              getPlayerStrength(
-                selectedPlayer
-              )
-            ),
-        })
+          }),
+          playerStrength: getPlayerStrength(selectedPlayer),
+        }
       : null;
 
 
@@ -3370,23 +3327,14 @@ const isAdmin =
 
 
                   <StatCard
-                    icon="🏆"
-                    label="Win Percentage"
-                    value={
-                      `${statistics.winPercentage}%`
-                    }
-                  />
-
-
-                  <StatCard
-                    icon="📉"
-                    label="Lose Percentage"
-                    value={
-                      `${statistics.losePercentage}%`
-                    }
+                    icon="🌟"
+                    label="Man of the Match"
+                    value={statistics.manOfMatch}
                   />
 
                 </div>
+
+                <CareerOutcomeRecords statistics={statistics} />
 
 
                 {/* ===================================================
@@ -3459,13 +3407,12 @@ const isAdmin =
                       }
                     />
 
-                    <StatCard
-                      label="Most Dismissed By"
-                      value={statistics.mostCommonBattingDismissal}
-                    />
-
                   </div>
 
+                  <CareerDismissalRecords
+                    title="Most Dismissed By"
+                    records={statistics.mostDismissedBy}
+                  />
 
                   <div className="profile-highlight-card">
 
@@ -3476,18 +3423,16 @@ const isAdmin =
 
                     <div className="profile-highlight-content">
 
-                      <span>
-                        Highest Score
-                      </span>
+                      <span>Best Batting Performance</span>
 
 
                       <strong>
-                        {statistics.highestScore}
+                        {statistics.highestScore} runs
                       </strong>
 
 
                       <p>
-                        {statistics.highestScoreMatch}
+                        Match: {statistics.highestScoreMatch}
                       </p>
 
                     </div>
@@ -3566,13 +3511,12 @@ const isAdmin =
                       }
                     />
 
-                    <StatCard
-                      label="Most Wickets By"
-                      value={statistics.mostCommonBowlingDismissal}
-                    />
-
                   </div>
 
+                  <CareerDismissalRecords
+                    title="Most Wickets Taken By"
+                    records={statistics.mostWicketsTakenBy}
+                  />
 
                   <div className="profile-highlight-card">
 
@@ -3590,19 +3534,16 @@ const isAdmin =
 
                       <strong>
 
-                        {statistics.bestBowlingWickets}
-
-                        {" "}
-
-                        {statistics.bestBowlingWickets === 1
-                          ? "Wicket"
-                          : "Wickets"}
+                        {statistics.bestBowlingFigures ||
+                          (statistics.bestBowlingWickets
+                            ? `${statistics.bestBowlingWickets} Wickets`
+                            : "—")}
 
                       </strong>
 
 
                       <p>
-                        {statistics.bestBowlingMatch}
+                        Match: {statistics.bestBowlingMatch}
                       </p>
 
                     </div>
@@ -3637,15 +3578,6 @@ const isAdmin =
                   )}
                 </div>
 
-
-                {/* ===================================================
-                    MATCH RESULTS
-                    =================================================== */}
-
-                <CareerPerformanceSummary
-                  statistics={statistics}
-                  description="Results across the player's recorded career"
-                />
 
                 </>
 

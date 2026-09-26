@@ -24,10 +24,17 @@ import {
   getCareerMatchStats,
   getMaidenCount,
 } from "../services/careerMatchStats";
+import {
+  getCareerPerformanceByPlayer,
+  getCareerPerformanceStats,
+  loadCareerRecords,
+} from "../services/careerPerformance";
 import { getPlayerDismissalStats } from "../services/dismissalStats";
-import { calculateStrengthPoints } from "../services/playerStrength";
 import LoadingOverlay from "../components/LoadingOverlay";
-import CareerPerformanceSummary from "../components/CareerPerformanceSummary";
+import {
+  CareerDismissalRecords,
+  CareerOutcomeRecords,
+} from "../components/CareerPerformanceRecords";
 
 import "./profile.css";
 
@@ -238,45 +245,7 @@ function Profile({
            FETCH OTHER STATISTICS
            ===================================================== */
 
-        const [
-          matchesSnapshot,
-          battingStatsSnapshot,
-          bowlingStatsSnapshot,
-          deliveriesSnapshot,
-          tournamentsSnapshot,
-        ] = await Promise.all([
-
-          getDocs(
-            collection(
-              db,
-              "matches"
-            )
-          ),
-
-          getDocs(
-            collection(
-              db,
-              "battingStats"
-            )
-          ),
-
-          getDocs(
-            collection(
-              db,
-              "bowlingStats"
-            )
-          ),
-
-          getDocs(
-            collection(
-              db,
-              "deliveries"
-            )
-          ),
-
-          getDocs(collection(db, "tournaments")),
-
-        ]);
+        const careerRecords = await loadCareerRecords();
 
 
         /* =====================================================
@@ -355,40 +324,14 @@ function Profile({
            numbers always agree with the scorecard.
            ===================================================== */
 
-        const matches =
-          matchesSnapshot.docs.map(
-            (matchDoc) => ({
-
-              ...matchDoc.data(),
-
-              id: matchDoc.id,
-
-            })
-          );
-
-
-        const battingDocs =
-          battingStatsSnapshot.docs.map(
-            (battingDoc) =>
-              battingDoc.data()
-          );
-
-
-        const bowlingDocs =
-          bowlingStatsSnapshot.docs.map(
-            (bowlingDoc) =>
-              bowlingDoc.data()
-          );
-
-        const deliveryDocs =
-          deliveriesSnapshot.docs.map(
-            (deliveryDoc) => deliveryDoc.data()
-          );
-
-        const tournamentDocs = tournamentsSnapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }));
+        const {
+          matches,
+          battingStats: battingDocs,
+          bowlingStats: bowlingDocs,
+          inningsRecords,
+          deliveries: deliveryDocs,
+          tournaments: tournamentDocs,
+        } = careerRecords;
 
 
         const playerIds =
@@ -405,125 +348,24 @@ function Profile({
           );
 
 
-        const careerStats =
-          computePlayerStatistics({
-            playerIds,
-            battingStats:
-              battingDocs,
-            bowlingStats:
-              bowlingDocs,
-            deliveries: deliveryDocs,
-            matches,
-            matchCategoryStats: getCareerMatchStats({
-              playerIds,
-              matches,
-              tournaments: tournamentDocs,
-            }),
-          });
-
-
-        /* =====================================================
-           PLAYER STRENGTH
-
-           Same formula and source the team builder uses:
-           (career runs + wickets x 5) / matches played
-           ===================================================== */
-
-        const strengthMatchIds =
-          new Set();
-
-        let strengthRuns = 0;
-
-        let strengthWickets = 0;
-
-
-        battingDocs.forEach(
-          (stat) => {
-
-            if (
-              !playerIds.has(
-                idString(
-                  stat.playerId ||
-                  stat.uid ||
-                  stat.id
-                )
-              )
-            ) {
-
-              return;
-
-            }
-
-
-            if (stat.matchId) {
-
-              strengthMatchIds.add(
-                String(stat.matchId)
-              );
-
-            }
-
-
-            strengthRuns +=
-              Number(
-                stat.runs
-              ) || 0;
-
-          }
-        );
-
-
-        bowlingDocs.forEach(
-          (stat) => {
-
-            if (
-              !playerIds.has(
-                idString(
-                  stat.playerId ||
-                  stat.uid ||
-                  stat.id
-                )
-              )
-            ) {
-
-              return;
-
-            }
-
-
-            if (stat.matchId) {
-
-              strengthMatchIds.add(
-                String(stat.matchId)
-              );
-
-            }
-
-
-            strengthWickets +=
-              Number(
-                stat.wickets
-              ) || 0;
-
-          }
-        );
-
-
-        const strengthMatches =
-          strengthMatchIds.size ||
-          careerStats.totalMatches;
-
-
-        const playerStrength =
-          strengthMatches > 0
-            ? (
-                calculateStrengthPoints({
-                  runs: strengthRuns,
-                  wickets: strengthWickets,
-                  matchesPlayed: strengthMatches,
-                })
-              ).toFixed(1)
-            : "0.0";
+        const careerStats = getCareerPerformanceStats({
+          playerIds,
+          matches,
+          battingStats: battingDocs,
+          bowlingStats: bowlingDocs,
+          inningsRecords,
+          deliveries: deliveryDocs,
+          tournaments: tournamentDocs,
+        });
+        const canonicalPlayerId =
+          playerData.uid || playerData.id || playerId;
+        const canonicalCareerStats = getCareerPerformanceByPlayer(
+          [{
+            id: canonicalPlayerId,
+            name: playerData.name || updatedProfile.name,
+          }],
+          careerRecords
+        ).get(String(canonicalPlayerId).trim().toLowerCase());
 
 
         /* =====================================================
@@ -533,8 +375,7 @@ function Profile({
         setStatistics({
 
           ...careerStats,
-
-          playerStrength,
+          playerStrength: canonicalCareerStats?.playerStrength || "0.0",
 
         });
 
@@ -1864,23 +1705,14 @@ function Profile({
 
 
           <StatCard
-            icon="🏆"
-            label="Win Percentage"
-            value={
-              `${statistics.winPercentage}%`
-            }
-          />
-
-
-          <StatCard
-            icon="📉"
-            label="Lose Percentage"
-            value={
-              `${statistics.losePercentage}%`
-            }
+            icon="🌟"
+            label="Man of the Match"
+            value={statistics.manOfMatch || 0}
           />
 
         </div>
+
+        <CareerOutcomeRecords statistics={statistics} />
 
 
         {/* ===================================================
@@ -1953,13 +1785,12 @@ function Profile({
               }
             />
 
-            <StatCard
-              label="Most Dismissed By"
-              value={statistics.mostCommonBattingDismissal}
-            />
-
           </div>
 
+          <CareerDismissalRecords
+            title="Most Dismissed By"
+            records={statistics.mostDismissedBy}
+          />
 
           <div className="profile-highlight-card">
 
@@ -1970,18 +1801,16 @@ function Profile({
 
             <div className="profile-highlight-content">
 
-              <span>
-                Highest Score
-              </span>
+              <span>Best Batting Performance</span>
 
 
               <strong>
-                {statistics.highestScore}
+                {statistics.highestScore} runs
               </strong>
 
 
               <p>
-                {statistics.highestScoreMatch}
+                Match: {statistics.highestScoreMatch}
               </p>
 
             </div>
@@ -2083,12 +1912,12 @@ function Profile({
               }
             />
 
-            <StatCard
-              label="Most Wickets By"
-              value={statistics.mostCommonBowlingDismissal}
-            />
-
           </div>
+
+          <CareerDismissalRecords
+            title="Most Wickets Taken By"
+            records={statistics.mostWicketsTakenBy}
+          />
 
 
           <div className="profile-highlight-card">
@@ -2106,20 +1935,15 @@ function Profile({
 
 
               <strong>
-
-                {statistics.bestBowlingWickets}
-
-                {" "}
-
-                {statistics.bestBowlingWickets === 1
-                  ? "Wicket"
-                  : "Wickets"}
-
+                {statistics.bestBowlingFigures ||
+                  (statistics.bestBowlingWickets
+                    ? `${statistics.bestBowlingWickets} Wickets`
+                    : "—")}
               </strong>
 
 
               <p>
-                {statistics.bestBowlingMatch}
+                Match: {statistics.bestBowlingMatch}
               </p>
 
             </div>
@@ -2128,15 +1952,6 @@ function Profile({
 
         </div>
 
-
-        {/* ===================================================
-            MATCH RESULTS
-            =================================================== */}
-
-        <CareerPerformanceSummary
-          statistics={statistics}
-          description="Results across your recorded career"
-        />
 
       </section>
 

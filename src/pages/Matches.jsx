@@ -9,7 +9,11 @@ import {
 } from "firebase/firestore";
 import "./matches.css";
 import { calculateWinPrediction, getPredictionForDelivery } from "../services/winPrediction";
-import { calculateStrengthPoints } from "../services/playerStrength";
+import {
+  getCareerPerformanceStats,
+  getCareerPerformanceByPlayer,
+  loadCareerRecords,
+} from "../services/careerPerformance";
 import { db } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
 import {
@@ -130,15 +134,28 @@ const isTestMatchRecord = (match) =>
   String(match?.matchType || "").toLowerCase() === "test";
 
 const isFinalMatch = (match) => {
-  const status = String(match?.status || "").toLowerCase();
-  return (
-    status === "finished" ||
-    status === "completed" ||
+  const status = String(match?.status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+  const resultText = typeof match?.result === "string"
+    ? match.result
+    : match?.result?.text ?? match?.resultText;
+
+  return ["finished", "complete", "completed"].includes(status) ||
     Boolean(match?.finishedAt || match?.completedAt) ||
     match?.winner != null ||
+    match?.winnerId != null ||
     match?.result?.winner != null ||
-    Boolean(match?.result && typeof match.result === "string")
-  );
+    match?.result?.winnerId != null ||
+    match?.scoringState?.result?.winner != null ||
+    match?.scoringState?.result?.winnerId != null ||
+    match?.result?.draw === true ||
+    match?.scoringState?.result?.draw === true ||
+    ["draw", "tied", "tie"].includes(
+      String(match?.drawState || "").trim().toLowerCase()
+    ) ||
+    Boolean(String(resultText || "").trim());
 };
 
 const tournamentMatchLabel = (match) => {
@@ -183,7 +200,7 @@ const testInningsDisplayLabel = (innings, index, match) =>
   }`;
 
 const testTeamInnings = (playedInnings, teamId) =>
-  playedInnings.filter((innings) => innings.teamId === teamId);
+  playedInnings.filter((innings) => innings?.teamId === teamId);
 
 const shotRegionNames = [
   "Behind Keeper",
@@ -915,6 +932,42 @@ const scorecardStrikeRate = (runs = 0, balls = 0) =>
 const scorecardEconomy = (runs = 0, balls = 0) =>
   balls ? ((Number(runs) / Number(balls)) * 6).toFixed(2) : "0.00";
 
+const scorecardBowlerRuns = (delivery) => {
+  const type = String(
+    delivery?.type ?? delivery?.deliveryType ?? delivery?.extraType ?? ""
+  )
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  const directRuns = Number(
+    delivery?.bowlerRuns ?? delivery?.runsConceded ?? 0
+  ) || 0;
+
+  if (["BYE", "LEG_BYE", "LB"].includes(type)) return directRuns;
+  if (["NB", "NO_BALL"].includes(type)) {
+    const batterRuns =
+      Number(delivery?.batterRuns ?? delivery?.batsmanRuns ?? 0) || 0;
+    const byeRuns =
+      Number(delivery?.byeRuns ?? delivery?.legByeRuns ?? 0) || 0;
+    const totalRuns =
+      Number(delivery?.runs ?? delivery?.totalRuns ?? 0) || 0;
+    return Math.max(directRuns, 1 + batterRuns, totalRuns - byeRuns);
+  }
+  if (["WD", "WIDE"].includes(type)) {
+    return Math.max(
+      directRuns,
+      1,
+      Number(delivery?.wideRuns ?? delivery?.runs ?? delivery?.totalRuns ?? 0) || 0
+    );
+  }
+  return Math.max(
+    0,
+    directRuns ||
+      Number(delivery?.runs ?? delivery?.totalRuns ?? 0) ||
+      0
+  );
+};
+
 const scorecardMaidens = (innings, bowlerId, savedMaidens = 0) => {
   const deliveries = Array.isArray(innings?.deliveries)
     ? innings.deliveries
@@ -924,23 +977,21 @@ const scorecardMaidens = (innings, bowlerId, savedMaidens = 0) => {
     : [];
   const normalizedBowlerId = String(bowlerId ?? "");
 
-  const recordedMaidens = completedOvers.filter(
-    (over) =>
-      over?.maiden === true &&
-      String(over?.bowlerId ?? "") === normalizedBowlerId
-  ).length;
-
   const legalDelivery = (delivery) => {
+    const type = String(
+      delivery?.type ?? delivery?.deliveryType ?? delivery?.extraType ?? ""
+    )
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, "_");
+    if (["NB", "NO_BALL", "WD", "WIDE", "DEAD"].includes(type)) return false;
     if (delivery?.validBall === true) return true;
     if (delivery?.validBall === false) return false;
-    return !["NB", "NO_BALL", "NO-BALL", "WD", "WIDE", "DEAD"].includes(
-      String(delivery?.type ?? delivery?.deliveryType ?? "").toUpperCase()
-    );
+    return true;
   };
 
   const overTotals = new Map();
   deliveries.forEach((delivery) => {
-    if (!legalDelivery(delivery)) return;
     const deliveryBowlerId = String(
       delivery?.bowlerId ?? delivery?.bowlerPlayerId ?? ""
     );
@@ -950,25 +1001,35 @@ const scorecardMaidens = (innings, bowlerId, savedMaidens = 0) => {
     if (!Number.isFinite(overNumber)) return;
     const key = String(overNumber);
     const current = overTotals.get(key) || { balls: 0, runs: 0 };
-    current.balls += 1;
-    current.runs += Number(
-      delivery?.bowlerRuns ??
-        delivery?.runsConceded ??
-        delivery?.runs ??
-        0
-    ) || 0;
+    if (legalDelivery(delivery)) current.balls += 1;
+    current.runs += scorecardBowlerRuns(delivery);
     overTotals.set(key, current);
   });
 
-  const derivedMaidens = [...overTotals.values()].filter(
-    (over) => over.balls === 6 && over.runs === 0
-  ).length;
+  const deliveryMaidens = [...overTotals.entries()]
+    .filter(([, over]) => over.balls === 6 && over.runs === 0)
+    .map(([overNumber]) => overNumber);
+  const recordedMaidens = completedOvers
+    .map((over, index) => {
+      if (
+        over?.maiden !== true ||
+        String(over?.bowlerId ?? "") !== normalizedBowlerId
+      ) {
+        return null;
+      }
+      const overNumber = Number(over?.over ?? over?.overNumber ?? index + 1);
+      return Number.isFinite(overNumber) ? String(overNumber) : null;
+    })
+    .filter((overNumber) => {
+      if (overNumber === null) return false;
+      if (!deliveries.length) return true;
+      const details = overTotals.get(overNumber);
+      return Boolean(details && details.balls === 6 && details.runs === 0);
+    });
+  const verifiedMaidens = new Set([...deliveryMaidens, ...recordedMaidens]).size;
 
-  return Math.max(
-    Number(savedMaidens) || 0,
-    recordedMaidens,
-    derivedMaidens
-  );
+  if (deliveries.length || completedOvers.length) return verifiedMaidens;
+  return Number(savedMaidens) || 0;
 };
 
 const getTossWinnerTeamId = (match) => {
@@ -1352,13 +1413,7 @@ const scorecardHistoryInnings = ({ match, scoringState }) => {
           day: scoringState.currentDay,
         }
       : null;
-    const matchFinished =
-      ["finished", "completed"].includes(
-        String(match?.status || "").toLowerCase()
-      ) ||
-      match?.result != null ||
-      match?.winner != null ||
-      match?.finishedAt != null;
+    const matchFinished = isFinalMatch(match);
     const savedCurrentInnings = savedInnings.find(
       (item) => Number(item.inningsIndex) === currentIndex
     );
@@ -2100,6 +2155,7 @@ function MatchInningsScorecard({
   battingTeam,
   bowlingTeam,
   match,
+  careerStatsByPlayer,
   commentaryLoading = false,
   commentaryEnabled = true,
 }) {
@@ -2109,12 +2165,62 @@ function MatchInningsScorecard({
   const battingStats = data.battingStats || {};
   const bowlingStats = data.bowlingStats || {};
   const extras = data.extras || { nb: 0, wd: 0, bye: 0, lb: 0 };
-  const fallOfWickets = Array.isArray(data.fallOfWickets)
+  const savedFallOfWickets = Array.isArray(data.fallOfWickets)
     ? data.fallOfWickets
     : [];
+  const fallOfWicketsByNumber = new Map(
+    savedFallOfWickets.map((entry) => [Number(entry?.wicket), entry])
+  );
+  let deliveryRuns = 0;
+  let deliveryWickets = 0;
+  [...(Array.isArray(data.deliveries) ? data.deliveries : [])]
+    .sort((left, right) =>
+      Number(left?.overNumber ?? left?.over ?? 0) -
+        Number(right?.overNumber ?? right?.over ?? 0) ||
+      Number(left?.ballNumber ?? left?.ball ?? 0) -
+        Number(right?.ballNumber ?? right?.ball ?? 0)
+    )
+    .forEach((delivery) => {
+      deliveryRuns += Number(
+        delivery?.runs ?? delivery?.totalRuns ?? delivery?.batterRuns ?? 0
+      ) || 0;
+      const wicket = delivery?.wicket || (
+        delivery?.wicketType || delivery?.dismissedPlayerId
+          ? {
+              type: delivery.wicketType,
+              batterName: delivery.dismissedPlayerName,
+            }
+          : null
+      );
+      if (!wicket) return;
+      deliveryWickets += 1;
+      if (!fallOfWicketsByNumber.has(deliveryWickets)) {
+        const over = Number(delivery?.overNumber ?? delivery?.over);
+        const ball = Number(delivery?.ballNumber ?? delivery?.ball);
+        fallOfWicketsByNumber.set(deliveryWickets, {
+          wicket: deliveryWickets,
+          score: deliveryRuns,
+          batter:
+            wicket.batterName ||
+            delivery.dismissedPlayerName ||
+            delivery.batterName ||
+            "Unknown batter",
+          over:
+            Number.isFinite(over) && Number.isFinite(ball)
+              ? `${over}.${ball}`
+              : "",
+        });
+      }
+    });
+  const fallOfWickets = [...fallOfWicketsByNumber.values()].sort(
+    (left, right) => Number(left?.wicket || 0) - Number(right?.wicket || 0)
+  );
 
   const batters = (battingTeam.players || []).map((player, index) => {
     const stats = battingStats[scorecardPlayerId(player)] || {};
+    const career = careerStatsByPlayer?.get(
+      scorecardPlayerId(player).trim().toLowerCase()
+    );
 
     return {
       id: scorecardPlayerId(player),
@@ -2133,6 +2239,7 @@ function MatchInningsScorecard({
       dismissal: stats.dismissal || "",
       fielder: stats.fielder || "",
       bowler: stats.bowler || "",
+      career,
     };
   });
 
@@ -2150,6 +2257,9 @@ function MatchInningsScorecard({
   const bowlers = (bowlingTeam?.players || [])
     .map((player) => {
       const stats = bowlingStats[scorecardPlayerId(player)] || {};
+      const career = careerStatsByPlayer?.get(
+        scorecardPlayerId(player).trim().toLowerCase()
+      );
 
       return {
         id: scorecardPlayerId(player),
@@ -2163,6 +2273,7 @@ function MatchInningsScorecard({
         runs: Number(stats.runs || 0),
         wickets: Number(stats.wickets || 0),
         maidens: scorecardMaidens(data, scorecardPlayerId(player), stats.maidens),
+        career,
       };
     })
     .filter(
@@ -2219,6 +2330,11 @@ function MatchInningsScorecard({
                           : "not out"}
                       {batter.bowler ? ` • Bowler: ${batter.bowler}` : ""}
                     </small>
+                    {/* {batter.career && (
+                      <small>
+                        Career: {batter.career.battingRuns} runs · Avg {batter.career.battingAverage} · SR {batter.career.strikeRate}
+                      </small>
+                    )} */}
                   </td>
                   <td>{batter.runs}</td>
                   <td>{batter.balls}</td>
@@ -2278,7 +2394,14 @@ function MatchInningsScorecard({
             <tbody>
               {bowlers.length ? bowlers.map((bowler) => (
                 <tr key={bowler.id}>
-                  <td><strong>{bowler.name}</strong></td>
+                  <td>
+                    <strong>{bowler.name}</strong>
+                    {/* {bowler.career && (
+                      <small>
+                        Career: {bowler.career.wickets} wickets · Eco {bowler.career.economy}
+                      </small>
+                    )} */}
+                  </td>
                   <td>{scorecardOvers(bowler.legalBalls)}</td>
                   <td>{bowler.maidens}</td>
                   <td>{bowler.runs}</td>
@@ -4399,7 +4522,11 @@ function FinishedMatchAnalysisGraphs({ match }) {
   );
 }
 
-function MatchScorecard({ match, commentaryLoading = false }) {
+function MatchScorecard({
+  match,
+  careerStatsByPlayer,
+  commentaryLoading = false,
+}) {
   const [activeInnings, setActiveInnings] = useState(
     () => {
       if (!isTestMatchRecord(match)) return "first";
@@ -4458,6 +4585,7 @@ function MatchScorecard({ match, commentaryLoading = false }) {
         battingTeam={battingTeam}
         bowlingTeam={bowlingTeam}
         match={match}
+        careerStatsByPlayer={careerStatsByPlayer}
         commentaryLoading={commentaryLoading}
         commentaryEnabled={options.commentaryEnabled === true}
       />
@@ -4946,8 +5074,7 @@ function Matches() {
   const [matches, setMatches] = useState([]);
   const [savedTeams, setSavedTeams] = useState([]);
   const [savedTeamPlayers, setSavedTeamPlayers] = useState([]);
-  const [battingStats, setBattingStats] = useState([]);
-  const [bowlingStats, setBowlingStats] = useState([]);
+  const [careerRecords, setCareerRecords] = useState(null);
 
   const [screen, setScreen] = useState("list");
   const [teamMode, setTeamMode] = useState(null);
@@ -5008,6 +5135,17 @@ function Matches() {
   const [viewingMatch, setViewingMatch] = useState(null);
   const [persistedDeliveries, setPersistedDeliveries] = useState([]);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
+  const careerStatsByPlayer = useMemo(() => {
+    if (!careerRecords || !viewingMatch) return null;
+    const teamAPlayers =
+      viewingMatch.teamA?.players || viewingMatch.teamAPlayers || [];
+    const teamBPlayers =
+      viewingMatch.teamB?.players || viewingMatch.teamBPlayers || [];
+    return getCareerPerformanceByPlayer(
+      [...teamAPlayers, ...teamBPlayers],
+      careerRecords
+    );
+  }, [careerRecords, viewingMatch]);
 
   // Id of the match currently being deleted (prevents double clicks).
   const [deletingMatchId, setDeletingMatchId] = useState(null);
@@ -5018,6 +5156,15 @@ function Matches() {
   // --------------------------------------------------
 
   useEffect(() => {
+    let cancelled = false;
+    loadCareerRecords()
+      .then((records) => {
+        if (!cancelled) setCareerRecords(records);
+      })
+      .catch((error) => {
+        console.error("Unable to load career performance records:", error);
+      });
+
     const unsubscribePlayers = subscribeToPlayers(
       setPlayers,
       (error) => console.error("Unable to load Firebase players:", error)
@@ -5059,29 +5206,8 @@ function Matches() {
       (error) => console.error("Unable to load Firebase matches:", error)
     );
 
-    Promise.all([
-      getDocs(collection(db, "battingStats")),
-      getDocs(collection(db, "bowlingStats")),
-    ])
-      .then(([battingSnapshot, bowlingSnapshot]) => {
-        setBattingStats(
-          battingSnapshot.docs.map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
-        );
-        setBowlingStats(
-          bowlingSnapshot.docs.map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
-        );
-      })
-      .catch((error) => {
-        console.error("Unable to load player match statistics:", error);
-      });
-
     return () => {
+      cancelled = true;
       unsubscribePlayers();
       unsubscribeTeams();
       unsubscribeTeamPlayers();
@@ -5388,41 +5514,11 @@ function Matches() {
 
     if (!playerId) return 0;
 
-    const batting = battingStats.filter(
-      (stat) =>
-        String(stat.playerId ?? stat.uid ?? stat.id ?? "") === playerId
-    );
-    const bowling = bowlingStats.filter(
-      (stat) =>
-        String(stat.playerId ?? stat.uid ?? stat.id ?? "") === playerId
-    );
-
-    const matchIds = new Set(
-      [...batting, ...bowling]
-        .map((stat) => stat.matchId ?? stat.matchID)
-        .filter(Boolean)
-        .map(String)
-    );
-    const matchesPlayed =
-      matchIds.size ||
-      Number(player.matchesPlayed ?? player.matches ?? 0);
-
-    if (!matchesPlayed) return 0;
-
-    const runs = batting.reduce(
-      (total, stat) => total + (Number(stat.runs) || 0),
-      0
-    );
-    const wickets = bowling.reduce(
-      (total, stat) => total + (Number(stat.wickets) || 0),
-      0
-    );
-
-    return calculateStrengthPoints({
-      runs,
-      wickets,
-      matchesPlayed,
-    });
+    if (!careerRecords) return 0;
+    return Number(getCareerPerformanceStats({
+      playerIds: [playerId, player.name].filter(Boolean),
+      ...careerRecords,
+    }).playerStrength) || 0;
   };
 
   const teamStrength = (team) => {
@@ -5895,8 +5991,7 @@ function Matches() {
     teamB.players,
     nextPickTeam,
     draftSelections,
-    battingStats,
-    bowlingStats,
+    careerRecords,
     skippedAiPlayerIds,
   ]);
 
@@ -6254,18 +6349,9 @@ function Matches() {
 
   const getMatchStatus = (match) => {
     if (!match) return "live";
-    const status = String(match.status || "").toLowerCase();
+    const status = String(match.status || "").trim().toLowerCase();
+    if (isFinalMatch(match)) return "finished";
     if (status === "unfinished") return "unfinished";
-    if (
-      status === "finished" ||
-      status === "completed" ||
-      match.result ||
-      match.resultText ||
-      match.winner ||
-      match.finishedAt
-    ) {
-      return "finished";
-    }
     if (status === "scheduled" || status === "upcoming") return "scheduled";
     return "live";
   };
@@ -6273,23 +6359,65 @@ function Matches() {
   const getMatchResultText = (match) => {
     if (!match) return "";
 
-    if (typeof match.result === "string") {
-      return match.result;
+    const savedText = typeof match.result === "string"
+      ? match.result
+      : match.result?.text ||
+        match.result?.resultText ||
+        match.resultText ||
+        match.scoringState?.result?.text;
+    if (String(savedText || "").trim()) return String(savedText).trim();
+
+    const winner =
+      match.result?.winner ??
+      match.scoringState?.result?.winner ??
+      match.winner ??
+      match.winnerName;
+    const winnerText = typeof winner === "object"
+      ? winner?.name || winner?.teamName || winner?.label || ""
+      : String(winner ?? "").trim();
+    const winnerKey = winnerText.toLowerCase();
+    if (
+      winnerKey === "draw" ||
+      winnerKey === "tied" ||
+      winnerKey === "tie" ||
+      String(match.drawState || "").trim().toLowerCase() === "draw"
+    ) {
+      return "Match drawn";
+    }
+    if (winnerText) {
+      const teamAId = String(match.teamAId ?? match.teamA?.id ?? "A");
+      const teamBId = String(match.teamBId ?? match.teamB?.id ?? "B");
+      if (
+        winnerKey === "a" ||
+        winnerKey === teamAId.toLowerCase() ||
+        winnerKey === String(match.teamA?.name || match.teamAName || "").toLowerCase()
+      ) {
+        return `${match.teamA?.name || match.teamAName || "Team A"} won`;
+      }
+      if (
+        winnerKey === "b" ||
+        winnerKey === teamBId.toLowerCase() ||
+        winnerKey === String(match.teamB?.name || match.teamBName || "").toLowerCase()
+      ) {
+        return `${match.teamB?.name || match.teamBName || "Team B"} won`;
+      }
+      return `${winnerText} won`;
     }
 
-    const isTestDraw =
-      isTestMatchRecord(match) &&
-      (
-        String(match.drawState || "").toLowerCase() === "draw" ||
-        String(match.winner || "").toUpperCase() === "DRAW" ||
-        String(match.result?.winner || "").toUpperCase() === "DRAW"
-      );
+    const winnerId =
+      match.result?.winnerId ??
+      match.scoringState?.result?.winnerId ??
+      match.winnerId;
+    if (winnerId != null) {
+      if (String(winnerId) === String(match.teamAId ?? match.teamA?.id ?? "A")) {
+        return `${match.teamA?.name || match.teamAName || "Team A"} won`;
+      }
+      if (String(winnerId) === String(match.teamBId ?? match.teamB?.id ?? "B")) {
+        return `${match.teamB?.name || match.teamBName || "Team B"} won`;
+      }
+    }
 
-    return (
-      match.result?.text ||
-      match.resultText ||
-      (isTestDraw ? "Match drawn" : "")
-    );
+    return isFinalMatch(match) ? "Match finished" : "";
   };
 
   const sortedMatches = [...matches].sort(
@@ -6344,7 +6472,7 @@ function Matches() {
     : sortedMatches;
 
   const displayMatches = visibleMatches.map((match) =>
-    String(match?.status || "").toLowerCase() === "live"
+    getMatchStatus(match) === "live"
       ? buildLiveScorecardSnapshot(match)
       : match
   );
@@ -6525,7 +6653,7 @@ function Matches() {
                       const playedInnings = scorecardHistoryInnings({
                         match,
                         scoringState: match.scoringState || {},
-                      });
+                      }).filter(Boolean);
                       const renderTeam = (team, teamId) => (
                         <div className="match-team test-match-team">
                           <strong>{team?.name || match[teamId === "A" ? "teamAName" : "teamBName"] || "TBD"}</strong>
@@ -6579,7 +6707,7 @@ function Matches() {
                       const playedInnings = scorecardHistoryInnings({
                         match,
                         scoringState: match.scoringState || {},
-                      });
+                      }).filter(Boolean);
                       const totalOvers = playedInnings.reduce(
                         (total, innings) => total + testCompletedOvers(innings.balls),
                         0
@@ -6591,11 +6719,15 @@ function Matches() {
                         },
                         { A: 0, B: 0 }
                       );
+                      const teamAName =
+                        match.teamA?.name || match.teamAName || "Team A";
+                      const teamBName =
+                        match.teamB?.name || match.teamBName || "Team B";
                       const leadText = totals.A === totals.B
                         ? "Scores level"
                         : totals.A > totals.B
-                          ? `${match.teamA.name} lead by ${totals.A - totals.B}`
-                          : `${match.teamB.name} lead by ${totals.B - totals.A}`;
+                          ? `${teamAName} lead by ${totals.A - totals.B}`
+                          : `${teamBName} lead by ${totals.B - totals.A}`;
                       const displayDay = testDisplayDay({
                         match,
                         innings: playedInnings,
@@ -6619,14 +6751,13 @@ function Matches() {
                       );
                     })()}
 
-                    {getMatchStatus(match) === "finished" &&
-                      (getMatchResultText(match) || match.winner) && (
+                    {getMatchStatus(match) === "finished" && (
                         <div className="winner-text">
                           {getMatchResultText(match).toLowerCase().includes("draw") ||
                           getMatchResultText(match).toLowerCase().includes("tie")
                             ? "🤝"
                             : "🏆"}{" "}
-                          {getMatchResultText(match) || `${match.winner} won`}
+                          {getMatchResultText(match)}
                         </div>
                       )}
 
@@ -8184,6 +8315,7 @@ const teamsWithPlayers = savedTeams.map((team) => {
 
           <MatchScorecard
             match={scorecardMatch}
+            careerStatsByPlayer={careerStatsByPlayer}
             commentaryLoading={commentaryLoading}
           />
         </div>

@@ -17,7 +17,6 @@ import { saveLastAdminDelete } from "./adminUndoService";
 const MATCHES = "matches";
 const INNINGS = "innings";
 const DELIVERIES = "deliveries";
-const COMMENTARY = "commentary";
 const BATTING_STATS = "battingStats";
 const BOWLING_STATS = "bowlingStats";
 const FIRESTORE_TIMEOUT_MS = 10000;
@@ -120,6 +119,7 @@ const removePersistedDeliveryArrays = (value) => {
     Object.entries(value)
       .filter(([key]) => ![
         "deliveries",
+        "commentaryDeliveries",
         "deliveryHistory",
         "allDeliveries",
         "ballByBall",
@@ -178,7 +178,7 @@ const writeInnings = async (match, inningsData, inningsNumber) => {
   const balls = Number(inningsData.balls || 0);
   const runs = Number(inningsData.runs || 0);
 
-  await withTimeout(setDoc(doc(db, INNINGS, inningsId), clean({
+  await setDoc(doc(db, INNINGS, inningsId), clean({
     inningsId,
     matchId: String(match.id),
     inningsNumber,
@@ -201,48 +201,8 @@ const writeInnings = async (match, inningsData, inningsNumber) => {
       : 0,
     startedAt: inningsData.startedAt || match.startedAt || new Date().toISOString(),
     completedAt: match.status === "finished" ? match.completedAt || match.finishedAt || new Date().toISOString() : null,
-  })), "Firestore innings update");
+  }));
 };
-
-const commentaryBallData = (matchId, delivery, inningsNumber, sequence) => clean({
-  matchId: String(matchId),
-  inningsNumber,
-  overNumber: Number(delivery.over || 0),
-  ballNumber: Number(delivery.ball || 0),
-  sequence,
-  strikerId: delivery.strikerId || null,
-  strikerName: delivery.strikerName || null,
-  nonStrikerId: delivery.nonStrikerId || null,
-  nonStrikerName: delivery.nonStrikerName || null,
-  bowlerId: delivery.bowlerId || null,
-  bowlerName: delivery.bowlerName || null,
-  runs: Number(delivery.runs || 0),
-  batterRuns: Number(delivery.batterRuns || 0),
-  bowlerRuns: Number(delivery.bowlerRuns || 0),
-  extras: Number(delivery.extras || 0),
-  extraType: delivery.type || null,
-  validBall: delivery.validBall === true,
-  shotPosition: delivery.shotPosition ?? null,
-  shotRegion: delivery.shotRegion || null,
-  wicketType: delivery.wicket?.type || delivery.wicketType || null,
-  dismissedPlayerId: delivery.wicket?.batterId || null,
-  dismissedPlayerName: delivery.wicket?.batterName || null,
-  fielderName: delivery.wicket?.fielder || null,
-  createdAt: delivery.createdAt || new Date().toISOString(),
-});
-
-const commentaryBallPath = (matchId, delivery, inningsNumber) =>
-  doc(
-    db,
-    COMMENTARY,
-    String(matchId),
-    "innings",
-    `innings_${inningsNumber}`,
-    "overs",
-    `over_${Number(delivery.over || 0)}`,
-    "balls",
-    String(delivery.id)
-  );
 
 const commentaryDeliveryKey = (delivery) => String(delivery?.id || "");
 
@@ -374,12 +334,12 @@ const writeCollections = async (match, { full = false } = {}) => {
     }));
   });
 
-  await withTimeout(Promise.all([
+  await Promise.all([
     ...rosterWrites,
     ...deliveryWrites,
     ...battingWrites,
     ...bowlingWrites,
-  ]), "Firestore over flush");
+  ]);
 };
 
 export const syncStructuredCommentary = async (
@@ -395,17 +355,54 @@ export const syncStructuredCommentary = async (
     .filter((delivery) => String(delivery?.type || "").toUpperCase() !== "DEAD");
   const nextKeys = new Set(nextDeliveries.map(commentaryDeliveryKey));
 
+  const previousByKey = new Map(
+    previous
+      .filter((delivery) => commentaryDeliveryKey(delivery))
+      .map((delivery) => [commentaryDeliveryKey(delivery), delivery])
+  );
+  const sequenceByKey = new Map(
+    nextDeliveries.map((delivery, sequence) => [
+      commentaryDeliveryKey(delivery),
+      sequence,
+    ])
+  );
   const writes = nextDeliveries
-    .filter((delivery) => commentaryDeliveryKey(delivery))
-    .map((delivery, sequence) => {
+    .filter((delivery) => {
+      const key = commentaryDeliveryKey(delivery);
+      if (!key) return false;
+      const previousDelivery = previousByKey.get(key);
+      return !previousDelivery ||
+        JSON.stringify(previousDelivery) !== JSON.stringify(delivery);
+    })
+    .map((delivery) => {
       const inningsNumber = Number(
         delivery.inningsNumber || delivery.innings || 1
       );
-      return setDoc(
-        commentaryBallPath(matchId, delivery, inningsNumber),
-        commentaryBallData(matchId, delivery, inningsNumber, sequence),
-        { merge: true }
-      );
+      const deliveryId = commentaryDeliveryKey(delivery);
+      return setDoc(doc(db, DELIVERIES, deliveryId), clean({
+        ...delivery,
+        deliveryId,
+        matchId: String(matchId),
+        inningsNumber,
+        inningsId: `${matchId}_innings_${inningsNumber}`,
+        overNumber: Number(delivery.over || 0),
+        ballNumber: Number(delivery.ball || 0),
+        legalBall: Boolean(delivery.validBall),
+        batsmanRuns: Number(delivery.batterRuns || 0),
+        totalRuns: Number(delivery.runs || 0),
+        extraType: delivery.type || null,
+        commentarySequence:
+          sequenceByKey.get(deliveryId) || 0,
+        commentary: delivery.commentary || null,
+        commentaryType: delivery.commentaryType || null,
+        commentaryLines: Array.isArray(delivery.commentaryLines)
+          ? delivery.commentaryLines
+          : [],
+        wicketType: delivery.wicket?.type || delivery.wicketType || null,
+        dismissedPlayerId: delivery.wicket?.batterId || null,
+        dismissedPlayerName: delivery.wicket?.batterName || null,
+        fielderName: delivery.wicket?.fielder || null,
+      }), { merge: true });
     });
 
   const deletions = previous
@@ -414,16 +411,10 @@ export const syncStructuredCommentary = async (
       return key && !nextKeys.has(key);
     })
     .map((delivery) => {
-      const inningsNumber = Number(
-        delivery.inningsNumber || delivery.innings || 1
-      );
-      return deleteDoc(commentaryBallPath(matchId, delivery, inningsNumber));
+      return deleteDoc(doc(db, DELIVERIES, key));
     });
 
-  await withTimeout(
-    Promise.all([...writes, ...deletions]),
-    "Firestore structured commentary update"
-  );
+  await Promise.all([...writes, ...deletions]);
 };
 
 export const saveMatch = async (match, ownerId = currentUserId()) => {
@@ -436,25 +427,27 @@ export const saveMatch = async (match, ownerId = currentUserId()) => {
   }
 
   const data = matchFields(match, ownerId);
-  queueOfflineMatch({ ...match, ...data, id: String(match.id) });
-  const result = { ...match, ...data, id: String(match.id), offlinePending: true };
+  const id = String(match.id);
+  try {
+    await setDoc(doc(db, MATCHES, id), data, { merge: true });
+  } catch (error) {
+    try {
+      queueOfflineMatch({ ...match, ...data, id });
+    } catch (queueError) {
+      console.error("Unable to queue match for offline sync:", queueError);
+    }
+    throw error;
+  }
 
   try {
-    withTimeout(
-      setDoc(doc(db, MATCHES, String(match.id)), data, { merge: true }),
-      "Firestore match update"
-    ).then(() => {
-      const queue = readOfflineQueue().filter(
-        (item) => String(item.id) !== String(match.id)
-      );
-      writeOfflineQueue(queue);
-    }).catch((error) => {
-      console.error("Match upload postponed:", error);
-    });
-    return result;
+    const queue = readOfflineQueue().filter(
+      (item) => String(item.id) !== id
+    );
+    writeOfflineQueue(queue);
   } catch (error) {
-    return result;
+    console.error("Unable to clear the synced match from the offline queue:", error);
   }
+  return { ...match, ...data, id, offlinePending: false };
 };
 
 export const syncOfflineMatches = async () => {
@@ -465,10 +458,7 @@ export const syncOfflineMatches = async () => {
   for (const match of queue) {
     try {
       const data = matchFields(match, currentUserId());
-      await withTimeout(
-        setDoc(doc(db, MATCHES, String(match.id)), data, { merge: true }),
-        "Offline match upload"
-      );
+      await setDoc(doc(db, MATCHES, String(match.id)), data, { merge: true });
       await writeCollections({ ...match, ...data }, { full: true });
     } catch (error) {
       console.error("Offline match upload postponed:", error);

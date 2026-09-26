@@ -10,7 +10,10 @@ import {
   auth,
   db,
 } from "../firebase/firebase";
-import { calculateStrengthPoints } from "../services/playerStrength";
+import {
+  getCareerPerformanceByPlayer,
+  loadCareerRecords,
+} from "../services/careerPerformance";
 import AdminUndoDelete from "../components/AdminUndoDelete";
 import LoadingOverlay from "../components/LoadingOverlay";
 
@@ -78,6 +81,7 @@ function Dashboard() {
         tournamentsSnapshot,
         battingStatsSnapshot,
         bowlingStatsSnapshot,
+        careerRecords,
       ] = await Promise.all([
         getDocs(collection(db, "players")),
         getDocs(collection(db, "teams")),
@@ -86,6 +90,7 @@ function Dashboard() {
         getDocs(collection(db, "tournaments")),
         getDocs(collection(db, "battingStats")),
         getDocs(collection(db, "bowlingStats")),
+        loadCareerRecords(),
       ]);
 
       // ========================================
@@ -118,6 +123,10 @@ function Dashboard() {
           email: player.email || "",
         });
       });
+      const careerByPlayer = getCareerPerformanceByPlayer(
+        [...playerMap.values()],
+        careerRecords
+      );
 
       const signedInUser = auth.currentUser;
       const normalizedUid = String(
@@ -386,20 +395,22 @@ function Dashboard() {
         battingMap.values()
       )
         .map((player) => {
+          const careerStats = careerByPlayer.get(
+            String(player.playerId).trim().toLowerCase()
+          );
+          if (careerStats) {
+            player = {
+              ...player,
+              runs: careerStats.battingRuns,
+              balls: careerStats.ballsFaced,
+              careerStats,
+            };
+          }
           return {
             ...player,
 
-            points:
-              (player.runs / (player.matchIds.size || 1)).toFixed(1),
-
-            strikeRate:
-              player.balls > 0
-                ? (
-                    (player.runs /
-                      player.balls) *
-                    100
-                  ).toFixed(2)
-                : "0.00",
+            points: careerStats?.playerStrength || "0.0",
+            strikeRate: careerStats?.strikeRate || "0.00",
           };
         })
         .sort((a, b) => {
@@ -428,6 +439,19 @@ function Dashboard() {
         bowlingMap.values()
       )
         .map((player) => {
+          const careerStats = careerByPlayer.get(
+            String(player.playerId).trim().toLowerCase()
+          );
+          if (careerStats) {
+            player = {
+              ...player,
+              wickets: careerStats.wickets,
+              balls: careerStats.totalBowls,
+              runsConceded: careerStats.runsConceded,
+              maidens: careerStats.maidens,
+              careerStats,
+            };
+          }
           const overs =
             Math.floor(
               player.balls / 6
@@ -453,11 +477,7 @@ function Dashboard() {
 
             economy,
 
-            points:
-              calculateStrengthPoints({
-                wickets: player.wickets,
-                matchesPlayed: 1,
-              }),
+            points: Number(careerStats?.playerStrength || 0),
           };
         })
         .sort((a, b) => {
@@ -561,17 +581,21 @@ function Dashboard() {
         overallMap.values()
       )
         .map((player) => {
+          const careerStats = careerByPlayer.get(
+            String(player.playerId).trim().toLowerCase()
+          );
+          if (careerStats) {
+            player = {
+              ...player,
+              runs: careerStats.battingRuns,
+              wickets: careerStats.wickets,
+              careerStats,
+            };
+          }
           return {
             ...player,
 
-            points:
-              Number(
-                calculateStrengthPoints({
-                  runs: player.runs,
-                  wickets: player.wickets,
-                  matchesPlayed: player.matchIds.size || 1,
-                }).toFixed(1)
-              ),
+            points: Number(careerStats?.playerStrength || 0),
           };
         })
         .sort((a, b) => {

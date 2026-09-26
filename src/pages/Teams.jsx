@@ -18,7 +18,10 @@ import {
 
 import { db, auth } from "../firebase/firebase";
 import { ADMIN_UID } from "../config/security";
-import { calculateStrengthPoints } from "../services/playerStrength";
+import {
+  getCareerPerformanceStats,
+  loadCareerRecords,
+} from "../services/careerPerformance";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { saveLastAdminDelete } from "../services/adminUndoService";
 import "./teams.css";
@@ -120,14 +123,10 @@ function Teams() {
   const [teamPlayers, setTeamPlayers] =
     useState([]);
 
-  const [battingStats, setBattingStats] =
-    useState([]);
-
-  const [bowlingStats, setBowlingStats] =
-    useState([]);
-
   const [matches, setMatches] =
     useState([]);
+  const [careerRecords, setCareerRecords] =
+    useState(null);
   const [tournamentTeams, setTournamentTeams] =
     useState([]);
 
@@ -187,9 +186,7 @@ function Teams() {
         teamsSnapshot,
         playersSnapshot,
         teamPlayersSnapshot,
-        battingSnapshot,
-        bowlingSnapshot,
-        matchesSnapshot,
+        careerRecordsSnapshot,
       ] = await Promise.all([
         getDocs(
           collection(
@@ -212,26 +209,7 @@ function Teams() {
           )
         ),
 
-        getDocs(
-          collection(
-            db,
-            "battingStats"
-          )
-        ),
-
-        getDocs(
-          collection(
-            db,
-            "bowlingStats"
-          )
-        ),
-
-        getDocs(
-          collection(
-            db,
-            "matches"
-          )
-        ),
+        loadCareerRecords(),
       ]);
 
       const loadedTeams =
@@ -258,29 +236,7 @@ function Teams() {
           })
         );
 
-      const loadedBattingStats =
-        battingSnapshot.docs.map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        );
-
-      const loadedBowlingStats =
-        bowlingSnapshot.docs.map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        );
-
-      const loadedMatches =
-        matchesSnapshot.docs.map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        );
+      const loadedMatches = careerRecordsSnapshot.matches;
 
       setTeams(
         loadedTeams
@@ -294,17 +250,10 @@ function Teams() {
         loadedTeamPlayers
       );
 
-      setBattingStats(
-        loadedBattingStats
-      );
-
-      setBowlingStats(
-        loadedBowlingStats
-      );
-
       setMatches(
         loadedMatches
       );
+      setCareerRecords(careerRecordsSnapshot);
 
       if (tournamentId) {
         const tournamentSnapshot = await getDoc(
@@ -628,101 +577,11 @@ function Teams() {
       return 0;
     }
 
-    // -------------------------------------------------------
-    // BATTING RUNS
-    // -------------------------------------------------------
-
-    const playerBattingStats =
-      battingStats.filter(
-        (stat) => {
-          const samePlayer =
-            String(
-              stat.playerId
-            ) ===
-            String(playerId);
-
-          const sameTeam = true;
-
-          return (
-            samePlayer &&
-            sameTeam
-          );
-        }
-      );
-
-    const totalRuns =
-      playerBattingStats.reduce(
-        (
-          sum,
-          stat
-        ) =>
-          sum +
-          Number(
-            stat.runs || 0
-          ),
-        0
-      );
-
-    // -------------------------------------------------------
-    // BOWLING WICKETS
-    // -------------------------------------------------------
-
-    const playerBowlingStats =
-      bowlingStats.filter(
-        (stat) => {
-          const samePlayer =
-            String(
-              stat.playerId
-            ) ===
-            String(playerId);
-
-          const sameTeam = true;
-
-          return (
-            samePlayer &&
-            sameTeam
-          );
-        }
-      );
-
-    const totalWickets =
-      playerBowlingStats.reduce(
-        (
-          sum,
-          stat
-        ) =>
-          sum +
-          Number(
-            stat.wickets || 0
-          ),
-        0
-      );
-
-    // -------------------------------------------------------
-    // POINTS
-    // -------------------------------------------------------
-
-    const playerMatchIds = new Set(
-      [...playerBattingStats, ...playerBowlingStats]
-        .map((stat) => stat.matchId || stat.matchID || stat.id)
-        .filter(Boolean)
-        .map(String)
-    );
-    const matchesPlayed =
-      playerMatchIds.size ||
-      Number(
-        player.matchesPlayed ||
-          player.matches ||
-          0
-      );
-
-    return matchesPlayed > 0
-      ? calculateStrengthPoints({
-          runs: totalRuns,
-          wickets: totalWickets,
-          matchesPlayed,
-        })
-      : 0;
+    if (!careerRecords) return 0;
+    return Number(getCareerPerformanceStats({
+      playerIds: [playerId, player.uid, player.name].filter(Boolean),
+      ...careerRecords,
+    }).playerStrength) || 0;
   };
 
   // =========================================================
@@ -1828,9 +1687,8 @@ function Teams() {
       visibleTeams,
       players,
       teamPlayers,
-      battingStats,
-      bowlingStats,
       matches,
+      careerRecords,
     ]);
 
   // =========================================================

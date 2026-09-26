@@ -6,6 +6,11 @@ import rightHandShotMap from "../svg/Scorify_Shot_Map_Right_Hand_Batsman.svg?raw
 import LoadingOverlay from "../components/LoadingOverlay";
 import { calculateWinPrediction } from "../services/winPrediction";
 import {
+  getCareerPerformanceByPlayer,
+  getCareerPerformanceStats,
+  loadCareerRecords,
+} from "../services/careerPerformance";
+import {
   getCurrentUserId,
   flushMatchData,
   saveMatch,
@@ -22,6 +27,38 @@ import {
 /* =========================================================
    HELPERS
 ========================================================= */
+
+const bowlerConcededRuns = (delivery) => {
+  const type = String(
+    delivery?.type ?? delivery?.deliveryType ?? delivery?.extraType ?? ""
+  )
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  const directRuns = delivery?.bowlerRuns ?? delivery?.runsConceded;
+  if (directRuns !== undefined && directRuns !== null) {
+    return Math.max(0, Number(directRuns) || 0);
+  }
+  if (["BYE", "LEG_BYE", "LB"].includes(type)) return 0;
+  if (["NB", "NO_BALL"].includes(type)) {
+    const batterRuns =
+      Number(delivery?.batterRuns ?? delivery?.batsmanRuns ?? 0) || 0;
+    const byeRuns =
+      Number(delivery?.byeRuns ?? delivery?.legByeRuns ?? 0) || 0;
+    const totalRuns =
+      Number(delivery?.runs ?? delivery?.totalRuns ?? 0) || 0;
+    return Math.max(1 + batterRuns, totalRuns - byeRuns);
+  }
+  if (["WD", "WIDE"].includes(type)) {
+    return Math.max(
+      1,
+      Number(
+        delivery?.wideRuns ?? delivery?.runs ?? delivery?.totalRuns ?? 0
+      ) || 0
+    );
+  }
+  return Math.max(0, Number(delivery?.runs ?? delivery?.totalRuns ?? 0) || 0);
+};
 
 function ScoringWinPredictionCard({ prediction, live = true }) {
   const fairPrediction = fairLiveWinPrediction(prediction, live);
@@ -219,71 +256,41 @@ function ShotPositionMap({ onSelect, battingHand, selectedPosition }) {
    so every known field name is checked here.
 ========================================================= */
 
-const CAREER_RUNS = (player, careerStats) => {
-  const id = String(PLAYER_ID(player));
-  const name = String(PLAYER_NAME(player)).trim().toLowerCase();
-
-  const aggregated =
-    (careerStats?.runsByPlayer?.[id] || 0) +
-    (careerStats?.runsByPlayer?.[`name:${name}`] || 0);
-  const hasAggregate =
-    Object.prototype.hasOwnProperty.call(careerStats?.runsByPlayer || {}, id) ||
-    Object.prototype.hasOwnProperty.call(
-      careerStats?.runsByPlayer || {},
-      `name:${name}`
+const CAREER_STAT = (player, careerStats, field) => {
+  const identifiers = [
+    String(PLAYER_ID(player) ?? "").trim(),
+    String(player?.uid ?? player?.playerUid ?? "").trim(),
+    String(PLAYER_NAME(player) ?? "").trim(),
+  ].filter(Boolean);
+  const values =
+    field === "runs"
+      ? careerStats?.runsByPlayer
+      : careerStats?.wicketsByPlayer;
+  const key = identifiers
+    .flatMap((identifier) => [
+      identifier,
+      identifier.toLowerCase(),
+      `name:${identifier.toLowerCase()}`,
+    ])
+    .find((identifier) =>
+      Object.prototype.hasOwnProperty.call(values || {}, identifier)
     );
-  const profileValue =
-    player?.careerRuns ??
-    player?.totalRuns ??
-    player?.runsScored ??
-    player?.career?.runs ??
-    player?.stats?.runs ??
-    player?.stats?.totalRuns ??
-    player?.battingStats?.runs ??
-    player?.runs ??
-    0;
-
-  const parsedProfile = Number(profileValue);
-  const parsedAggregate = Number(aggregated);
-  return hasAggregate && Number.isFinite(parsedAggregate)
-    ? parsedAggregate
-    : Number.isFinite(parsedProfile)
-      ? parsedProfile
-      : 0;
+  const value = key
+    ? Number(values?.[key])
+    : Number(
+        getCareerPerformanceStats({
+          ...careerStats?.records,
+          playerIds: identifiers,
+        })[field === "runs" ? "battingRuns" : "wickets"]
+      );
+  return Number.isFinite(value) ? value : 0;
 };
 
-const CAREER_WICKETS = (player, careerStats) => {
-  const id = String(PLAYER_ID(player));
-  const name = String(PLAYER_NAME(player)).trim().toLowerCase();
+const CAREER_RUNS = (player, careerStats) =>
+  CAREER_STAT(player, careerStats, "runs");
 
-  const aggregated =
-    (careerStats?.wicketsByPlayer?.[id] || 0) +
-    (careerStats?.wicketsByPlayer?.[`name:${name}`] || 0);
-  const hasAggregate =
-    Object.prototype.hasOwnProperty.call(careerStats?.wicketsByPlayer || {}, id) ||
-    Object.prototype.hasOwnProperty.call(
-      careerStats?.wicketsByPlayer || {},
-      `name:${name}`
-    );
-  const profileValue =
-    player?.careerWickets ??
-    player?.totalWickets ??
-    player?.wicketsTaken ??
-    player?.career?.wickets ??
-    player?.stats?.wickets ??
-    player?.stats?.totalWickets ??
-    player?.bowlingStats?.wickets ??
-    player?.wickets ??
-    0;
-
-  const parsedProfile = Number(profileValue);
-  const parsedAggregate = Number(aggregated);
-  return hasAggregate && Number.isFinite(parsedAggregate)
-    ? parsedAggregate
-    : Number.isFinite(parsedProfile)
-      ? parsedProfile
-      : 0;
-};
+const CAREER_WICKETS = (player, careerStats) =>
+  CAREER_STAT(player, careerStats, "wickets");
 
 const aggregateCareerStatsFromMatches = (matches = []) => {
   const runsByPlayer = {};
@@ -1017,20 +1024,14 @@ export default function Scoring() {
      battingStats / bowlingStats records, keyed by player id.
   ------------------------------------------------------- */
 
-  const [careerStats, setCareerStats] = useState({
-    runsByPlayer: {},
-    wicketsByPlayer: {},
-  });
+  const [careerRecords, setCareerRecords] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    getMatchesOnce()
-      .then((matches) => {
-        if (!cancelled) {
-          const stats = aggregateCareerStatsFromMatches(matches, matchId);
-          setCareerStats(stats);
-        }
+    loadCareerRecords()
+      .then((records) => {
+        if (!cancelled) setCareerRecords(records);
       })
       .catch((error) => {
         console.warn("Unable to load career stats:", error);
@@ -1039,7 +1040,43 @@ export default function Scoring() {
     return () => {
       cancelled = true;
     };
-  }, [matchId]);
+  }, []);
+
+  const careerStats = useMemo(() => {
+    const runsByPlayer = {};
+    const wicketsByPlayer = {};
+    if (!careerRecords) {
+      return { runsByPlayer, wicketsByPlayer, records: null };
+    }
+    const careerPlayers = playerPool.map((player) => ({
+      ...player,
+      id: PLAYER_ID(player),
+    }));
+    const careerByPlayer = getCareerPerformanceByPlayer(
+      careerPlayers,
+      careerRecords
+    );
+    careerPlayers.forEach((player) => {
+      const rawPlayerId = String(PLAYER_ID(player) || "").trim();
+      const playerId = rawPlayerId.toLowerCase();
+      const playerName = String(PLAYER_NAME(player) || "").trim().toLowerCase();
+      const stats = careerByPlayer.get(playerId) || careerByPlayer.get(playerName);
+      if (!stats) return;
+      if (playerId) {
+        runsByPlayer[playerId] = stats.battingRuns;
+        wicketsByPlayer[playerId] = stats.wickets;
+      }
+      if (rawPlayerId) {
+        runsByPlayer[rawPlayerId] = stats.battingRuns;
+        wicketsByPlayer[rawPlayerId] = stats.wickets;
+      }
+      if (playerName) {
+        runsByPlayer[`name:${playerName}`] = stats.battingRuns;
+        wicketsByPlayer[`name:${playerName}`] = stats.wickets;
+      }
+    });
+    return { runsByPlayer, wicketsByPlayer, records: careerRecords };
+  }, [careerRecords, playerPool]);
 
   /* -------------------------------------------------------
      BATTERS
@@ -1243,8 +1280,18 @@ export default function Scoring() {
   ========================================================= */
 
   useEffect(() => {
+    let hasAppliedSnapshot = false;
     const applyMatch = (saved) => {
       if (!saved) return;
+      if (
+        hasAppliedSnapshot &&
+        (!saved.createdBy ||
+          String(saved.createdBy) === String(getCurrentUserId()))
+      ) {
+        return;
+      }
+      hasAppliedSnapshot = true;
+
       let localPending = null;
       try {
         localPending = JSON.parse(
@@ -2583,12 +2630,15 @@ export default function Scoring() {
           ).filter(
             (item) => Number(item.inningsIndex) !== Number(inningsIndex)
           )),
-          ...(finalInningsData || currentTestInnings
+          ...(finalInningsData || finalTestInnings || currentTestInnings
             ? [{
-                ...(finalInningsData || currentTestInnings),
+                ...(finalInningsData || finalTestInnings || currentTestInnings),
                 inningsIndex,
                 completedOversCount: completedTestOvers(
-                  finalInningsData?.balls ?? currentTestInnings?.balls ?? legalBalls
+                  finalInningsData?.balls ??
+                    finalTestInnings?.balls ??
+                    currentTestInnings?.balls ??
+                    legalBalls
                 ),
               }]
             : []),
@@ -3684,15 +3734,22 @@ export default function Scoring() {
     }
     overCompletionRef.current = completionKey;
 
-    const bowlerRuns =
-      overBalls.reduce(
-        (sum, ball) =>
-          sum +
-          Number(
-            ball.bowlerRuns || 0
-          ),
-        0
+    const bowlerRuns = overBalls.reduce(
+      (sum, ball) => sum + bowlerConcededRuns(ball),
+      0
+    );
+    const hasBowlerChargedExtra = overBalls.some((ball) => {
+      const type = String(
+        ball.type ?? ball.deliveryType ?? ball.extraType ?? ""
+      )
+        .trim()
+        .toUpperCase()
+        .replace(/[\s-]+/g, "_");
+      return (
+        ["NB", "NO_BALL", "WD", "WIDE"].includes(type) &&
+        bowlerConcededRuns(ball) > 0
       );
+    });
 
     /*
      * A maiden is only awarded
@@ -3704,6 +3761,7 @@ export default function Scoring() {
     const maiden =
       validCount === 6 &&
       bowlerRuns === 0 &&
+      !hasBowlerChargedExtra &&
       overBalls.every(
         (ball) =>
           String(ball.bowlerId) ===
@@ -3920,7 +3978,7 @@ export default function Scoring() {
     };
 
     saveMatchEverywhere(updated, matchId);
-    flushMatchData(updated, { full: true }).catch((error) => {
+    flushMatchData(updated).catch((error) => {
       console.error("Unable to persist delivery commentary:", error);
     });
   };
@@ -6454,13 +6512,14 @@ export default function Scoring() {
       console.warn("Unable to cache pending match locally:", error);
     }
 
+    saveMatchEverywhere(updated, matchId);
+
     if (
       legalBalls > 0 &&
       legalBalls % 6 === 0 &&
       lastFlushedBallRef.current !== legalBalls
     ) {
       lastFlushedBallRef.current = legalBalls;
-      saveMatchEverywhere(updated, matchId);
       flushMatchData(updated).catch((error) => {
         console.error("Unable to flush completed over:", error);
       });
