@@ -29,6 +29,7 @@ import {
   db,
 } from "../firebase/firebase";
 import LoadingOverlay from "../components/LoadingOverlay";
+import PlayerRuns from "./PlayerRuns";
 import {
   getCareerMatchStats,
   getMaidenCount,
@@ -2251,6 +2252,8 @@ const isAdmin =
         </button>
 
       </div>
+
+      <PlayerRuns embedded />
 
 
       {/* =====================================
