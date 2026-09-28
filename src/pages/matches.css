@@ -4420,6 +4420,7 @@
   vector-effect: non-scaling-stroke;
 }
 
+.finished-match-analysis .match-analysis-axis-label,
 .finished-match-analysis .analysis-axis-label,
 .finished-match-analysis .analysis-y-label {
   fill: var(--analysis-muted);

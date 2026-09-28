@@ -39,7 +39,7 @@ const emptyTeam = {
   players: [],
 };
 
-const TOSS_FLIP_MS = 2000;
+const TOSS_FLIP_MS = 1000;
 
 function CoinFlip({ result, spinning = false }) {
   const normalizedResult = result === "Heads" ? "Heads" : result === "Tails" ? "Tails" : null;
@@ -437,9 +437,7 @@ const mergePersistedDeliveries = (
     (
       String(delivery.inningsId ?? "") === `${matchId}_innings_${inningsNumber}` ||
       Number(delivery.inningsNumber) === inningsNumber ||
-      Number(delivery.inningsIndex) === resolvedInningsIndex ||
-      Number(delivery.innings) === inningsNumber ||
-      Number(delivery.innings) === resolvedInningsIndex
+      deliveryInningsIndex(delivery) === resolvedInningsIndex
     )
   );
 
