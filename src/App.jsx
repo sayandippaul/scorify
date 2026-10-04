@@ -3,6 +3,7 @@ import {
   BrowserRouter,
   Routes,
   Route,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -21,6 +22,7 @@ import Tournament from "./pages/Tournament";
 import Series from "./pages/Series";
 import PageLoader from "./components/PageLoader";
 import OfflineScreen from "./components/OfflineScreen";
+import ScorifyAI from "./components/ScorifyAI/ScorifyAI";
 
 
 /* =========================================================
@@ -153,6 +155,11 @@ function AppNavbar({ user }) {
       }
     />
   );
+}
+
+function DashboardAIAssistant() {
+  const { pathname } = useLocation();
+  return pathname === "/" ? <ScorifyAI /> : null;
 }
 
 
@@ -486,6 +493,8 @@ function App() {
             </main>
 
           </div>
+
+          <DashboardAIAssistant />
 
         </div>
 

@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
+    "dev:vercel": "vercel dev",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -12,7 +16,10 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "@google/genai": "^2.27.0",
     "firebase": "^12.19.0",
-    "react-router-dom": "^7.18.3"
+    "jose": "^6.2.12",
+    "react-router-dom": "^7.18.3",
+    "vercel": "^62.2.0"
   }
 }

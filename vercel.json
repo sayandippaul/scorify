@@ -1,7 +1,39 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/players",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/teams",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/matches",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/matches/:matchId/scorecard",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tournaments",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/series",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/scoring/:matchId",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/test-scoring/:matchId",
       "destination": "/index.html"
     }
   ]

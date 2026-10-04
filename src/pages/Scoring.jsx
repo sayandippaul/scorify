@@ -4430,6 +4430,9 @@ export default function Scoring() {
     appendDelivery(ball);
     setCurrentOverBalls(prev => [...prev, ball]);
 
+    /* The no-ball penalty is not a completed run; only the selected runs rotate strike. */
+    applyOddRunStrike(extra);
+
     const chaseEnded = checkInningsEnd(
       newRuns,
       newWickets,
@@ -4452,9 +4455,6 @@ export default function Scoring() {
     if (chaseEnded) {
       return true;
     }
-
-    /* NB penalty is not a completed run for strike purposes. */
-    applyOddRunStrike(extra);
 
     if (wicket && dismissedId) {
       const wasStriker = String(dismissedId) === String(strikerBefore);
@@ -4594,6 +4594,9 @@ export default function Scoring() {
     appendDelivery(ball);
     setCurrentOverBalls(prev => [...prev, ball]);
 
+    /* The wide penalty is not a completed run; only the extra runs rotate strike. */
+    applyOddRunStrike(extra);
+
     const chaseEnded = checkInningsEnd(
       newRuns,
       newWickets,
@@ -4616,9 +4619,6 @@ export default function Scoring() {
     if (chaseEnded) {
       return true;
     }
-
-    /* Only completed wide runs can change strike. */
-    applyOddRunStrike(extra);
 
     if (wicket && dismissedId) {
       const wasStriker = String(dismissedId) === String(strikerBefore);

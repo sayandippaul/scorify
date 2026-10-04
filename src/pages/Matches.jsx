@@ -7563,11 +7563,19 @@ function Matches() {
   // --------------------------------------------------
 
   if (screen === "player-selection") {
-    const filteredPlayers = players.filter((player) =>
+    const sortPlayersByName = (playerList) =>
+      [...playerList].sort((left, right) =>
+        getPlayerName(left).localeCompare(getPlayerName(right), undefined, {
+          sensitivity: "base",
+        })
+      );
+    const filteredPlayers = sortPlayersByName(players.filter((player) =>
       getPlayerName(player)
         .toLowerCase()
         .includes(playerSearch.toLowerCase())
-    );
+    ));
+    const sortedTeamAPlayers = sortPlayersByName(teamA.players);
+    const sortedTeamBPlayers = sortPlayersByName(teamB.players);
 
     const currentBoth = teamA.players.find((p) =>
       teamB.players.some((b) => String(b.id) === String(p.id))
@@ -7781,7 +7789,7 @@ function Matches() {
               {teamA.players.length === 0 ? (
                 <p className="no-players">No players selected.</p>
               ) : (
-                teamA.players.map((player) => (
+                sortedTeamAPlayers.map((player) => (
                   <div className="selected-player" key={`A-${player.id}`}>
                     <div>
                       <strong>{getPlayerName(player)}</strong>
@@ -7815,7 +7823,7 @@ function Matches() {
               {teamB.players.length === 0 ? (
                 <p className="no-players">No players selected.</p>
               ) : (
-                teamB.players.map((player) => (
+                sortedTeamBPlayers.map((player) => (
                   <div className="selected-player" key={`B-${player.id}`}>
                     <div>
                       <strong>{getPlayerName(player)}</strong>
